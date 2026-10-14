@@ -1,0 +1,26 @@
+<% require 'shellwords'; require 'json' %>
+#!/usr/bin/env bash
+set +x
+set -euo pipefail
+umask 077
+
+# REQUIRED: configure the module environment for HPCF3 here.
+# module purge
+# module load java fastqc/0.12.1 multiqc
+
+export QUALIDOCK_INSTALL=<%= Shellwords.escape(File.expand_path(context.installation_path.to_s)) %>
+export QUALIDOCK_ROOTS=<%= Shellwords.escape(JSON.generate([File.expand_path(context.input_root.to_s)])) %>
+export QUALIDOCK_OUTPUT=<%= Shellwords.escape(File.expand_path(context.output_directory.to_s)) %>
+export QUALIDOCK_FRONTEND="${QUALIDOCK_INSTALL}/frontend/dist"
+export QUALIDOCK_CPUS=<%= Integer(context.bc_num_slots.to_s, 10) %>
+export QUALIDOCK_MEMORY_MB=<%= Integer(context.bc_mem_gb.to_s, 10) * 1024 %>
+export QUALIDOCK_SECURE_COOKIE=1
+export host="$(hostname -f)"
+export port="$(find_port "$host")"
+export password="$(create_passwd 48)"
+export QUALIDOCK_TOKEN="$password"
+export QUALIDOCK_PREFIX="/node/${host}/${port}"
+test -x "${QUALIDOCK_INSTALL}/.venv/bin/qualidock"
+test -f "${QUALIDOCK_FRONTEND}/index.html"
+command -v fastqc >/dev/null
+command -v multiqc >/dev/null

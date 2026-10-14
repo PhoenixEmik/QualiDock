@@ -1,0 +1,35 @@
+<%
+def positive_integer(value, maximum)
+  number = Integer(value.to_s, 10)
+  raise "Invalid resource request" unless number.between?(1, maximum)
+  number
+end
+def scheduler_token(value)
+  text = value.to_s.strip
+  raise "Invalid PBS queue/account" unless text.match?(/\A[A-Za-z0-9._-]*\z/)
+  text
+end
+hours = positive_integer(context.bc_num_hours, 24)
+cpus = positive_integer(context.bc_num_slots, 32)
+memory = positive_integer(context.bc_mem_gb, 128)
+raise "Allocate at least 2 GB" if memory < 2
+queue = scheduler_token(context.bc_queue)
+raise "Configure the HPCF3 PBS queue" if queue.empty? || queue.start_with?("REPLACE_")
+account = scheduler_token(context.bc_account)
+%>
+---
+batch_connect:
+  template: basic
+script:
+  job_name: qualidock
+  native:
+    - "-q"
+    - "<%= queue %>"
+<% unless account.empty? %>
+    - "-A"
+    - "<%= account %>"
+<% end %>
+    - "-l"
+    - "select=1:ncpus=<%= cpus %>:mem=<%= memory %>gb"
+    - "-l"
+    - "walltime=<%= hours %>:00:00"

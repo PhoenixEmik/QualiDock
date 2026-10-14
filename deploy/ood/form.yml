@@ -1,0 +1,60 @@
+---
+# REQUIRED: match /etc/ood/config/clusters.d/<cluster-id>.yml on HPCF3.
+cluster: "REPLACE_WITH_HPCF3_CLUSTER_ID"
+form:
+  - installation_path
+  - input_root
+  - output_directory
+  - bc_num_hours
+  - bc_num_slots
+  - bc_mem_gb
+  - bc_queue
+  - bc_account
+attributes:
+  installation_path:
+    label: QualiDock installation directory
+    widget: text_field
+    value: "/opt/qualidock"
+    required: true
+    help: "REQUIRED: a shared installation containing .venv and frontend/dist, visible on compute nodes."
+  input_root:
+    label: FASTQ / FastQC report directory
+    widget: text_field
+    value: "~/data"
+    required: true
+    cacheable: false
+    help: "Only this directory and its descendants will be accessible. No files are uploaded."
+  output_directory:
+    label: Persistent analysis output directory
+    widget: text_field
+    value: "~/qualidock-results"
+    required: true
+    help: "Use persistent shared storage, not PBS scratch. One session may own this directory at a time."
+  bc_num_hours:
+    label: Walltime (hours)
+    widget: number_field
+    value: 2
+    min: 1
+    max: 24
+  bc_num_slots:
+    label: CPU cores
+    widget: number_field
+    value: 4
+    min: 1
+    max: 32
+  bc_mem_gb:
+    label: Memory (GB)
+    widget: number_field
+    value: 8
+    min: 2
+    max: 128
+  bc_queue:
+    label: PBS queue
+    widget: text_field
+    required: true
+    value: "REPLACE_WITH_HPCF3_QUEUE"
+  bc_account:
+    label: PBS account (if required)
+    widget: text_field
+    required: false
+    value: ""

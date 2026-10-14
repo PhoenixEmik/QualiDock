@@ -1,0 +1,18 @@
+# Security model
+
+QualiDock is a per-user web session running under the current Unix identity. It must never run as root. It is not a multi-user service or a sandbox for malicious QC executables. Installed tools, the results directory, and the owning Unix account are trusted. Other users must not have write access to the executable installation or output directory.
+
+- Private APIs, SSE, logs, metrics, and downloads require a session cookie or bearer credential. The static application shell has no private data.
+- Browser mutations require `X-QualiDock-Request: 1`; provided origins must match the request host. No CORS is enabled. Session cookies are HttpOnly and SameSite Strict, and Secure behind HTTPS.
+- Resolved filesystem paths must be inside configured roots. Relative paths, traversal components, NUL bytes, escaped symlinks and missing paths are rejected. Browse results omit inaccessible entries. Inputs are revalidated when a queued analysis starts, including size and modification time.
+- Analysis commands use argument arrays without a shell. User names and paths are never interpolated into commands. Output directories use random UUID identifiers; stems must be unique within a run.
+- MultiQC-only scans copied, explicitly selected FastQC report files inside a run, rather than walking user directories. ZIP archives are parsed by reading one bounded data member and are never extracted by QualiDock.
+- Native React content is escaped; chart tooltips render as canvas rich text. Report HTML is never embedded. Every download has an attachment disposition and opaque binary media type. The main application CSP denies frames and objects.
+- Downloads require membership in the run's persisted artifact registry and a new resolved containment check. Result directories, metrics, logs, and artifacts cannot be symlink substitutions outside their run.
+- A single analysis consumes resources at a time. Linux CPU affinity and conservative thread budgeting bound CPU use; process-group RSS monitoring terminates over-budget tools. Scheduler/cgroup limits provide the hard host boundary, because polling can temporarily overshoot between samples.
+- Cancellation signals the whole group, escalating to SIGKILL. A worker guardian kills the group if its web-server parent disappears. Session shutdown preserves unfinished runs as interrupted. Do not daemonize QC tools or let them create new process sessions.
+- New output files use a private umask through the supported launcher. A filesystem lock prevents two sessions from mutating one result store. JSON writes use temporary files, fsync, and atomic rename. Back up persistent results according to local storage policy.
+
+Configured input trees should not be concurrently rewritten by an untrusted user. Path revalidation does not provide a general filesystem race-proof sandbox: a privileged attacker or the owning Unix user can replace files between checks. Inputs are references, not immutable snapshots. Use shared storage ACLs and stable FASTQ data. Downloads of official HTML may execute its own content when opened locally; keep it outside the application context.
+
+The default standalone listener is loopback. Use an HTTPS reverse proxy for remote access and enable `QUALIDOCK_SECURE_COOKIE=1`; for OOD the supplied adapter does this. Do not expose a shared static token in public logs, command arguments, repositories, or URLs with query parameters.

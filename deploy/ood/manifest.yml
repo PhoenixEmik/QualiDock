@@ -1,0 +1,6 @@
+---
+name: QualiDock
+category: Interactive Apps
+subcategory: Bioinformatics
+role: batch_connect
+description: Sequencing QC workspace powered by FastQC and MultiQC.
