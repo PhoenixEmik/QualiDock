@@ -1,4 +1,5 @@
-export type View = "workspace" | "new" | "jobs" | "dashboard" | "reports";
+export type View = "workspace" | "new" | "analyses" | "analysis";
+export type DetailTab = "overview" | "metrics" | "reports";
 export type RunState =
   | "queued"
   | "running"

@@ -1,6 +1,6 @@
 ---
-# REQUIRED: match /etc/ood/config/clusters.d/<cluster-id>.yml on HPCF3.
-cluster: "REPLACE_WITH_HPCF3_CLUSTER_ID"
+# REQUIRED: match /etc/ood/config/clusters.d/<cluster-id>.yml on your Open OnDemand host.
+cluster: "REPLACE_WITH_CLUSTER_ID"
 form:
   - installation_path
   - input_root
@@ -52,7 +52,7 @@ attributes:
     label: PBS queue
     widget: text_field
     required: true
-    value: "REPLACE_WITH_HPCF3_QUEUE"
+    value: "REPLACE_WITH_PBS_QUEUE"
   bc_account:
     label: PBS account (if required)
     widget: text_field

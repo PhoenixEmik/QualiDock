@@ -7,7 +7,7 @@ name = "qualidock"
 version = "0.1.0.dev0"
 description = "A single-user sequencing quality control workspace"
 requires-python = ">=3.11"
-license = "MIT"
+license = "GPL-3.0-only"
 dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1"]
 
 [project.optional-dependencies]

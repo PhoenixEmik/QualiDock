@@ -4,7 +4,7 @@ This adapter allocates resources through Batch Connect, then starts the ordinary
 
 ## Required site settings
 
-HPCF3 values were not available during implementation. Before use, an administrator must:
+Configure the adapter for your HPC site's environment before use. An administrator must:
 
 1. Set `cluster` in `deploy/ood/form.yml` to the actual OOD cluster ID from `/etc/ood/config/clusters.d`.
 2. Set a valid PBS queue and optional account. Submission rejects the placeholder queue and invalid scheduler tokens.
@@ -25,7 +25,7 @@ The server binds to `0.0.0.0` on the compute node so OOD can reach it. The sessi
 
 The after hook waits for the server port before exposing the connection. `set +x` keeps credentials out of shell trace output, and `umask 077` protects new files. Protect Batch Connect staging/connection files as well; these are managed by OOD.
 
-## HPCF3 acceptance procedure
+## HPC deployment acceptance procedure
 
 Record cluster/queue/module versions and the PBS job ID, then:
 
@@ -41,4 +41,4 @@ Record cluster/queue/module versions and the PBS job ID, then:
 
 Release v0.1.0 only after these checks and standalone Linux acceptance pass.
 
-This template follows the official [OOD 4.2 rendering and lifecycle documentation](https://osc.github.io/ood-documentation/latest/how-tos/app-development/interactive/template.html), [connection/proxy contract](https://osc.github.io/ood-documentation/latest/how-tos/app-development/interactive/view.html), and [submission format](https://osc.github.io/ood-documentation/latest/reference/files/submit-yml-erb.html). Those references do not establish HPCF3-specific configuration.
+This template follows the official [OOD 4.2 rendering and lifecycle documentation](https://osc.github.io/ood-documentation/latest/how-tos/app-development/interactive/template.html), [connection/proxy contract](https://osc.github.io/ood-documentation/latest/how-tos/app-development/interactive/view.html), and [submission format](https://osc.github.io/ood-documentation/latest/reference/files/submit-yml-erb.html). Each deployment must supply its own cluster configuration.

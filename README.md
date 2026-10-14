@@ -2,7 +2,7 @@
 
 A single-user sequencing QC workspace for Linux workstations and HPC compute nodes. Browse existing FASTQ files, run FastQC and MultiQC, inspect native interactive charts, and download persistent reports.
 
-**Status: v0.1 development, not an accepted release.** Standalone Linux and HPCF3 Open OnDemand end-to-end acceptance must pass before tagging v0.1.0. See [validation](docs/VALIDATION.md).
+**Status: v0.1 development, not an accepted release.** Standalone Linux and an HPC deployment through Open OnDemand must pass end-to-end acceptance before tagging v0.1.0. See [validation](docs/VALIDATION.md).
 
 ## Run locally
 
@@ -31,11 +31,12 @@ Without `QUALIDOCK_ROOTS`, the app uses the generated `example-data` directory. 
 
 ## Workspace
 
-- **Workspace:** browse configured storage roots, search files, inspect mate detection, and select inputs across directories.
-- **New analysis:** choose FastQC + MultiQC, FastQC only, or MultiQC only and set a bounded thread count.
-- **Analysis jobs:** inspect live state, progress, logs, cancellation, and rerun configuration.
-- **QC dashboard:** examine per-base quality boxplots, mean quality, GC distributions, base content, length, N content, and adapter content. Sample summaries preserve FastQC module pass/warn/fail results.
-- **Reports:** download complete official HTML/ZIP outputs, normalized metrics, logs, and manifests. HTML is served only as an attachment.
+- **Workspace:** browse connected storage, navigate directories, and select inputs. Switch between **Samples** (grouped detected read pairs) and **Files** (individual files). Incomplete pairs and unrecognized names remain available. Search covers currently loaded sample names and filenames; load more to include additional entries.
+- **Analyses:** find running, queued, completed, failed, partial, interrupted, or cancelled runs. Open an analysis for **Overview & logs**, **QC metrics**, and **Reports**. The UI displays the actual job state and stage, without estimated progress percentages.
+
+Use **New analysis** in the Workspace, or configure the current selection, to choose FastQC + MultiQC, FastQC only, or MultiQC only and set a bounded thread count. Selecting a confirmed pair in Samples includes both mates, even if directory pagination splits them. Files mode supports individual-read selection; partial selections remain visible when switching views.
+
+Each analysis retains native per-base quality boxplots, mean quality, GC distributions, base content, length, N content, adapter content, and module checks when actual parsed data is available. Its Reports section downloads official HTML/ZIP outputs, normalized metrics, logs, and manifests. HTML remains an attachment.
 
 Mate detection recognizes `_R1`/`_R2`, `.R1`/`.R2`, `-R1`/`-R2`, and corresponding `1`/`2` suffixes, optionally followed by `_001` (or equivalent separator). A pair is confirmed only when exactly one of each mate exists in the same directory. Both mates must be selected; unpaired files can also run. Each FASTQ is assessed independently.
 
@@ -65,6 +66,8 @@ The application runs one analysis at a time; other runs queue. FastQC threads ar
 cd frontend && npm run build
 ```
 
+Run `npm test` in `frontend` for sample grouping, partial selection, directory pagination, and missing-input handling tests. These use Node's built-in test runner and TypeScript stripping (Node 22.6+).
+
 For frontend development, start the backend on port 8765, then `npm run dev` in `frontend`. Vite proxies `/api` to the backend. Open the Vite URL and paste the backend's token on the login screen. Production serves the built frontend and API from the same FastAPI process.
 
 For the real-tool smoke test:
@@ -78,7 +81,7 @@ The smoke test requires real executables and checks paired-end inputs, successfu
 
 ## Open OnDemand
 
-The [Batch Connect adapter](deploy/ood) launches this same standalone server on a PBS-allocated compute node. See [the OOD deployment guide](docs/OOD.md) for site configuration and acceptance checks. HPCF3 cluster ID, queue/account, module names, and shared installation paths are currently unspecified.
+The [Batch Connect adapter](deploy/ood) launches this same standalone server on a PBS-allocated compute node. See [the OOD deployment guide](docs/OOD.md) for site configuration and acceptance checks. Configure your site's cluster ID, queue/account, module names, and shared installation paths.
 
 ## Architecture and security
 
@@ -88,4 +91,4 @@ The core package has no OOD or PBS API dependency. `Executor` defines execution 
 
 Metrics are parsed from the bounded `fastqc_data.txt` member of a FastQC ZIP or a selected FastQC text file, without extracting archives. Per-base categories preserve FastQC's grouped positions; quartiles and 10th/90th percentiles are preserved. No Q30 fraction is inferred from these aggregated statistics.
 
-Licensed under [MIT](LICENSE). FastQC, MultiQC, Apache ECharts, and other dependencies retain their respective licenses.
+Licensed under [GNU GPLv3](LICENSE). FastQC, MultiQC, Apache ECharts, and other dependencies retain their respective licenses.
