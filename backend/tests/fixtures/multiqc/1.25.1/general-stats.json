@@ -1,0 +1,98 @@
+{
+  "config_version": "1.25.1",
+  "report_general_stats_headers": [
+    {
+      "percent_duplicates": {
+        "title": "Dups",
+        "description": "% duplicate reads",
+        "max": 100,
+        "min": 0,
+        "suffix": "%",
+        "scale": "RdYlGn-rev",
+        "namespace": "FastQC",
+        "rid": "fastqc-percent_duplicates",
+        "placement": 1000
+      },
+      "percent_gc": {
+        "title": "GC",
+        "description": "Average % GC content",
+        "max": 100,
+        "min": 0,
+        "suffix": "%",
+        "scale": "PuRd",
+        "format": "{:,.1f}",
+        "namespace": "FastQC",
+        "rid": "fastqc-percent_gc",
+        "placement": 1000
+      },
+      "avg_sequence_length": {
+        "title": "Avg len",
+        "description": "Average read length",
+        "min": 0,
+        "suffix": " bp",
+        "scale": "RdYlGn",
+        "format": "{:,.0f}",
+        "hidden": true,
+        "namespace": "FastQC",
+        "rid": "fastqc-avg_sequence_length",
+        "placement": 1000
+      },
+      "median_sequence_length": {
+        "title": "Median len",
+        "description": "Median read length",
+        "min": 0,
+        "suffix": " bp",
+        "scale": "RdYlGn",
+        "format": "{:,.0f}",
+        "hidden": true,
+        "namespace": "FastQC",
+        "rid": "fastqc-median_sequence_length",
+        "placement": 1000
+      },
+      "percent_fails": {
+        "title": "Failed",
+        "description": "Percentage of modules failed in FastQC report (includes those not plotted here)",
+        "max": 100,
+        "min": 0,
+        "suffix": "%",
+        "scale": "Reds",
+        "format": "{:,.0f}",
+        "hidden": true,
+        "namespace": "FastQC",
+        "rid": "fastqc-percent_fails",
+        "placement": 1000
+      },
+      "total_sequences": {
+        "title": "Seqs",
+        "description": "Total sequences (millions)",
+        "min": 0,
+        "scale": "Blues",
+        "suffix": "M",
+        "modify": null,
+        "namespace": "FastQC",
+        "rid": "fastqc-total_sequences",
+        "placement": 1000
+      }
+    }
+  ],
+  "report_general_stats_data": [
+    {
+      "coverage_R1": {
+        "total_sequences": 400.0,
+        "percent_gc": 47.0,
+        "avg_sequence_length": 150.05,
+        "median_sequence_length": 150,
+        "percent_duplicates": 24.75,
+        "percent_fails": 33.33333333333333
+      },
+      "coverage_R2": {
+        "total_sequences": 400.0,
+        "percent_gc": 47.0,
+        "avg_sequence_length": 150.05,
+        "median_sequence_length": 150,
+        "percent_duplicates": 24.75,
+        "percent_fails": 33.33333333333333
+      }
+    }
+  ]
+}

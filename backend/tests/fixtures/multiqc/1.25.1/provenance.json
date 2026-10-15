@@ -1,0 +1,10 @@
+{
+  "multiqc_version": "1.25.1",
+  "fastqc_version": "0.13.0",
+  "command": "multiqc --file-list input-reports.txt --outdir OUTPUT --force --data-format json --no-version-check",
+  "inputs": {
+    "backend/tests/fixtures/fastqc-0.13.0/coverage_R1_fastqc/fastqc_data.txt": "23c096b2e8cb8df2970972df696ec976d1ba20579e650e788d87222dc2fb4892",
+    "backend/tests/fixtures/fastqc-0.13.0/coverage_R2_fastqc/fastqc_data.txt": "7f8dd3ff19f2ed2341215d85db372abeb37c59ebe1b68f66f3aebdb71e8e1d25"
+  },
+  "fixture_sha256": "5c66356602f63da1bcee3d36e2c3354b6ef0d8fc201122e5b0bcd5b039d5c3d1"
+}

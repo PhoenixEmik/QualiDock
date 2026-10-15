@@ -113,3 +113,37 @@ def test_general_stats_missing_empty_and_unsupported_are_distinct(tmp_path, data
 def test_general_stats_malformed_is_not_a_valid_empty_table(tmp_path, data):
     path = tmp_path / 'stats.json'; path.write_text(json.dumps(data))
     with pytest.raises(ValueError, match='Malformed'): parse_multiqc(path)
+
+
+@pytest.mark.parametrize('version', ['1.25.1', '1.35'])
+def test_genuine_versioned_multiqc_regression(version):
+    import hashlib
+    folder = Path(__file__).parent/'fixtures/multiqc'/version
+    path = folder/'general-stats.json'
+    original = json.loads(path.read_text())
+    provenance = json.loads((folder/'provenance.json').read_text())
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == provenance['fixture_sha256']
+    for name, digest in provenance['inputs'].items():
+        assert hashlib.sha256((Path(__file__).resolve().parents[2]/name).read_bytes()).hexdigest() == digest
+    assert original['config_version'] == version
+    tables = original['report_general_stats_data']
+    assert isinstance(tables, dict if version == '1.35' else list)
+    sections = tables.items() if isinstance(tables, dict) else ((str(i), value) for i, value in enumerate(tables))
+    parsed = parse_multiqc(path)
+    assert parsed['status'] == 'available'
+    assert {row['sample'] for row in parsed['rows']} == {'coverage_R1', 'coverage_R2'}
+    rows = {row['sample']: row['values'] for row in parsed['rows']}
+    columns = {column['key']: column for column in parsed['columns']}
+    headers = original['report_general_stats_headers']
+    for section, table in sections:
+        metadata = headers[section] if isinstance(headers, dict) else headers[int(section)]
+        for key, value in metadata.items():
+            column = columns[f'{section}:{key}']
+            assert column['raw_key'] == key
+            assert column['title'] == value.get('title', key)
+            assert column['unit'] == value.get('suffix', '')
+        for sample, values in table.items():
+            for key, value in values.items():
+                if value is not None:
+                    assert rows[sample][f'{section}:{key}'] == value
+            assert values['total_sequences'] == 400  # Raw read count, never rescale to millions.
