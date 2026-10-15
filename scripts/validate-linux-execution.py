@@ -99,11 +99,11 @@ async def main(output):
                 await until(lambda: not group_snapshot(observed['group']), 10)
                 assert aggregate['state'] == 'cancelled'
                 evidence['checks']['multiqc_cancel'] = {'observation': observed, 'state': aggregate['state']}
-                broken = inputs/'broken.fastq'; broken.write_text('@broken\nACGT\n+\nII\n')
+                broken = inputs/'broken.fastq'; broken.write_text('@broken\nACGT\n+\n')
                 invalid = await manager.create('Malformed input', 'fastqc', [str(broken)], 1)
                 await until(lambda: invalid['id'] not in manager.tasks)
-                assert invalid['state'] == 'failed' and following['state'] == 'completed'
                 evidence['checks']['malformed_input'] = {'state': invalid['state'], 'error': invalid['error']}
+                assert invalid['state'] == 'failed' and following['state'] == 'completed', evidence['checks']['malformed_input']
                 limited = LocalExecutor(64)
                 code = await limited.execute('over-budget', [sys.executable, '-c', 'import time; data=bytearray(192*1024*1024); time.sleep(30)'], directory, output/'memory-overrun.log', 1)
                 assert code == 137 and limited.observations['over-budget']['peak_sampled_rss_bytes'] > 64*1024*1024
@@ -165,6 +165,7 @@ asyncio.run(main())
         raise
     finally:
         (output/'linux-execution.json').write_text(json.dumps(evidence, indent=2) + '\n')
+        print('QUALIDOCK_LINUX_EVIDENCE=' + json.dumps(evidence))
     print('PASS: actual Linux FastQC/Java/MultiQC affinity, cancellation, queue recovery, RSS limit, graceful shutdown, guardian and persisted history')
 
 
