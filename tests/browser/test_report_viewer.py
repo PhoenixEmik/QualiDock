@@ -160,6 +160,8 @@ def quality_plot(frame):
 def test_real_reports_and_interactions(workspace, browser):
     with browser.new_context(viewport={"width": 1440, "height": 1000}) as context:
         page = context.new_page()
+        errors = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
         frame = open_run(page, workspace, "Browser combined")
         assert page.get_by_label("Select HTML report").input_value() == "multiqc/multiqc_report.html"
         assert page.locator(".report-preview iframe").get_attribute("sandbox") == "allow-scripts"
@@ -167,6 +169,8 @@ def test_real_reports_and_interactions(workspace, browser):
         # Genuine MultiQC 1.35: compressed plot data, Plotly figures and tables.
         assert frame.locator("#general_stats_table_table tbody tr").count() >= 2
         chart = quality_plot(frame)
+        assert frame.locator(".mqc_loading_warning").first.is_hidden()
+        assert not errors, errors
         chart.hover()
         assert chart.locator(".modebar").count() > 0
         # Strict allow-scripts deliberately blocks native form submission before
@@ -220,6 +224,35 @@ def test_opaque_report_cannot_read_parent_or_private_state(workspace, browser):
             assert response.status == 401
         finally:
             anonymous.close()
+
+
+def test_multiqc_temporary_state_never_exposes_parent_storage_or_cookies(workspace, browser):
+    with browser.new_context() as context:
+        page = context.new_page()
+        open_run(page, workspace, "Browser combined")
+        page.evaluate("localStorage.setItem('qualidock-parent-canary','private'); sessionStorage.setItem('qualidock-parent-canary','private')")
+        frame = page.locator(".report-preview iframe").content_frame
+        quality_plot(frame)
+        boundary = frame.evaluate("""() => {
+          function blocked(fn){try{fn();return false}catch(error){return error.name==='SecurityError'}}
+          return {parentDOM:blocked(()=>parent.document.body),parentCookie:blocked(()=>parent.document.cookie),cookie:document.cookie,local:localStorage.getItem('qualidock-parent-canary'),session:sessionStorage.getItem('qualidock-parent-canary')};
+        }""")
+        assert boundary == {"parentDOM": True, "parentCookie": True, "cookie": "", "local": None, "session": None}
+        frame.evaluate("localStorage.setItem('mqc-theme','dark'); sessionStorage.setItem('report-only','value'); document.cookie='preview_only=must-not-persist'")
+        assert frame.evaluate("localStorage.getItem('mqc-theme')") == "dark"
+        assert page.evaluate("localStorage.getItem('mqc-theme')") is None
+        assert not any(cookie["name"] == "preview_only" for cookie in context.cookies())
+        assert frame.evaluate("""async () => {try{await fetch('/api/config',{credentials:'include'});return false}catch(_){return true}}""")
+        page.reload()
+        page.get_by_role("button", name="Analyses", exact=True).click()
+        page.get_by_role("button", name="Open Browser combined", exact=True).click()
+        page.get_by_role("tab", name="Reports", exact=True).click()
+        page.locator(".report-preview[aria-busy=false] iframe").wait_for()
+        frame = page.locator(".report-preview iframe").content_frame
+        quality_plot(frame)
+        assert frame.evaluate("localStorage.getItem('mqc-theme')") is None
+        assert frame.evaluate("sessionStorage.getItem('report-only')") is None
+        assert page.evaluate("localStorage.getItem('qualidock-parent-canary')") == "private"
 
 
 def test_loading_missing_reports_and_restart(workspace, browser):

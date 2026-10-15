@@ -76,7 +76,7 @@ from pathlib import Path
 if '--version' in sys.argv: print('multiqc, version 1.35'); sys.exit(0)
 p=argparse.ArgumentParser();p.add_argument('--file-list', required=True);p.add_argument('--outdir');p.add_argument('--force',action='store_true');p.add_argument('--data-format');p.add_argument('--no-version-check',action='store_true')
 a=p.parse_args();out=Path(a.outdir)
-(out/'multiqc_report.html').write_text('<html>combined official fixture</html>')
+(out/'multiqc_report.html').write_text('<!doctype html><html><head></head><body>combined official fixture</body></html>')
 (out/'multiqc_data').mkdir();(out/'multiqc_data/multiqc_data.json').write_text('{}')
 print('MultiQC fixture completed',flush=True)
 ''')

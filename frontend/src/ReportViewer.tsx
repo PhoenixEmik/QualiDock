@@ -74,10 +74,11 @@ export default function ReportViewer({ run }: { run: Run }) {
         </p>
       )}
       <p className="report-preview-help">
-        Isolated preview. Browser storage, external services, form-based
-        controls (including MultiQC text filters), and in-report exports are
-        blocked. Download the original HTML for these features or reports
-        needing external assets.
+        Isolated preview. MultiQC uses temporary in-frame settings that reset
+        when the report reloads. Application cookies and browser storage remain
+        inaccessible. External services, form-based controls (including MultiQC
+        text filters), and in-report exports are blocked. Download the original
+        HTML for these features or reports needing external assets.
       </p>
     </section>
   );

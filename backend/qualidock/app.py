@@ -16,7 +16,7 @@ from typing import Literal
 from .config import Settings
 from .files import PathViolation, DirectoryChanged
 from .manager import RunManager
-from .preview import PREVIEW_PATH, REPORT_CSP, application_csp
+from .preview import PREVIEW_PATH, application_csp, report_preview, UnsupportedPreview
 
 
 class SessionRequest(BaseModel):
@@ -173,7 +173,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return FileResponse(artifact, media_type="application/octet-stream", filename=artifact.name, headers={"Content-Security-Policy": "sandbox; default-src 'none'"})
 
     @app.api_route(PREVIEW_PATH, methods=["GET", "HEAD"])
-    async def preview(run_id: str, path: str):
+    async def preview(request: Request, run_id: str, path: str):
         if "\x00" in path or "\\" in path or Path(path).is_absolute() or ".." in Path(path).parts:
             raise PathViolation("Invalid report artifact path")
         try:
@@ -184,12 +184,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(403, "The saved report is not readable")
         if artifact.suffix.lower() != ".html":
             raise HTTPException(415, "Only registered HTML reports can be previewed; download this file instead")
-        return FileResponse(artifact, media_type="text/html", filename=artifact.name,
-                            content_disposition_type="inline", headers={
-                                "Content-Security-Policy": REPORT_CSP,
-                                "X-Frame-Options": "SAMEORIGIN",
-                                "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), fullscreen=()",
-                            })
+        try:
+            return await asyncio.to_thread(report_preview, artifact,
+                                           multiqc=path == "multiqc/multiqc_report.html",
+                                           head=request.method == "HEAD")
+        except UnsupportedPreview as exc:
+            raise HTTPException(415, str(exc))
+        except FileNotFoundError:
+            raise HTTPException(404, "The saved report is no longer available")
+        except PermissionError:
+            raise HTTPException(403, "The saved report is not readable")
 
     @app.get("/api/events")
     async def events(request: Request):

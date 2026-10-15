@@ -8,8 +8,12 @@ existing download rows. There is no new navigation page or persistence format.
 
 ## HTTP and isolation boundary
 
-`GET /api/report-preview?run_id=<id>&path=<registered-artifact>` streams the
-original HTML using `FileResponse`, `text/html`, and inline disposition.
+`GET /api/report-preview?run_id=<id>&path=<registered-artifact>` serves
+`text/html` with inline disposition. FastQC HTML is streamed unchanged with
+`FileResponse`. MultiQC HTML receives a fixed compatibility bootstrap immediately
+after its real `<head>` tag, before its bundled scripts. A bounded 64 KiB prefix
+is inspected and the rest is streamed in chunks; the complete report is not
+loaded in memory. The saved HTML and attachment download are never rewritten.
 `HEAD` performs the same authentication, artifact membership, containment,
 symlink, existence, and HTML checks without sending report bytes. The UI checks
 HEAD before embedding because iframe `load` events cannot distinguish opaque
@@ -55,7 +59,12 @@ In particular:
   so those controls are unavailable. This follows the
   [HTML form submission algorithm](https://html.spec.whatwg.org/multipage/form-control-infrastructure.html#concept-form-submit).
   The viewer displays this limitation and keeps Download alongside the selector.
-- Browser storage is unavailable, so MultiQC settings cannot persist. External
+- Real browser storage is unavailable. MultiQC receives private memory-backed
+  local/session storage interfaces (2 MiB each), reset on every frame load.
+  A cookie getter returns an empty string and ignores writes; it never exposes
+  application or browser cookies. This lets MultiQC 1.35 initialize its theme and
+  AI-cookie code without uncaught `SecurityError`, while its report settings cannot
+  persist or cross between frames. External
   services, including MultiQC's AI integrations, are blocked. Report-generated
   exports, clipboard/fullscreen operations and popup links may be unavailable.
 - Official self-contained reports can use bundled JavaScript, CSS and data
@@ -64,8 +73,10 @@ In particular:
   Images/JS/CSS directories may be incomplete. Use the original HTML and its
   associated report files/ZIP. QualiDock does not rewrite official reports or
   register additional files automatically just to make a preview work.
-- No `allow-same-origin`, `allow-forms`, storage shim, injected compatibility
-  script, or globally relaxed CSP is used. A separate report origin could permit
+- No `allow-same-origin`, `allow-forms`, actual browser storage access or globally
+  relaxed CSP is used. The fixed compatibility script provides only ephemeral
+  document state inside the opaque sandbox; it does not communicate with the parent,
+  obtain credentials, or change the report's scientific data. A separate report origin could permit
   additional controls, but requires an explicitly provisioned DNS/proxy origin,
   separate access credentials, and rejection of application cookies/APIs. It is
   not added to this single-server/OOD integration.
@@ -76,12 +87,13 @@ and opening it outside the authenticated application.
 
 ## Tests and current evidence
 
-Automated HTTP tests cover cookie and bearer access, GET/HEAD, unchanged HTML
-bytes, inline vs attachment headers, restricted CSP, arbitrary/non-HTML paths,
+Automated HTTP tests cover cookie and bearer access, GET/HEAD, unchanged original
+downloads and FastQC preview bytes, MultiQC response-only bootstrap insertion,
+streaming/lengths, inline vs attachment headers, restricted CSP, arbitrary/non-HTML paths,
 traversal, file/directory/run symlinks, missing artifacts, unknown analyses,
 HTTPS prefix-scoped cookies, retained and stripped prefixes, and restart history.
-Real-tool tests also compare preview/download bytes from FastQC 0.13.0 and
-MultiQC 1.35, including imported report companions and saved-result aggregation.
+Real-tool tests also verify FastQC 0.13.0 and MultiQC 1.35 original bytes
+remain intact apart from the fixed MultiQC preview bootstrap, including imported report companions and saved-result aggregation.
 Frontend tests cover report selection, MultiQC preference, immutable records and
 escaped paths under a proxy prefix.
 
@@ -120,9 +132,30 @@ Subsequent CI at [`e46ca0d`](https://github.com/PhoenixEmik/QualiDock/actions/ru
 did execute both browsers. All opaque-origin security cases passed, while six
 report-rendering waits per browser failed. The tests now navigate to a specific
 FastQC quality plot instead of the first global SVG, which may belong to a hidden
-General Statistics violin plot. That selector change is pending another CI run;
-full rendering acceptance is still not established. Phase 3A also adds explicit
+General Statistics violin plot. The selector change alone did not fix the failure; the initialization repair below addresses its reproduced cause. Phase 3A also adds explicit
 [native QC browser coverage](NATIVE-FASTQC.md). No sandbox restriction was relaxed.
+
+## MultiQC initialization repair (2026-10-16)
+
+MultiQC 1.35 reads `localStorage` in its top-level theme initialization and
+`document.cookie` in its ready-time AI initialization without catching opaque-origin
+errors. These aborted its bundle/ready callbacks, leaving “Loading report..” and
+empty plots. The MultiQC-only preview bootstrap handles those assumptions without
+opening access to real cookies or storage. CSP and iframe sandbox permissions are
+unchanged. Missing/unsupported HTML heads return 415 with the existing download
+fallback rather than inserting code after report scripts have already run.
+
+Validation: **139 backend tests**, **98 frontend tests** and the production build
+pass. Chrome reproduced both exceptions with the original restricted policy, then
+rendered genuine MultiQC 1.35 Plotly quality/count plots and the previously blank GC
+curves using the streamed response plus the same opaque sandbox/CSP. No Firefox UI
+was operated. Node runtime tests exercise the exact bootstrap, storage quota,
+cookie behavior and reset semantics. Browser CI adds actual parent-storage/cookie
+canaries, blocked API access and reload checks. The local manual harness is a file
+frame with CSP meta plus the sandbox attribute; authenticated HTTP/header and
+proxy-prefix checks are covered separately by backend tests and browser CI.
+Full Chromium/Firefox HTTP CI and HTTPS/OOD site acceptance still need confirmation
+for this repair; successful iframe load alone is not claimed as script validation.
 
 ## Files changed
 

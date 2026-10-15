@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from qualidock.app import create_app
 from qualidock.config import Settings
 from qualidock.metrics import parse_report
+from qualidock.preview import MEMORY_STORAGE_BOOTSTRAP
 from test_workspace import wait
 
 INPUTS = Path(__file__).parent / 'fixtures/fastqc-0.13.0'
@@ -72,7 +73,9 @@ def test_real_combined_and_existing_results_multiqc(tmp_path):
         report = client.get(f'/api/runs/{run_id}/download', params={'path': 'multiqc/multiqc_report.html'})
         assert report.status_code == 200
         preview = client.get('/api/report-preview', params={'run_id': run_id, 'path': 'multiqc/multiqc_report.html'})
-        assert preview.status_code == 200 and preview.content == report.content
+        assert preview.status_code == 200
+        assert preview.content.replace(MEMORY_STORAGE_BOOTSTRAP, b'', 1) == report.content
+        assert preview.content.count(MEMORY_STORAGE_BOOTSTRAP) == 1
         summary = client.get(f'/api/runs/{run_id}/metrics').json()['multiqc']
         assert len(summary['rows']) == 2 and summary['columns']
         response = client.post(f'/api/runs/{run_id}/multiqc')
@@ -91,4 +94,5 @@ def test_real_combined_and_existing_results_multiqc(tmp_path):
             assert client.get('/api/report-preview', params={'run_id': aggregate_id, 'path': path}).status_code == 200
     with TestClient(create_app(settings)) as restored:
         restored.headers.update({'Authorization': f'Bearer {settings.token}'})
-        assert restored.get('/api/report-preview', params={'run_id': run_id, 'path': 'multiqc/multiqc_report.html'}).content == report.content
+        response = restored.get('/api/report-preview', params={'run_id': run_id, 'path': 'multiqc/multiqc_report.html'})
+        assert response.content.replace(MEMORY_STORAGE_BOOTSTRAP, b'', 1) == report.content

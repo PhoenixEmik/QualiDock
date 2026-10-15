@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from qualidock.app import create_app
-from qualidock.preview import application_csp, REPORT_CSP
+from qualidock.preview import application_csp, REPORT_CSP, MEMORY_STORAGE_BOOTSTRAP, report_preview, UnsupportedPreview
 from test_workspace import start, wait
 
 
@@ -13,7 +13,7 @@ def preview(client, run_id, path="multiqc/multiqc_report.html", method="GET", pr
     return client.request(method, prefix + "/api/report-preview", params={"run_id": run_id, "path": path}, **kwargs)
 
 
-def test_registered_preview_is_inline_isolated_and_byte_identical(client, setup):
+def test_registered_preview_is_inline_isolated_and_preserves_original_report(client, setup):
     settings, root = setup
     run = wait(client, start(client, root)["id"])
     for report in run["reports"]:
@@ -23,7 +23,12 @@ def test_registered_preview_is_inline_isolated_and_byte_identical(client, setup)
         original = (settings.output / run["id"] / path).read_bytes()
         response = preview(client, run["id"], path)
         assert response.status_code == 200
-        assert response.content == original
+        if path == "multiqc/multiqc_report.html":
+            assert response.content.count(MEMORY_STORAGE_BOOTSTRAP) == 1
+            assert response.content.replace(MEMORY_STORAGE_BOOTSTRAP, b"", 1) == original
+            assert response.headers["x-qualidock-preview-compatibility"] == "memory-storage"
+        else:
+            assert response.content == original
         assert response.headers["content-type"] == "text/html; charset=utf-8"
         assert response.headers["content-disposition"].startswith("inline;")
         assert response.headers["cache-control"] == "no-store"
@@ -38,9 +43,10 @@ def test_registered_preview_is_inline_isolated_and_byte_identical(client, setup)
         assert "camera=()" in response.headers["permissions-policy"]
         head = preview(client, run["id"], path, method="HEAD")
         assert head.status_code == 200 and not head.content
-        assert head.headers["content-length"] == str(len(original))
+        assert head.headers["content-length"] == str(len(response.content))
         download = client.get(f"/api/runs/{run['id']}/download", params={"path": path})
         assert download.content == original
+        assert (settings.output / run["id"] / path).read_bytes() == original
         assert download.headers["content-disposition"].startswith("attachment;")
         assert download.headers["content-type"] == "application/octet-stream"
         assert download.headers["x-frame-options"] == "DENY"
@@ -137,3 +143,44 @@ def test_policy_host_cannot_inject_sources():
     assert "frame-src 'none'" in application_csp("evil; script-src *", "")
     assert "frame-src [::1]:8765/api/report-preview;" in application_csp("[::1]:8765", "")
     assert "frame-src qc.example/node/compute%20name/8765/api/report-preview;" in application_csp("qc.example", "/node/compute name/8765")
+
+
+@pytest.mark.parametrize("prefix", [b"<!doctype html><!-- <head> is a comment -->\n<html><head data-note='a>b'>", "<!doctype html><!-- 測試 -->\n<html>\n<head>".encode(), "<!doctype html><!-- Å -->\n<html><head>".encode()])
+def test_multiqc_bootstrap_follows_actual_head_without_rewriting_report(tmp_path, prefix):
+    import asyncio
+    artifact = tmp_path / "multiqc_report.html"
+    original = prefix + b"<title>Original</title></head><body>" + b"x" * (200 * 1024) + b"</body></html>"
+    artifact.write_bytes(original)
+    response = report_preview(artifact, multiqc=True)
+    async def collect():
+        return [part async for part in response.body_iterator]
+    chunks = asyncio.run(collect())
+    result = b"".join(chunks)
+    assert chunks[0] == prefix
+    assert chunks[1] == MEMORY_STORAGE_BOOTSTRAP
+    assert max(map(len, chunks[2:])) <= 64 * 1024
+    assert result.replace(MEMORY_STORAGE_BOOTSTRAP, b"", 1) == original
+    assert artifact.read_bytes() == original
+    head = report_preview(artifact, multiqc=True, head=True)
+    assert head.body == b"" and int(head.headers["content-length"]) == len(result)
+    assert "etag" not in response.headers  # No stale original-file validator.
+
+
+@pytest.mark.parametrize("content", [b"<script>window.ran=true</script><head></head>", b"<html>" + b" " * (64 * 1024) + b"<head></head>"])
+def test_unsupported_multiqc_head_has_explicit_download_fallback(tmp_path, content):
+    artifact = tmp_path / "multiqc_report.html"
+    artifact.write_bytes(content)
+    with pytest.raises(UnsupportedPreview):
+        report_preview(artifact, multiqc=True)
+
+
+def test_unsupported_registered_multiqc_returns_415_without_changing_download(client, setup):
+    settings, root = setup
+    run = wait(client, start(client, root)["id"])
+    original = b"<script>window.earlyScript=true</script><head></head>"
+    (settings.output / run["id"] / "multiqc/multiqc_report.html").write_bytes(original)
+    for method in ("GET", "HEAD"):
+        assert preview(client, run["id"], method=method).status_code == 415
+    response = client.get(f"/api/runs/{run['id']}/download", params={"path": "multiqc/multiqc_report.html"})
+    assert response.content == original
+    assert response.headers["content-disposition"].startswith("attachment;")
