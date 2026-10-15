@@ -60,6 +60,8 @@ export interface ToolInfo {
   error: string | null;
 }
 export interface MultiQCSummary {
+  status?: "available" | "empty" | "missing" | "unsupported" | "invalid";
+  message?: string | null;
   columns: {
     key: string;
     title: string;

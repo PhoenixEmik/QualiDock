@@ -126,32 +126,46 @@ def parse_report(path: Path, source: str) -> dict:
 
 
 def parse_multiqc(path: Path) -> dict:
-    """Expose general-statistics values without scaling, rounding or recomputation."""
+    """Read the list-based and section-keyed General Statistics exports in MultiQC 1.x."""
+    def unavailable(status, message):
+        return {"status": status, "message": message, "columns": [], "rows": []}
+
     data = json.loads(bounded_text(path))
     if not isinstance(data, dict):
-        raise ValueError("Unsupported MultiQC JSON structure")
-    headers = data.get("report_general_stats_headers", [])
-    tables = data.get("report_general_stats_data", [])
-    if not isinstance(headers, list) or not isinstance(tables, list):
-        return {"columns": [], "rows": []}
+        raise ValueError("Malformed MultiQC JSON: expected an object")
+    if "report_general_stats_headers" not in data or "report_general_stats_data" not in data:
+        return unavailable("missing", "MultiQC JSON does not contain General Statistics fields.")
+    headers, tables = data["report_general_stats_headers"], data["report_general_stats_data"]
+    if isinstance(tables, list) and isinstance(headers, list):
+        sections = [(str(index), table, headers[index] if index < len(headers) else {}) for index, table in enumerate(tables)]
+    elif isinstance(tables, dict) and isinstance(headers, dict):
+        sections = [(key, table, headers.get(key, {})) for key, table in tables.items()]
+    else:
+        return unavailable("unsupported", "Unsupported MultiQC General Statistics schema: expected matching lists or section-keyed objects.")
     columns, rows = [], {}
-    for index, table in enumerate(tables):
-        if not isinstance(table, dict):
-            continue
-        metadata = headers[index] if index < len(headers) and isinstance(headers[index], dict) else {}
-        keys = dict.fromkeys(key for values in table.values() if isinstance(values, dict) for key in values)
+    for section, table, metadata in sections:
+        if not isinstance(table, dict) or not isinstance(metadata, dict):
+            raise ValueError(f"Malformed MultiQC General Statistics section: {section}")
+        if any(not isinstance(values, dict) for values in table.values()):
+            raise ValueError(f"Malformed MultiQC sample rows in section: {section}")
+        # Retain columns with absent sample values; never fill missing cells with zeros.
+        keys = dict.fromkeys([*metadata, *(key for values in table.values() for key in values)])
         for key in keys:
             column = metadata.get(key, {})
             if not isinstance(column, dict):
-                column = {}
-            column = {name: value if isinstance(value, str) else "" for name, value in column.items()}
-            columns.append({"key": f"{index}:{key}", "title": column.get("title", key), "description": column.get("description", ""), "namespace": column.get("namespace", ""), "unit": column.get("suffix", ""), "raw_key": key})
+                raise ValueError(f"Malformed MultiQC column metadata: {section}:{key}")
+            def label(name, default=""):
+                value = column.get(name, default)
+                return value if isinstance(value, str) else default
+            columns.append({"key": f"{section}:{key}", "title": label("title", key), "description": label("description"), "namespace": label("namespace"), "unit": label("suffix"), "raw_key": key})
         for sample, values in table.items():
-            if not isinstance(values, dict):
-                continue
             row = rows.setdefault(sample, {"sample": sample, "values": {}})
             for key, value in values.items():
-                if isinstance(value, (str, int, float)) and not isinstance(value, bool):
-                    if not isinstance(value, float) or math.isfinite(value):
-                        row["values"][f"{index}:{key}"] = value
-    return {"columns": columns, "rows": list(rows.values())}
+                if value is None:
+                    continue
+                if not isinstance(value, (str, int, float)) or isinstance(value, bool) or isinstance(value, float) and not math.isfinite(value):
+                    raise ValueError(f"Malformed MultiQC cell: {section}:{sample}:{key}")
+                row["values"][f"{section}:{key}"] = value
+    if not rows or not columns or not any(row["values"] for row in rows.values()):
+        return unavailable("empty", "MultiQC produced an empty General Statistics table.")
+    return {"status": "available", "message": None, "columns": columns, "rows": list(rows.values())}

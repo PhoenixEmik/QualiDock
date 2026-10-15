@@ -282,11 +282,16 @@ class RunManager:
                 if run_id in self.cancelled:
                     return
                 structured = directory / "multiqc/multiqc_data/multiqc_data.json"
-                if structured.is_file():
-                    try:
-                        metrics["multiqc"] = await asyncio.to_thread(parse_multiqc, structured)
-                    except (ValueError, OSError, UnicodeError, TypeError) as exc:
-                        run["warnings"].append(f"MultiQC summary unavailable: {exc}")
+                if run["mode"] != "fastqc":
+                    if not structured.exists():
+                        metrics["multiqc"] = {"status": "missing", "message": "MultiQC structured JSON was not generated; inspect the log and official report.", "columns": [], "rows": []}
+                    else:
+                        try:
+                            metrics["multiqc"] = await asyncio.to_thread(parse_multiqc, structured)
+                        except (ValueError, OSError, UnicodeError, TypeError) as exc:
+                            metrics["multiqc"] = {"status": "invalid", "message": f"Cannot parse MultiQC General Statistics: {exc}", "columns": [], "rows": []}
+                    if metrics["multiqc"]["status"] != "available":
+                        run["warnings"].append(metrics["multiqc"]["message"])
                 await asyncio.to_thread(save_json, directory / "metrics.json", metrics)
                 expected = len(run.get("report_inputs", [])) if run["mode"] == "multiqc" else len(paths)
                 if len(metrics["samples"]) != expected:

@@ -88,3 +88,28 @@ def test_multiqc_general_stats_preserve_raw_values(tmp_path):
     summary = parse_multiqc(path)
     assert summary['rows'] == [{'sample': 'sample', 'values': {'0:total': 1234567, '0:gc': 48.125}}]
     assert summary['columns'][0]['unit'] == ' M'  # Stored metadata; never apply display scaling.
+
+
+@pytest.mark.parametrize('shape', ['list', 'sections'])
+def test_general_stats_supported_shapes_and_absent_values(tmp_path, shape):
+    headers = {'count': {'title': 'Reads'}, 'absent': {'title': 'Not reported'}}
+    values = {'R1': {'count': 400}, 'R2': {'count': 401, 'absent': None}}
+    data = {'report_general_stats_headers': [headers] if shape == 'list' else {'fastqc': headers}, 'report_general_stats_data': [values] if shape == 'list' else {'fastqc': values}}
+    path = tmp_path / 'stats.json'; path.write_text(json.dumps(data))
+    result = parse_multiqc(path)
+    assert result['status'] == 'available' and len(result['rows']) == 2
+    assert len(result['columns']) == 2
+    assert not any(key.endswith(':absent') for row in result['rows'] for key in row['values'])
+
+
+@pytest.mark.parametrize(('data', 'status'), [({}, 'missing'), ({'report_general_stats_headers': [], 'report_general_stats_data': []}, 'empty'), ({'report_general_stats_headers': {}, 'report_general_stats_data': {}}, 'empty'), ({'report_general_stats_headers': [], 'report_general_stats_data': {}}, 'unsupported')])
+def test_general_stats_missing_empty_and_unsupported_are_distinct(tmp_path, data, status):
+    path = tmp_path / 'stats.json'; path.write_text(json.dumps(data))
+    result = parse_multiqc(path)
+    assert result['status'] == status and result['message'] and result['rows'] == []
+
+
+@pytest.mark.parametrize('data', [[], {'report_general_stats_headers': {}, 'report_general_stats_data': {'fastqc': []}}, {'report_general_stats_headers': [{}], 'report_general_stats_data': [{'sample': 'not a row'}]}])
+def test_general_stats_malformed_is_not_a_valid_empty_table(tmp_path, data):
+    path = tmp_path / 'stats.json'; path.write_text(json.dumps(data))
+    with pytest.raises(ValueError, match='Malformed'): parse_multiqc(path)

@@ -55,7 +55,7 @@ with tempfile.TemporaryDirectory(prefix='qualidock-smoke-') as output:
         reports = ['metrics.json', 'manifest.json', 'analysis.log']
         if args.mode == 'both':
             reports.append('multiqc/multiqc_report.html')
-            assert metrics['multiqc']['rows'], 'MultiQC general statistics are missing'
+            assert metrics['multiqc'].get('status') == 'available' and len(metrics['multiqc']['rows']) == 2, metrics['multiqc']
             response = client.post(f'/api/runs/{run_id}/multiqc')
             assert response.status_code == 201, response.text
             aggregated = finished(response.json()['id'])

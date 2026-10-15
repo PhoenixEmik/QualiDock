@@ -498,6 +498,12 @@ export default function AnalysisDetail({
               QC data.
             </span>
           </div>
+          {multiqc && !multiqc.rows.length && (
+            <p className="inline-note" role="status">
+              {multiqc.message ||
+                "MultiQC General Statistics are unavailable for this analysis."}
+            </p>
+          )}
           {multiqc && multiqc.rows.length > 0 && (
             <section className="sample-table-section">
               <h2>MultiQC sample summary</h2>
