@@ -26,6 +26,8 @@ def test_statistics_selection_status_navigation_comparison_and_exports(workspace
         expect(legend.get_by_role('listitem')).to_have_count(4)
         expect(page.locator('.qc-status-cell.pass svg').first).to_have_attribute('aria-hidden', 'true')
         expect(page.locator('.qc-status-cell.fail svg').first).to_be_visible()
+        Path('validation').mkdir(exist_ok=True)
+        page.screenshot(path='validation/native-overview'+workspace.settings.prefix.replace('/','-')+'.png', full_page=True)
         table = page.get_by_role('region', name='General Statistics table', exact=True)
         expect(table.locator('tbody tr')).to_have_count(2)
         expect(table.get_by_role('button', name=re.compile('Seqs.*reads'))).to_be_visible()

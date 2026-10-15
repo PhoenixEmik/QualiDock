@@ -2367,8 +2367,12 @@ tr.row-selected:hover {
 .qc-overview-summary dl > div {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
   gap: 5px;
   min-width: 0;
+  padding: 0;
+  border: 0;
 }
 .qc-overview-summary dt {
   color: var(--text-secondary);
@@ -2376,6 +2380,9 @@ tr.row-selected:hover {
 }
 .qc-overview-summary dd {
   order: -1;
+  text-align: left;
+  color: var(--text);
+  min-height: 36px;
   margin: 0;
   font-size: 28px;
   font-weight: 600;
@@ -2416,9 +2423,6 @@ tr.row-selected:hover {
   .qc-overview-summary dt {
     font-size: 11px;
   }
-}
-.qc-overview-summary dd {
-  min-height: 36px;
 }
 .qc-count-unavailable {
   font-size: 14px;
