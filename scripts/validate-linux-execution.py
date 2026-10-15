@@ -152,6 +152,10 @@ asyncio.run(main())
                         if parent.poll() is None: parent.kill(); parent.wait(timeout=10)
                 assert original == {p.name: (p.stat().st_size,p.stat().st_mtime_ns,hashlib.sha256(p.read_bytes()).hexdigest()) for p in (small,large)}
                 evidence['checks']['inputs_unchanged'] = True
+                await asyncio.to_thread(subprocess.run, [sys.executable, str(Path(__file__).with_name('benchmark-analysis.py')), '--input', str(small), '--output', str(output/'benchmark-smoke'), '--mode', 'fastqc', '--threads', '1', '--memory-mb', '1024'], check=True)
+                measured = json.loads((output/'benchmark-smoke/benchmark.json').read_text())
+                assert measured['input_integrity_unchanged'] and measured['run']['state'] == 'completed'
+                evidence['checks']['benchmark_command_smoke'] = 'passed'
                 for run in manager.runs.values():
                     source = manager.directory(run['id'])
                     target = output/run['id']; target.mkdir()
