@@ -6,9 +6,10 @@ import threading
 import time
 import uuid
 from collections import OrderedDict
+from .sample_metadata import PAIR_NAME, describe
 
 FASTQ = re.compile(r"\.(?:fastq|fq)(?:\.gz)?$", re.I)
-PAIR = re.compile(r"^(.*?)([._-])(?:R)?([12])((?:[._-]00\d)?)$", re.I)
+PAIR = PAIR_NAME
 
 
 class PathViolation(ValueError):
@@ -65,7 +66,7 @@ class FileAccess:
                 "size": info.st_size if kind != "directory" else None, "modified": info.st_mtime,
                 "read": f"R{pair[3]}" if pair else None,
                 "pair_key": str(directory / (pair[1] + pair[4])) if pair else None,
-                "paired": False, "mate": None}
+                "paired": False, "mate": None, "ambiguous": False, **(describe(path) if kind == "fastq" else {})}
 
     def _snapshot(self, directory, token, refresh):
         signature = self.signature(directory)
@@ -105,7 +106,16 @@ class FileAccess:
             names.sort(key=lambda item: (not item[1], item[0].casefold(), item[0]))
             if self.signature(directory) != signature:
                 raise DirectoryChanged("Directory changed while indexing. Refresh and try again.")
-            cached = {'signature': signature, 'names': names, 'groups': groups, 'token': uuid.uuid4().hex, 'accessed': time.monotonic()}
+            samples = {}
+            for name, is_directory in names:
+                if is_directory or not FASTQ.search(name):
+                    continue
+                details = describe(directory / name)
+                pair = PAIR.match(FASTQ.sub('', name))
+                group = groups.get(pair[1] + pair[4], {}) if pair else {}
+                if details['sample_key'] and not any(len(group.get(read, [])) > 1 for read in ('R1', 'R2')):
+                    samples.setdefault(details['sample_key'], []).append(str(directory / name))
+            cached = {'signature': signature, 'names': names, 'groups': groups, 'samples': samples, 'token': uuid.uuid4().hex, 'accessed': time.monotonic()}
             self._snapshots.pop(str(directory), None)
             while self._snapshots and (len(self._snapshots) >= MAX_CACHED_DIRECTORIES or sum(len(value['names']) for value in self._snapshots.values()) + len(names) > MAX_INDEX_ENTRIES):
                 self._snapshots.popitem(last=False)
@@ -116,6 +126,7 @@ class FileAccess:
         if current and current['pair_key']:
             pair = PAIR.match(FASTQ.sub('', current['name']))
             group = cached['groups'].get(pair[1] + pair[4], {})
+            current['ambiguous'] = any(len(group.get(read, [])) > 1 for read in ('R1', 'R2'))
             if len(group.get('R1', [])) == len(group.get('R2', [])) == 1:
                 mate = entry(group['R2' if current['read'] == 'R1' else 'R1'][0])
                 if mate and mate['kind'] == 'fastq':
@@ -141,7 +152,7 @@ class FileAccess:
                 if path.parent == directory:
                     current = self._pair(entry(path.name), cached, entry)
                     if current:
-                        result.append({key: current[key] for key in ('path', 'name', 'read', 'pair_key', 'paired', 'mate')})
+                        result.append({key: current[key] for key in ('path', 'name', 'read', 'pair_key', 'paired', 'mate', 'lane', 'chunk', 'ambiguous')})
             if self.resolve(str(directory)) != directory or self.signature(directory) != cached['signature']:
                 raise DirectoryChanged("Directory changed while confirming pairs. Refresh and retry.")
         return result
@@ -172,5 +183,7 @@ class FileAccess:
         parent = directory.parent if any(directory.parent.is_relative_to(r) for r in self.roots) else None
         total = len(cached['names'])
         following = offset + limit
-        return {"path": str(directory), "parent": str(parent) if parent else None, "entries": entries,
+        sample_keys = {entry.get('sample_key') for entry in entries if not entry.get('ambiguous')}
+        sample_groups = {key: {'paths': cached['samples'][key][:501], 'total': len(cached['samples'][key])} for key in sample_keys if key in cached['samples']}
+        return {"sample_groups": sample_groups, "path": str(directory), "parent": str(parent) if parent else None, "entries": entries,
                 "total": total, "snapshot": cached['token'], "next_offset": following if following < total else None}

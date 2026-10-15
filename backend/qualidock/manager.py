@@ -8,6 +8,9 @@ import os
 from pathlib import Path
 import shutil
 import time
+import tempfile
+import re
+from copy import deepcopy
 import uuid
 import zipfile
 
@@ -17,6 +20,8 @@ from .files import FileAccess, FASTQ, PathViolation
 from .metrics import parse_report, parse_multiqc
 from .reports import discover, metadata
 from .tools import detect_tool
+from .store import ResultStores
+from .sample_metadata import validate_configuration
 
 ACTIVE = {"queued", "running"}
 TERMINAL = {"completed", "failed", "partial", "cancelled", "interrupted"}
@@ -27,18 +32,25 @@ def now():
 
 
 def save_json(path: Path, value):
-    temporary = path.with_suffix(".tmp")
-    with temporary.open("w") as stream:
-        json.dump(value, stream, indent=2, allow_nan=False)
-        stream.flush()
-        os.fsync(stream.fileno())
-    os.replace(temporary, path)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, prefix="." + path.name, suffix=".tmp", delete=False) as stream:
+            temporary = Path(stream.name)
+            json.dump(value, stream, indent=2, allow_nan=False)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
 
 
 class RunManager:
     def __init__(self, settings: Settings, executor: Executor | None = None):
         self.settings = settings
         self.files = FileAccess(settings.roots)
+        self.stores = ResultStores(settings.output, settings.output_roots)
         self.executor = executor or LocalExecutor(max(256, settings.memory_mb - 256))
         self.runs: dict[str, dict] = {}
         self.tasks: dict[str, asyncio.Task] = {}
@@ -53,39 +65,46 @@ class RunManager:
         self.tool_checked_at = 0.0
 
     def start(self):
-        self.settings.output.mkdir(parents=True, exist_ok=True, mode=0o700)
-        self.lock = (self.settings.output / ".lock").open("a")
+        self.stores.start()
+        self.lock = self.stores.locks[self.stores.default]
         try:
-            fcntl.flock(self.lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError as exc:
-            self.lock.close()
-            raise RuntimeError("Another QualiDock session owns this results directory") from exc
-        for path in self.settings.output.glob("*/manifest.json"):
-            if path.is_symlink() or path.parent.is_symlink():
-                continue
-            try:
-                run = json.loads(path.read_text())
-                if run["id"] != path.parent.name or len(run["id"]) != 32:
-                    continue
-                if run["state"] in ACTIVE:
-                    run.update(state="interrupted", finished_at=now(), stage="Session ended",
-                               error="The previous web session ended before this analysis finished.")
-                    save_json(path, run)
-                self.runs[run["id"]] = run
-            except (OSError, ValueError, KeyError):
-                continue
+            for root in self.stores.roots:
+                for path in root.glob("*/manifest.json"):
+                    if path.is_symlink() or path.parent.is_symlink():
+                        continue
+                    try:
+                        run = json.loads(path.read_text())
+                        if run["id"] != path.parent.name or not re.fullmatch('[a-f0-9]{32}', run['id']):
+                            continue
+                        if run.get('output_directory', str(path.parent)) != str(path.parent):
+                            continue
+                        if run['id'] in self.runs:
+                            raise RuntimeError('Duplicate analysis ID in configured result stores')
+                        self.stores.paths[run['id']] = path.parent
+                        self.stores.directory(run['id'])
+                        if run["state"] in ACTIVE:
+                            run.update(state="interrupted", finished_at=now(), stage="Session ended", error="The previous web session ended before this analysis finished.")
+                            save_json(path, run)
+                        self.runs[run["id"]] = run
+                    except (OSError, ValueError, KeyError):
+                        continue
+        except Exception:
+            self.stores.close()
+            raise
 
     def directory(self, run_id: str) -> Path:
         if run_id not in self.runs:
             raise KeyError(run_id)
-        directory = self.settings.output / run_id
-        if directory.is_symlink() or not directory.resolve().is_relative_to(self.settings.output.resolve()):
-            raise PathViolation("Result directory is unavailable")
-        return directory
+        return self.stores.directory(run_id)
 
     def update(self, run: dict, **changes):
-        run.update(changes, updated_at=now())
-        save_json(self.directory(run["id"]) / "manifest.json", run)
+        updated = {**run, **changes, "updated_at": now()}
+        try:
+            self.stores.resolve(str(self.directory(run['id']).parent))
+            save_json(self.directory(run["id"]) / "manifest.json", updated)
+        except OSError as exc:
+            raise PathViolation('Cannot persist analysis metadata: output location is unavailable or unwritable') from exc
+        run.update(updated)
         self.revision += 1
 
     def list(self):
@@ -120,22 +139,30 @@ class RunManager:
             return FileAccess([fastqc])
         return self.files
 
-    async def create(self, name: str, mode: str, raw_paths: list[str], threads: int, source_run_id=None):
+    async def create(self, name: str, mode: str, raw_paths: list[str], threads: int, source_run_id=None, *, input_pairing=None, sample_groups=None, output_root=None, rerun_of=None):
+        if mode not in {'both', 'fastqc', 'multiqc'}:
+            raise ValueError('Invalid analysis mode')
         if self.closing:
             raise ValueError("Session is stopping")
         if self.settings.memory_mb < 1024:
             raise ValueError("Allocate at least 1024 MB to start an analysis")
-        if threads > self.settings.max_threads:
+        if threads < 1 or threads > self.settings.max_threads:
             raise ValueError(f"This session allows at most {self.settings.max_threads} analysis threads")
         if len([r for r in self.runs.values() if r["state"] in ACTIVE]) >= 20:
             raise ValueError("The analysis queue is full")
         await self.detect_tools()
+        if rerun_of:
+            previous = self.runs[rerun_of]
+            if previous.get('source_run_id') and mode == 'multiqc' and raw_paths == previous['inputs']:
+                source_run_id = previous['source_run_id']
         access = self.input_access(source_run_id)
         paths = list(dict.fromkeys(access.resolve(p) for p in raw_paths))
         if not paths or len(paths) > 500:
             raise ValueError("Select between 1 and 500 inputs")
         report_inputs = []
+        supplied_pairing = input_pairing
         input_pairing = []
+        normalized_groups = []
         pairing_note = None
         if mode == "multiqc":
             try:
@@ -148,12 +175,16 @@ class RunManager:
             stems = [FASTQ.sub("", p.name) for p in paths]
             if len(stems) != len(set(stems)):
                 raise ValueError("Input filenames must have unique FASTQ stems to avoid output collisions")
-            try:
-                input_pairing = await asyncio.to_thread(access.pairing, paths)
-            except (ValueError, OSError):
-                # Pairing is optional display metadata. A directory index limit
-                # or an unavailable mate must not prevent valid FastQC inputs.
-                pairing_note = "Pairing could not be confirmed; reads remain available individually."
+            configuration = await asyncio.to_thread(self.sample_configuration, paths, supplied_pairing, sample_groups)
+            input_pairing = configuration['input_pairing'] if not configuration.get('pairing_note') or supplied_pairing is not None else []
+            normalized_groups = configuration['sample_groups']
+            pairing_note = configuration.get('pairing_note')
+        sample_input_paths = [str(path) for path in paths] if mode != 'multiqc' else []
+        if mode == 'multiqc' and source_run_id:
+            source = self.runs[source_run_id]
+            input_pairing = deepcopy(source.get('input_pairing', []))
+            normalized_groups = deepcopy(source.get('sample_groups', []))
+            sample_input_paths = source.get('sample_input_paths', source['inputs'])
         required = ["fastqc"] if mode == "fastqc" else ["multiqc"] if mode == "multiqc" else ["fastqc", "multiqc"]
         for tool in required:
             info = self.tool_info.get(tool)
@@ -165,16 +196,16 @@ class RunManager:
         if self.closing or len([r for r in self.runs.values() if r["state"] in ACTIVE]) >= 20:
             raise ValueError("Session is stopping or the analysis queue is full")
         run_id = uuid.uuid4().hex
-        directory = self.settings.output / run_id
-        directory.mkdir(mode=0o700)
+        directory = self.stores.allocate(run_id, output_root)
         for sub in ("fastqc", "multiqc", "inputs"):
             (directory / sub).mkdir(mode=0o700)
         (directory / "analysis.log").touch(mode=0o600)
         run = {"schema_version": 2, "id": run_id, "name": name.strip() or "Untitled analysis", "mode": mode,
                "state": "queued", "stage": "Waiting for resources", "created_at": now(), "updated_at": now(),
                "started_at": None, "finished_at": None, "threads": threads, "inputs": [str(p) for p in paths],
-               "input_metadata": [{**metadata(p), "kind": "directory" if p.is_dir() else "file"} for p in paths],
-               "input_pairing": input_pairing,
+               "input_metadata": [{**metadata(p), "kind": "directory" if p.is_dir() else "file", "device": p.stat().st_dev, "inode": p.stat().st_ino} for p in paths],
+               "input_pairing": input_pairing, "sample_groups": normalized_groups, "sample_input_paths": sample_input_paths,
+               "output_root": str(directory.parent), "output_directory": str(directory), "rerun_of": rerun_of,
                "pairing_note": pairing_note,
                "report_inputs": report_inputs, "source_run_id": source_run_id, "tools": {tool: dict(self.tool_info.get(tool, {})) for tool in required},
                "executions": [], "parameters": {"threads": threads, "memory_mb": self.settings.memory_mb, "executor": "local"},
@@ -183,6 +214,69 @@ class RunManager:
         self.update(run)
         self.tasks[run_id] = asyncio.create_task(self.execute(run))
         return run
+
+    @staticmethod
+    def readable_fastq(path):
+        if not path.is_file() or not FASTQ.search(path.name) or not path.stat().st_mode & 0o444 or not os.access(path, os.R_OK):
+            raise ValueError(f'FASTQ is unavailable or unreadable: {path.name}')
+        with path.open('rb') as stream:
+            stream.read(0)
+
+    def sample_configuration(self, raw_paths, pairing=None, groups=None):
+        paths = [self.files.resolve(str(path)) for path in raw_paths]
+        if not paths or len(paths) > 500 or len(set(paths)) != len(paths):
+            raise ValueError('Select 1–500 distinct FASTQ files')
+        for path in paths:
+            self.readable_fastq(path)
+        note = None
+        try:
+            automatic = self.files.pairing(paths)
+        except (OSError, ValueError):
+            automatic = [{'path': str(path), 'name': path.name, 'paired': False, 'read': None, 'mate': None, 'pair_key': None} for path in paths]
+            note = 'Automatic pairing unavailable. Review manual assignments or analyze reads individually.'
+        allowed = {str(path) for path in paths}
+        for record in automatic:
+            record['source'] = 'auto'
+            if record.get('mate') not in allowed:
+                record.update(paired=False, mate=None, pair_key=None)
+        # Normalize only file references, never reinterpret user relationship metadata.
+        if pairing is not None:
+            pairing = deepcopy(pairing)
+            for record in pairing:
+                if isinstance(record, dict):
+                    for key in ('path', 'mate'):
+                        if record.get(key): record[key] = str(self.files.resolve(record[key]))
+        if groups is not None:
+            groups = deepcopy(groups)
+            for group in groups:
+                if isinstance(group, dict) and isinstance(group.get('files'), list):
+                    group['files'] = [str(self.files.resolve(path)) for path in group['files']]
+        result = validate_configuration(paths, automatic, pairing, groups)
+        result['pairing_note'] = note
+        return result
+
+    def rename(self, run_id, name):
+        name = name.strip()
+        if not name or len(name) > 120 or any(ord(c) < 32 for c in name):
+            raise ValueError('Analysis names must contain 1–120 printable characters')
+        run = self.runs[run_id]
+        self.update(run, name=name)
+        return run
+
+    def configuration(self, run_id):
+        run = self.runs[run_id]
+        access = self.input_access(run.get('source_run_id'))
+        paths = [access.resolve(path) for path in run['inputs']]
+        entries = []
+        for path in paths:
+            if run['mode'] != 'multiqc': self.readable_fastq(path)
+            entry = access._entry(path.parent, path.name)
+            if not entry: raise ValueError('An original input is unavailable')
+            entries.append(entry)
+        self.stores.resolve(str(self.directory(run_id).parent))
+        return {'name': (run['name'] + ' · rerun')[:120], 'mode': run['mode'], 'paths': [str(path) for path in paths], 'entries': entries,
+                'threads': min(run.get('threads', 1), self.settings.max_threads), 'input_pairing': run.get('input_pairing') or None,
+                'sample_groups': run.get('sample_groups') or None, 'output_root': str(self.directory(run_id).parent), 'rerun_of': run_id}
 
     def checked_inputs(self, run):
         paths = []
@@ -194,8 +288,9 @@ class RunManager:
                     raise ValueError("Input directory is unavailable")
                 paths.append(path)
                 continue
+            self.readable_fastq(path) if run['mode'] != 'multiqc' else None
             stat = path.stat()
-            if not path.is_file() or stat.st_size != metadata["size"] or stat.st_mtime_ns != metadata["mtime_ns"]:
+            if not path.is_file() or stat.st_size != metadata["size"] or stat.st_mtime_ns != metadata["mtime_ns"] or any(key in metadata and getattr(stat, attribute) != metadata[key] for key, attribute in (("device", "st_dev"), ("inode", "st_ino"))):
                 raise ValueError(f"Input changed while queued: {path.name}")
             paths.append(path)
         return paths
@@ -217,7 +312,7 @@ class RunManager:
 
     async def execute(self, run):
         run_id = run["id"]
-        directory = self.directory(run_id)
+        directory = self.stores.paths[run_id]
         metrics = {"schema_version": 2, "samples": []}
         errors = []
         try:
@@ -313,13 +408,25 @@ class RunManager:
                 self.update(run, state=state, stage="Finished", progress=100, finished_at=now(), error=" ".join(errors) or None)
         except Exception as exc:
             if run_id not in self.cancelled:
-                if metrics["samples"]:
-                    await asyncio.to_thread(save_json, directory / "metrics.json", metrics)
-                self.update(run, state="partial" if metrics["samples"] else "failed", sample_count=len(metrics["samples"]), stage="Stopped", error=str(exc), finished_at=now())
-                with (directory / "analysis.log").open("a") as stream:
-                    stream.write(f"\nQualiDock: {exc}\n")
+                changes = dict(state="partial" if metrics["samples"] else "failed", sample_count=len(metrics["samples"]), stage="Stopped", error=str(exc), finished_at=now())
+                try:
+                    self.stores.resolve(str(self.directory(run_id).parent))
+                    if metrics["samples"]:
+                        await asyncio.to_thread(save_json, directory / "metrics.json", metrics)
+                    self.update(run, **changes)
+                    with (directory / "analysis.log").open("a") as stream:
+                        stream.write(f"\nQualiDock: {exc}\n")
+                except (OSError, ValueError):
+                    # Surface storage loss in the live UI even when persistence is
+                    # impossible. Restart will identify its saved active state.
+                    run.update(**changes, updated_at=now())
+                    self.revision += 1
         finally:
-            self.refresh_reports(run)
+            try:
+                self.refresh_reports(run)
+            except (OSError, ValueError):
+                run.setdefault('warnings', []).append('Results location is unavailable; artifact indexing could not be persisted.')
+                self.revision += 1
             self.tasks.pop(run_id, None)
 
     def refresh_reports(self, run):
@@ -346,11 +453,14 @@ class RunManager:
         self.cancelled.update(run_id for run_id, _ in unfinished)
         for run_id, run in unfinished:
             await self.executor.cancel(run_id)
-            self.update(run, state="interrupted", stage="Session ended", finished_at=now(), error="The web session ended. Start a new analysis to rerun these inputs.")
+            changes = dict(state="interrupted", stage="Session ended", finished_at=now(), error="The web session ended. Start a new analysis to rerun these inputs.")
+            try:
+                self.update(run, **changes)
+            except (OSError, ValueError):
+                run.update(**changes, updated_at=now())
         if self.tasks:
             await asyncio.gather(*list(self.tasks.values()), return_exceptions=True)
-        if self.lock:
-            self.lock.close()
+        self.stores.close()
 
     def artifact(self, run_id, raw: str):
         run = self.runs[run_id]

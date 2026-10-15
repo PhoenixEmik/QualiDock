@@ -15,15 +15,17 @@ def test_analysis_preserves_explorer_confirmed_pairs_and_history(setup):
         expected = FileAccess([root]).pairing(sorted(root.glob("*.fastq")))
         run = wait(client, start(client, root)["id"])
         assert run["state"] == "completed"
-        assert run["input_pairing"] == expected
+        assert [{key: record[key] for key in expected[0]} for record in run["input_pairing"]] == expected
+        assert all(record['source'] == 'auto' and record['assignment'] == 'paired' for record in run['input_pairing'])
+        persisted = run['input_pairing']
         assert {record["read"] for record in expected} == {"R1", "R2"}
         assert all(record["paired"] and record["mate"] for record in expected)
-        assert set(expected[0]) == {"path", "name", "read", "pair_key", "paired", "mate"}
+        assert set(expected[0]) == {"path", "name", "read", "pair_key", "paired", "mate", "lane", "chunk", "ambiguous"}
         metrics = client.get(f"/api/runs/{run['id']}/metrics").json()
         assert {sample["name"] for sample in metrics["samples"]} == {record["name"] for record in expected}
     with TestClient(create_app(settings)) as client:
         client.headers.update({"Authorization": f"Bearer {settings.token}"})
-        assert client.get(f"/api/runs/{run['id']}").json()["input_pairing"] == expected
+        assert client.get(f"/api/runs/{run['id']}").json()["input_pairing"] == persisted
         assert client.get(f"/api/runs/{run['id']}/metrics").json() == metrics
 
 

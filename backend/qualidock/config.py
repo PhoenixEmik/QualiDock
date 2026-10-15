@@ -41,6 +41,7 @@ class Settings:
     memory_mb: int = field(default_factory=available_memory_mb)
     fastqc: str = "fastqc"
     multiqc: str = "multiqc"
+    output_roots: list[Path] = field(default_factory=list)
     secure_cookie: bool = False
     allow_root: bool = False  # Only injected by tests; never exposed as a production option.
 
@@ -58,6 +59,7 @@ class Settings:
         return cls(
             roots=[Path(root).expanduser().resolve(strict=True) for root in roots],
             output=Path(os.environ.get("QUALIDOCK_OUTPUT", project / "runs")).expanduser().resolve(),
+            output_roots=[Path(root).expanduser().absolute() for root in json.loads(os.environ.get("QUALIDOCK_OUTPUT_ROOTS", "[]"))],
             frontend=Path(os.environ.get("QUALIDOCK_FRONTEND", project / "frontend/dist")).resolve(),
             token=os.environ.get("QUALIDOCK_TOKEN") or secrets.token_urlsafe(32),
             prefix=prefix, secure_cookie=os.environ.get("QUALIDOCK_SECURE_COOKIE") == "1",

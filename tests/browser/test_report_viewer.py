@@ -65,8 +65,12 @@ class Workspace:
             yield client
 
     def finish(self, client, response):
-        assert response.status_code == 201, response.text
-        identifier = response.json()["id"]
+        if isinstance(response, dict):
+            # Browser tests have already asserted the POST response status.
+            identifier = response["id"]
+        else:
+            assert response.status_code == 201, response.text
+            identifier = response.json()["id"]
         deadline = time.monotonic() + 180
         while time.monotonic() < deadline:
             run = client.get(f"api/runs/{identifier}").json()
@@ -84,7 +88,8 @@ def workspace(tmp_path_factory, request):
     assert fastqc and multiqc, "Real FastQC and MultiQC are required for browser acceptance"
     assert (ROOT / "frontend/dist/index.html").is_file(), "Build the actual frontend first"
     output = tmp_path_factory.mktemp("report-browser")
-    settings = Settings(roots=[INPUTS, output], output=output, frontend=ROOT / "frontend/dist", token=secrets.token_urlsafe(32), prefix=request.param, cpus=1, memory_mb=4096, fastqc=fastqc, multiqc=multiqc)
+    project_output = tmp_path_factory.mktemp("project-output")
+    settings = Settings(roots=[INPUTS, output], output_roots=[project_output], output=output, frontend=ROOT / "frontend/dist", token=secrets.token_urlsafe(32), prefix=request.param, cpus=1, memory_mb=4096, fastqc=fastqc, multiqc=multiqc)
     # An intentionally malicious HTML artifact is used only to probe the security
     # boundary, never as scientific QC data or as a substitute for genuine reports.
     malicious_id = uuid.uuid4().hex
@@ -117,6 +122,8 @@ parent.postMessage({type:'qualidock-report-ready',html:'<img onerror=alert(1)>'}
         historical = {**instance.fastqc, "id": uuid.uuid4().hex, "name": "Browser historical"}
         historical.pop("input_pairing", None)
         historical.pop("pairing_note", None)
+        historical.pop("output_directory", None)
+        historical.pop("output_root", None)
         shutil.copytree(output / instance.fastqc["id"], output / historical["id"])
         save_json(output / historical["id"] / "manifest.json", historical)
         instance.historical = historical

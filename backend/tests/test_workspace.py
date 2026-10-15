@@ -19,9 +19,9 @@ from qualidock.metrics import parse_report, parse_text
 from conftest import DATA, NATIVE_MEMORY_SAMPLER
 
 
-def wait(client, run_id, states=None):
+def wait(client, run_id, states=None, timeout=10):
     states = states or {"completed", "partial", "failed", "cancelled", "interrupted"}
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         run = client.get(f"/api/runs/{run_id}").json()
         if run["state"] in states:

@@ -23,11 +23,42 @@ class SessionRequest(BaseModel):
     token: str = Field(max_length=512)
 
 
+class ReadAssignment(BaseModel):
+    path: str = Field(max_length=4096)
+    read: Literal["R1", "R2"] | None = None
+    pair_key: str | None = Field(default=None, max_length=2048)
+    paired: bool = False
+    mate: str | None = Field(default=None, max_length=4096)
+    source: Literal["auto", "confirmed", "manual"] = "auto"
+    assignment: Literal["paired", "single", "unpaired"] | None = None
+    lane: str | None = Field(default=None, max_length=80)
+    chunk: str | None = Field(default=None, max_length=80)
+
+
+class SampleGroup(BaseModel):
+    id: str = Field(max_length=128)
+    display_name: str = Field(min_length=1, max_length=120)
+    files: list[str] = Field(min_length=1, max_length=500)
+    source: Literal["auto", "confirmed", "manual"] = "auto"
+
+
+class SampleConfigurationRequest(BaseModel):
+    paths: list[str] = Field(min_length=1, max_length=500)
+
+
+class RenameRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+
+
 class AnalysisRequest(BaseModel):
     name: str = Field(default="", max_length=120)
     mode: Literal["both", "fastqc", "multiqc"] = "both"
     paths: list[str] = Field(min_length=1, max_length=500)
     threads: int = Field(default=1, ge=1, le=32)
+    input_pairing: list[ReadAssignment] | None = Field(default=None, max_length=500)
+    sample_groups: list[SampleGroup] | None = Field(default=None, max_length=500)
+    output_root: str | None = Field(default=None, max_length=4096)
+    rerun_of: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -118,7 +149,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"roots": [str(p) for p in manager.files.roots], "cpus": settings.cpus,
                 "memory_mb": settings.memory_mb, "max_threads": settings.max_threads, "prefix": settings.prefix,
                 "tools": {name: info["compatible"] for name, info in (await manager.detect_tools()).items()},
-                "tool_details": manager.tool_info}
+                "tool_details": manager.tool_info, "default_output": str(manager.stores.default),
+                "output_locations": await asyncio.to_thread(manager.stores.listing)}
 
     @app.get("/api/files")
     async def files(path: str, offset: int = 0, limit: int = 500, snapshot: str | None = None, refresh: bool = False):
@@ -132,12 +164,31 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/api/runs", status_code=201)
     async def create_run(body: AnalysisRequest):
-        return await manager.create(body.name, body.mode, body.paths, body.threads)
+        return await manager.create(body.name, body.mode, body.paths, body.threads,
+                                    input_pairing=[record.model_dump(exclude_unset=True) for record in body.input_pairing] if body.input_pairing is not None else None,
+                                    sample_groups=[group.model_dump() for group in body.sample_groups] if body.sample_groups is not None else None,
+                                    output_root=body.output_root, rerun_of=body.rerun_of)
+
+    @app.get("/api/output-locations")
+    async def output_locations():
+        return await asyncio.to_thread(manager.stores.listing)
+
+    @app.post("/api/sample-configuration")
+    async def sample_configuration(body: SampleConfigurationRequest):
+        return await asyncio.to_thread(manager.sample_configuration, body.paths)
+
+    @app.patch("/api/runs/{run_id}")
+    async def rename_run(run_id: str, body: RenameRequest):
+        return manager.rename(run_id, body.name)
+
+    @app.get("/api/runs/{run_id}/configuration")
+    async def run_configuration(run_id: str):
+        return await asyncio.to_thread(manager.configuration, run_id)
 
     @app.post("/api/runs/{run_id}/multiqc", status_code=201)
     async def aggregate(run_id: str):
         source = manager.runs[run_id]
-        return await manager.create(f"MultiQC · {source['name']}"[:120], "multiqc", [str(manager.directory(run_id) / "fastqc")], min(source.get("threads", 1), settings.max_threads), source_run_id=run_id)
+        return await manager.create(f"MultiQC · {source['name']}"[:120], "multiqc", [str(manager.directory(run_id) / "fastqc")], min(source.get("threads", 1), settings.max_threads), source_run_id=run_id, output_root=str(manager.directory(run_id).parent))
 
     @app.get("/api/runs/{run_id}")
     async def run(run_id: str):
