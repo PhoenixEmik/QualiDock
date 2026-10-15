@@ -354,3 +354,12 @@ test("unknown columns are not plotted as counts and theoretical GC data is not s
     0,
   );
 });
+
+test("all-missing numeric modules have an explicit unavailable state", () => {
+  const changed = structuredClone(samples[0]);
+  const module = findModule(changed, "Per base sequence quality")!;
+  for (const row of module.rows) row[1] = "";
+  const result = multiComparison(analyticsSamples(run, [changed]), module.name);
+  assert.equal(result.groups.length, 0);
+  assert.match(result.unavailable[0], /no numeric values/);
+});

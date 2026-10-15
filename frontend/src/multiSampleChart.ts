@@ -11,7 +11,12 @@ export function overlayOptions(
   );
   return {
     animation: false,
-    aria: { enabled: true },
+    aria: {
+      enabled: true,
+      label: {
+        description: `Saved FastQC ${group.unit} for ${group.members.map((s) => s.name).join(", ")}. Original reported bins are preserved. Missing values remain gaps; exact values are available in source CSV and TSV exports.`,
+      },
+    },
     grid: { left: 72, right: 24, top: 45, bottom: 130 },
     legend: {
       type: "scroll",

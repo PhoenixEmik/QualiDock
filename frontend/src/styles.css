@@ -2323,3 +2323,16 @@ tr.row-selected:hover {
   max-height: 220px;
   overflow: auto;
 }
+.analytics-actions label {
+  max-width: 100%;
+}
+.analytics-actions select {
+  min-width: 0;
+  max-width: 100%;
+}
+@media (max-width: 640px) {
+  .analytics-views button {
+    min-width: 0;
+    white-space: normal;
+  }
+}

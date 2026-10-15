@@ -256,6 +256,17 @@ export function multiComparison(
       unavailable.push(`${entity.name} (supported metric columns unavailable)`);
       continue;
     }
+    const numericColumns = comparisonColumns(module, key).map((column) =>
+      module.columns.indexOf(column),
+    );
+    if (
+      !module.rows.some((row) =>
+        numericColumns.some((column) => numeric(row[column]) !== null),
+      )
+    ) {
+      unavailable.push(`${entity.name} (no numeric values reported)`);
+      continue;
+    }
     if (normalized) {
       const count = module.columns.indexOf("Count");
       const denominator = entity.fastqc?.total_sequences;
@@ -263,8 +274,9 @@ export function multiComparison(
       if (
         key !== "persequencequalityscores" ||
         !denominator ||
+        !Number.isSafeInteger(denominator) ||
         denominator <= 0 ||
-        values.some((v) => v === null || v < 0) ||
+        values.some((v) => v === null || !Number.isSafeInteger(v) || v < 0) ||
         values.reduce<number>((s, v) => s + (v || 0), 0) !== denominator
       ) {
         unavailable.push(
