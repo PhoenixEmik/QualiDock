@@ -2336,3 +2336,9 @@ tr.row-selected:hover {
     white-space: normal;
   }
 }
+/* Keep the previous canvas size inside its chart while ResizeObserver redraws. */
+.analytics-plot .quality-chart {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}

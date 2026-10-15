@@ -85,9 +85,14 @@ def test_statistics_selection_status_navigation_comparison_and_exports(workspace
         page.get_by_role('button', name='Compare Samples', exact=True).click()
         page.set_viewport_size({'width':390,'height':844})
         expect(page.locator('.quality-chart')).to_be_visible()
+        # ResizeObserver schedules the chart resize on the next animation frame.
+        # Capture diagnostics even if a genuine layout defect persists afterwards.
+        try:
+            page.wait_for_function('document.documentElement.scrollWidth <= innerWidth', timeout=3000)
+        finally:
+            Path('validation').mkdir(exist_ok=True)
+            page.screenshot(path='validation/native-compare'+workspace.settings.prefix.replace('/','-')+'.png', full_page=True)
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
-        Path('validation').mkdir(exist_ok=True)
-        page.screenshot(path='validation/native-compare'+workspace.settings.prefix.replace('/','-')+'.png', full_page=True)
         assert not errors
     with workspace.api() as client:
         assert client.get(f"api/runs/{workspace.combined['id']}").json()['executions'] == before['executions']
