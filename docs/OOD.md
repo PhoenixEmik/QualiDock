@@ -42,3 +42,34 @@ Record cluster/queue/module versions and the PBS job ID, then:
 Release v0.1.0 only after these checks and standalone Linux acceptance pass.
 
 This template follows the official [OOD 4.2 rendering and lifecycle documentation](https://osc.github.io/ood-documentation/latest/how-tos/app-development/interactive/template.html), [connection/proxy contract](https://osc.github.io/ood-documentation/latest/how-tos/app-development/interactive/view.html), and [submission format](https://osc.github.io/ood-documentation/latest/reference/files/submit-yml-erb.html). Each deployment must supply its own cluster configuration.
+
+## Site acceptance record
+
+A real site allocation and authenticated OOD endpoint are required to complete
+issue #4. No cluster login, queue/account, module configuration or authorized
+large-data path has been provided to this implementation session. The generic
+adapter and proxy-prefix tests are ready; **site acceptance is pending**.
+Do not substitute the Linux CI container for an actual OOD/PBS run.
+
+Keep the completed record in private site documentation and publish only a
+redacted version containing:
+
+- OOD, OpenPBS, OS, Java, FastQC and MultiQC versions; date and tested commit.
+- Cluster ID, queue/account policy, allocated/granted CPUs/RAM/walltime, worker
+  hostname pattern and ordinary UID (redact identifiers as needed).
+- Shared installation path and persistent result-store policy, plus storage type
+  and ACL checks for readable inputs/private outputs; never include session tokens.
+- Confirmed `/node` or `/rnode` path and HTTPS cookie scope, API/assets/download
+  checks, and a live SSE connection throughout a real run.
+- Results for all three modes, official/native metric comparisons, cancellations,
+  shutdown/job termination, historical report reopening and result-store locking.
+- Traversal, escaped symlink, unauthorized attachment and literal special-character
+  path tests, with no protected reads or credentials included in evidence.
+
+Troubleshoot in that order: missing assets usually indicate a prefix/build-base
+mismatch; repeated 401 responses require checking token exchange and cookie
+path/Secure settings; buffered or disconnected SSE requires reviewing the actual
+reverse proxy's streaming and timeout configuration. Missing tools must be fixed
+in the launch environment, not installed by the application. Resource requests
+must match the scheduler grant; capture actual observations following
+[Linux validation](LINUX-VALIDATION.md) and [large-input benchmarking](BENCHMARKING.md).

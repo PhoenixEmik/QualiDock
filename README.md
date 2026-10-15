@@ -91,7 +91,7 @@ The smoke test requires real executables and checks paired-end inputs, FastQC/Mu
 
 The [Batch Connect adapter](deploy/ood) launches this same standalone server on a PBS-allocated compute node. See [the OOD deployment guide](docs/OOD.md) for site configuration and acceptance checks. Configure your site's cluster ID, queue/account, module names, and shared installation paths.
 
-See [Phase 2 implementation, changed files, and validation](docs/PHASE2.md) for detailed engine and reporting behavior.
+See [Phase 2 implementation, changed files, and validation](docs/PHASE2.md) for detailed engine and reporting behavior, and [issue status with passing Linux/MultiQC evidence](docs/ISSUES.md) for subsequent fixes and remaining site/release gates.
 
 ## Architecture and security
 

@@ -2,6 +2,10 @@
 
 This repository is an MVP development implementation, not a validated v0.1.0 release.
 
+## Issue follow-up verification — 2026-10-15
+
+[Issue-by-issue status and CI evidence](ISSUES.md) supersede the earlier missing-MultiQC/Linux-validation limitations below. Real MultiQC 1.25.1, 1.35 and latest-supported 1.x now pass combined and existing-result workflows. Native Linux cgroup/process checks pass under 1 CPU / 1 GiB. Directory browsing is covered by regression tests and a local 100,000-name benchmark. Actual site, large-input and browser acceptance remain pending.
+
 ## Phase 2 verification — 2026-10-15
 
 See [Phase 2 implementation and validation](PHASE2.md) for the current module coverage, actual FastQC 0.13.0 checks, MultiQC execution tests, backward-compatible persistence fields, and remaining real-MultiQC/Linux/browser/HPC acceptance work. The older record below describes the initial implementation environment.
@@ -39,9 +43,9 @@ The managed macOS development sandbox denies `ps`, so its backend tests replace 
 
 - [x] Frontend TypeScript and Vite production build with the real ECharts dependency.
 - [ ] Browser QA of Workspace, analysis setup, Analyses, all analysis detail sections, authentication, live SSE, downloads, and mobile layout.
-- [ ] Linux backend suite with real process and resource monitoring.
-- [ ] Real FastQC 0.13.0 + MultiQC end-to-end smoke on standalone Linux.
-- [ ] Accurate native chart comparison to official FastQC data, including grouped bases and quartiles.
+- [x] Linux backend suite with real process and resource monitoring; see [evidence](LINUX-VALIDATION.md).
+- [x] Real FastQC 0.13.0 + MultiQC end-to-end smoke on standalone Linux; fixed 1.25.1/1.35 and latest-1.x CI targets pass.
+- [x] Native chart points compared to actual FastQC output, including grouped bases and quartiles, with ECharts rendering tests. Live browser QA remains separate.
 - [ ] HPC site configuration and end-to-end acceptance under the actual OOD reverse proxy.
 - [ ] Large-file cancellation, memory-limit failure, graceful shutdown, and abrupt-session interruption on Linux/PBS.
 - [ ] Historical reports restored after an OOD restart from persistent storage.
