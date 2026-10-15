@@ -244,7 +244,7 @@ export default function FileExplorer({
                         onClick={() => void browse(first.path)}
                         disabled={busy}
                       >
-                        <Folder size={19} fill="#edf1e7" />
+                        <Folder size={19} fill="var(--surface-muted)" />
                         <span>{row.name}</span>
                         <ChevronRight size={14} />
                       </button>

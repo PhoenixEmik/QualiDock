@@ -5,6 +5,7 @@ import { moduleKey } from "./qc";
 import QcModule from "./QcModule";
 import QualityChart from "./QualityChart";
 import RawData from "./RawData";
+import { gcReferenceUnavailable } from "./fastqcTheme";
 
 export default function PairComparison({
   pair,
@@ -67,6 +68,16 @@ export default function PairComparison({
             median={median}
             visibility={visibility}
           />
+          {data.modules.some(
+            (module) => module && gcReferenceUnavailable(module),
+          ) && (
+            <p className="inline-note">
+              The theoretical GC distribution is unavailable for one or both
+              reads. Only shared reported columns are compared. Inspect Raw Data
+              or the official report for per-read details; no model is
+              calculated.
+            </p>
+          )}
           {data.modules.map(
             (module, i) =>
               module && (

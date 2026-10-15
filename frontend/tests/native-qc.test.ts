@@ -329,9 +329,9 @@ for (const name of [
     const data = compareModules(r1, r2, name);
     assert.equal(data.mode, "overlay");
     assert.deepEqual(
-      (option.series as { data: (number | null)[] }[]).map(
-        (series) => series.data,
-      ),
+      (option.series as { name: string; data: (number | null)[] }[])
+        .filter((series) => series.name !== "Quality regions")
+        .map((series) => series.data),
       data.series.map((series) => series.data),
     );
     for (const width of [350, 900]) {

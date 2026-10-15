@@ -8,6 +8,16 @@ import {
   qualityData,
   moduleKey,
 } from "./qc.ts";
+import {
+  fastqcColors,
+  scientificColor,
+  scientificLabel,
+} from "./fastqcTheme.ts";
+import {
+  qualityRegions,
+  qualityUpperLimit,
+  renderQualityBox,
+} from "./qualityPlot.ts";
 
 /** Only arrange FastQC's reported points; do not derive scientific statistics. */
 export function chartOptions(
@@ -21,25 +31,28 @@ export function chartOptions(
   const isQuality = moduleKey(metric) === "perbasesequencequality";
   const data = chartData(module);
   const heatmap = data.kind === "heatmap";
-  const palette = [
-    "#25745b",
-    "#74a68d",
-    "#ce954c",
-    "#697fbd",
-    "#ae6d7a",
-    "#67734c",
-  ];
-  const maxQuality = quality.reduce(
-    (max, b) => Math.max(max, b.percentile_90 ?? 0, b.mean ?? 0),
-    45,
-  );
+  const percentage = [
+    "perbasesequencecontent",
+    "perbasencontent",
+    "adaptercontent",
+  ].includes(moduleKey(metric));
+  const basePosition = isQuality || percentage || heatmap;
+  const maxQuality = qualityUpperLimit([sample]);
   let series: echarts.SeriesOption[];
   if (isQuality) {
     series = [
       {
         name: "Quartiles · 10th–90th whiskers",
-        type: "boxplot",
-        itemStyle: { color: "#dcebe0", borderColor: "#81a994" },
+        type: "custom",
+        renderItem: renderQualityBox,
+        clip: true,
+        // The category index is supplied to coord() directly; all data dimensions
+        // are original quantiles. Zoom clips the glyph without rewriting bins.
+        encode: { x: -1, y: [0, 1, 2, 3, 4] },
+        itemStyle: {
+          color: fastqcColors.quality.box,
+          borderColor: fastqcColors.quality.whisker,
+        },
         data: reportedQuality.boxes.map((box) =>
           box.some((value) => value === null || !Number.isFinite(value))
             ? [NaN, NaN, NaN, NaN, NaN]
@@ -55,8 +68,8 @@ export function chartOptions(
           reportedQuality.means.filter((value) => value !== null).length === 1
             ? "circle"
             : "none",
-        lineStyle: { color: palette[0], width: 2.5 },
-        itemStyle: { color: palette[0] },
+        lineStyle: { color: fastqcColors.quality.mean, width: 2 },
+        itemStyle: { color: fastqcColors.quality.mean },
       },
     ];
   } else if (heatmap) {
@@ -74,13 +87,19 @@ export function chartOptions(
     series = data.series.map(
       (series, index) =>
         ({
-          name: series.name,
-          type: data.kind,
+          name: scientificLabel(metric, series.name),
+          type:
+            data.kind === "bar" && moduleKey(metric) !== "kmercontent"
+              ? "line"
+              : data.kind,
           showSymbol: module.rows.length === 1,
           connectNulls: false,
           data: series.data,
-          lineStyle: { width: 2, color: palette[index % palette.length] },
-          itemStyle: { color: palette[index % palette.length] },
+          lineStyle: {
+            width: 2,
+            color: scientificColor(metric, series.name, index),
+          },
+          itemStyle: { color: scientificColor(metric, series.name, index) },
         }) as echarts.SeriesOption,
     );
   }
@@ -91,10 +110,6 @@ export function chartOptions(
     : [];
   const minimum = tileValues.reduce(
     (min, value) => Math.min(min, value),
-    tileValues[0] ?? 0,
-  );
-  const maximum = tileValues.reduce(
-    (max, value) => Math.max(max, value),
     tileValues[0] ?? 0,
   );
   const heatmapRows = heatmap
@@ -111,11 +126,13 @@ export function chartOptions(
     pertilesequencequality: "Tile",
     kmercontent: "Observed / expected",
   };
+  const legendNames = series.map((series) => series.name as string);
+  if (isQuality) series.push(qualityRegions(maxQuality));
   return {
     animation: false,
     textStyle: {
       fontFamily: "Inter, -apple-system, sans-serif",
-      color: "#52665c",
+      color: fastqcColors.chrome.text,
     },
     // Reserve separate rows for axis labels/title, zoom controls, and legend.
     grid: { left: 60, right: heatmap ? 85 : 24, top: 30, bottom: 124 },
@@ -146,38 +163,43 @@ export function chartOptions(
           itemWidth: 14,
           itemHeight: 8,
           textStyle: { fontSize: 11 },
+          data: legendNames,
         },
     xAxis: {
       type: "category",
       data: isQuality ? quality.map((b) => b.base) : data.categories,
-      name: isQuality
+      name: basePosition
         ? "Position in read (bp)"
         : module.columns[heatmap ? 1 : 0],
       nameLocation: "middle",
       nameGap: 32,
       axisTick: { show: false },
-      axisLabel: { fontSize: 10, hideOverlap: true },
+      axisLabel: { fontSize: 11, hideOverlap: true },
+      axisLine: { lineStyle: { color: fastqcColors.chrome.axis } },
     },
     yAxis: {
       type: heatmap ? "category" : "value",
       data: heatmap ? data.tiles : undefined,
-      min: isQuality ? 0 : undefined,
-      max: isQuality ? Math.ceil(maxQuality / 5) * 5 : undefined,
+      min: isQuality || percentage ? 0 : undefined,
+      max: isQuality ? maxQuality : percentage ? 100 : undefined,
       name: isQuality ? "Phred score" : units[moduleKey(metric)],
       nameTextStyle: { fontSize: 10 },
-      splitLine: { lineStyle: { color: "#e8ece9", type: "dashed" } },
-      axisLabel: { fontSize: 10 },
+      splitLine: {
+        lineStyle: { color: fastqcColors.chrome.grid, type: "dashed" },
+      },
+      axisLabel: { fontSize: 11 },
     },
     visualMap: heatmap
       ? {
-          min: minimum,
-          max: maximum,
+          min: Math.min(minimum, -1),
+          max: 0,
           calculable: true,
           orient: "vertical",
           right: 0,
           top: "middle",
-          inRange: { color: ["#ae6d7a", "#f2f1df", "#25745b"] },
-          text: [String(maximum), String(minimum)],
+          inRange: { color: fastqcColors.tile },
+          outOfRange: { color: fastqcColors.tile.at(-1) },
+          text: ["≥ 0", String(Math.min(minimum, -1))],
         }
       : undefined,
     dataZoom: [
@@ -189,17 +211,17 @@ export function chartOptions(
         bottom: 40,
         brushSelect: false,
         borderColor: "transparent",
-        backgroundColor: "#f1f4f1",
-        fillerColor: "#dbe6de",
+        backgroundColor: fastqcColors.chrome.zoomBackground,
+        fillerColor: fastqcColors.chrome.zoomFill,
         dataBackground: {
-          lineStyle: { color: "#81a994" },
-          areaStyle: { color: "#dcebe0" },
+          lineStyle: { color: fastqcColors.chrome.zoomLine },
+          areaStyle: { color: fastqcColors.chrome.zoomArea },
         },
         selectedDataBackground: {
-          lineStyle: { color: "#5c8f77" },
-          areaStyle: { color: "#b9d4c4" },
+          lineStyle: { color: fastqcColors.chrome.zoomLine },
+          areaStyle: { color: fastqcColors.chrome.zoomArea },
         },
-        handleStyle: { color: "#5c8f77" },
+        handleStyle: { color: fastqcColors.chrome.zoomLine },
       },
     ],
     series,

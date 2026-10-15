@@ -413,7 +413,7 @@ export default function AnalysisDetail({
                     {metric === "Per base sequence quality"
                       ? comparing
                         ? "Comparison curves use reported means; optional medians and all percentiles remain in the tooltip and Raw Data. No Q20/Q30 percentages are inferred."
-                        : "Boxes show the 25th–75th percentiles and the median. Whiskers show the 10th–90th percentiles. Scroll to zoom."
+                        : "Yellow boxes: 25th–75th percentiles. Red segments: medians. Dark whiskers: 10th–90th percentiles. Blue line: means. Background regions are visual guides, not PASS/WARN/FAIL rules. Scroll to zoom."
                       : metric === "Per tile sequence quality"
                         ? "Reported deviations from mean quality by tile and base bin. Scroll to zoom."
                         : "Parsed directly from the official FastQC output. Exact values are available in the table."}

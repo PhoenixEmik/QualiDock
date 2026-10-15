@@ -2,6 +2,7 @@ import type { Sample } from "./types";
 import { findModule, tableOnly } from "./qc";
 import QualityChart from "./QualityChart";
 import RawData from "./RawData";
+import { gcReferenceUnavailable, gcReferenceNote } from "./fastqcTheme";
 
 export default function QcModule({
   sample,
@@ -38,6 +39,9 @@ export default function QcModule({
           <QualityChart sample={sample} metric={metric} />
         </>
       ) : null}
+      {gcReferenceUnavailable(module) && (
+        <p className="inline-note">{gcReferenceNote}</p>
+      )}
       <RawData
         key={`${sample.id}:${metric}`}
         module={module}

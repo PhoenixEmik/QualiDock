@@ -4,6 +4,10 @@ QC Metrics keeps the existing workspace, sample selector, ECharts renderer,
 collapsible Sample Details and official Reports tab. The scientific parser and
 all FastQC/MultiQC commands remain unchanged.
 
+The subsequent [chart fidelity refinement](CHART-FIDELITY.md) documents the neutral
+application theme, independent scientific palette, classic quality glyphs and
+newer validation results.
+
 ## Exploring a result
 
 - The compact module navigation shows all 12 supported modules, additional

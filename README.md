@@ -42,6 +42,8 @@ Each analysis retains native per-base quality boxplots, mean quality, GC distrib
 
 QC Metrics includes clickable module statuses, optional explanatory notes, paged Raw Data tables and exact CSV/TSV exports. New analyses with confirmed, persisted R1/R2 relationships can compare reported quality and compatible QC profiles. Incompatible bins stay on separate original axes, and old/unpaired results remain individually accessible. See [native FastQC behavior and comparison rules](docs/NATIVE-FASTQC.md).
 
+The workspace uses neutral slate surfaces and blue controls, independently of the FastQC scientific palette. Native quality plots retain yellow quartile boxes, red medians, blue means and quality-region backgrounds. See [palettes, visual fidelity and validation](docs/CHART-FIDELITY.md).
+
 Mate detection recognizes `_R1`/`_R2`, `.R1`/`.R2`, `-R1`/`-R2`, and corresponding `1`/`2` suffixes, optionally followed by `_001` (or equivalent separator). A pair is confirmed only when exactly one of each mate exists in the same directory. Both mates must be selected; unpaired files can also run. Each FASTQ is assessed independently.
 
 For **MultiQC only**, enter an existing QC results directory within a configured root, or select `*_fastqc.zip` / `fastqc_data.txt` files. Directory imports discover FastQC reports recursively, validate every path, and snapshot only bounded QC reports and their summary/HTML companions. FASTQ data is never copied or rerun. ZIP/extracted copies of the same result are imported once. Other QC tool formats remain outside this phase. Directory imports are limited to 20,000 entries, 500 reports, and 512 MiB of report snapshots.

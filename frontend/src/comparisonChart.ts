@@ -3,6 +3,8 @@ import type { Sample } from "./types";
 import { chartOptions } from "./chartOptions.ts";
 import { compareModules, comparisonTooltip } from "./comparison.ts";
 import { inputFilename, moduleKey } from "./qc.ts";
+import { fastqcColors, scientificColor } from "./fastqcTheme.ts";
+import { qualityRegions, qualityUpperLimit } from "./qualityPlot.ts";
 
 export function comparisonChartOptions(
   r1: Sample,
@@ -14,32 +16,10 @@ export function comparisonChartOptions(
   if (comparison.mode !== "overlay") return {};
   const option = chartOptions(r1, metric);
   const quality = moduleKey(metric) === "perbasesequencequality";
-  const bases = moduleKey(metric) === "perbasesequencecontent";
-  const palette = [
-    "#256c54",
-    "#4668a5",
-    "#9b702b",
-    "#ab5650",
-    "#75608e",
-    "#4e7780",
-  ];
-  const baseColors: Record<string, string> = {
-    A: "#256c54",
-    C: "#4668a5",
-    G: "#9b702b",
-    T: "#ab5650",
-  };
   const columns = [
     ...new Set(comparison.series.map((series) => series.column)),
   ];
-  const maxQuality = [r1, r2].reduce(
-    (max, sample) =>
-      sample.per_base_quality.reduce(
-        (value, bin) => Math.max(value, bin.mean ?? 0, bin.percentile_90 ?? 0),
-        max,
-      ),
-    45,
-  );
+  const maxQuality = qualityUpperLimit([r1, r2]);
   return {
     ...option,
     xAxis: {
@@ -50,7 +30,11 @@ export function comparisonChartOptions(
     },
     yAxis: {
       ...option.yAxis,
-      max: quality ? Math.ceil(maxQuality / 5) * 5 : undefined,
+      ...(quality ? { max: maxQuality } : {}),
+    },
+    legend: {
+      ...option.legend,
+      data: comparison.series.map((series) => series.name),
     },
     tooltip: {
       trigger: "axis",
@@ -67,31 +51,35 @@ export function comparisonChartOptions(
             ]);
       },
     },
-    series: comparison.series.map((series) => {
-      const color =
-        quality || columns.length === 1
-          ? palette[series.read === "R1" ? 0 : 1]
-          : bases
-            ? baseColors[series.column] ||
-              palette[columns.indexOf(series.column) % palette.length]
-            : palette[columns.indexOf(series.column) % palette.length];
-      return {
-        name: series.name,
-        type: "line",
-        data: series.data,
-        connectNulls: false,
-        showSymbol: series.data.filter((value) => value !== null).length === 1,
-        symbol: series.read === "R1" ? "circle" : "triangle",
-        symbolSize: 5,
-        lineStyle: {
-          color,
-          type: series.read === "R1" ? "solid" : "dashed",
-          width: series.column === "Median" ? 1 : 2,
-          opacity: series.column === "Median" ? 0.65 : 1,
-        },
-        itemStyle: { color },
-        emphasis: { focus: "series" },
-      };
-    }),
+    series: [
+      ...comparison.series.map((series): echarts.LineSeriesOption => {
+        const color = quality
+          ? fastqcColors.reads[series.read === "R1" ? 0 : 1]
+          : scientificColor(
+              metric,
+              series.column,
+              columns.indexOf(series.column),
+            );
+        return {
+          name: series.name,
+          type: "line",
+          data: series.data,
+          connectNulls: false,
+          showSymbol:
+            series.data.filter((value) => value !== null).length === 1,
+          symbol: series.read === "R1" ? "circle" : "triangle",
+          symbolSize: 5,
+          lineStyle: {
+            color,
+            type: series.read === "R1" ? "solid" : "dashed",
+            width: series.column === "Median" ? 1 : 2,
+            opacity: series.column === "Median" ? 0.65 : 1,
+          },
+          itemStyle: { color },
+          emphasis: { focus: "series" },
+        };
+      }),
+      ...(quality ? [qualityRegions(maxQuality)] : []),
+    ],
   };
 }
