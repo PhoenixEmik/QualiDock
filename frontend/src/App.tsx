@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   ArrowLeft,
@@ -31,7 +31,7 @@ import { Empty, State } from "./Feedback";
 import FileExplorer from "./FileExplorer";
 import AnalysisDetail from "./AnalysisDetail";
 import NewAnalysisForm from "./NewAnalysisForm";
-import { resolveEntries, type ExplorerMode } from "./explorer";
+import { resolveEntries, listingUrl, type ExplorerMode } from "./explorer";
 
 const active = (run: Run) => ["queued", "running"].includes(run.state);
 const nav = [
@@ -54,6 +54,7 @@ export default function App() {
   const [view, setView] = useState<View>("workspace");
   const [runs, setRuns] = useState<Run[]>([]);
   const [listing, setListing] = useState<Listing | null>(null);
+  const listingRef = useRef<Listing | null>(null);
   const [path, setPath] = useState("");
   const [selected, setSelected] = useState<Map<string, Entry>>(new Map());
   const [search, setSearch] = useState("");
@@ -93,6 +94,7 @@ export default function App() {
       setSamples([]);
       setSelected(new Map());
       setListing(null);
+      listingRef.current = null;
       setRunId("");
       setView("workspace");
     }
@@ -101,18 +103,24 @@ export default function App() {
     );
   }, []);
   const browse = useCallback(
-    async (next: string, offset = 0) => {
+    async (next: string, offset = 0, refresh = false) => {
       setBusy(true);
       setError("");
       try {
+        const previous = listingRef.current;
+        const snapshot =
+          offset && previous?.path === next ? previous.snapshot : undefined;
         const result = await api<Listing>(
-          `api/files?path=${encodeURIComponent(next)}&offset=${offset}`,
+          listingUrl(next, offset, snapshot, refresh),
         );
-        setListing((previous) =>
-          offset && previous?.path === result.path
+        const combined =
+          offset &&
+          previous?.path === result.path &&
+          previous.snapshot === result.snapshot
             ? { ...result, entries: [...previous.entries, ...result.entries] }
-            : result,
-        );
+            : result;
+        listingRef.current = combined;
+        setListing(combined);
         setPath(result.path);
         if (!offset) setSearch("");
       } catch (err) {
@@ -302,10 +310,8 @@ export default function App() {
       const entries = await resolveEntries(
         paths,
         [...selected.values(), ...(listing?.entries || [])],
-        (folder, offset) =>
-          api<Listing>(
-            `api/files?path=${encodeURIComponent(folder)}&offset=${offset}`,
-          ),
+        (folder, offset, snapshot) =>
+          api<Listing>(listingUrl(folder, offset, snapshot)),
       );
       setSelected((previous) => {
         const next = new Map(previous);
@@ -408,10 +414,11 @@ export default function App() {
     setBusy(true);
     setError("");
     try {
-      const entries = await resolveEntries(run.inputs, [], (folder, offset) =>
-        api<Listing>(
-          `api/files?path=${encodeURIComponent(folder)}&offset=${offset}`,
-        ),
+      const entries = await resolveEntries(
+        run.inputs,
+        [],
+        (folder, offset, snapshot) =>
+          api<Listing>(listingUrl(folder, offset, snapshot)),
       );
       setSelected(new Map(entries.map((entry) => [entry.path, entry])));
       setName(`${run.name} · rerun`);
@@ -589,6 +596,7 @@ export default function App() {
                 setRuns([]);
                 setRunId("");
                 setListing(null);
+                listingRef.current = null;
                 setView("workspace");
               } catch (err) {
                 fail(err);

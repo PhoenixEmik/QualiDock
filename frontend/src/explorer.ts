@@ -107,7 +107,11 @@ export function selectionState(
 export async function resolveEntries(
   paths: string[],
   known: Entry[],
-  list: (directory: string, offset: number) => Promise<Listing>,
+  list: (
+    directory: string,
+    offset: number,
+    snapshot?: string,
+  ) => Promise<Listing>,
 ): Promise<Entry[]> {
   const requested = [...new Set(paths)];
   const found = new Map(known.map((entry) => [entry.path, entry]));
@@ -120,11 +124,19 @@ export async function resolveEntries(
       (path) => (path.slice(0, path.lastIndexOf("/")) || "/") === directory,
     );
     let offset = 0;
+    let snapshot: string | undefined;
     while (needed.some((path) => !found.has(path))) {
-      const page = await list(directory, offset);
+      const page = await list(directory, offset, snapshot);
+      if (snapshot && snapshot !== page.snapshot)
+        throw new Error(
+          "Directory listing changed. Refresh and retry the selection.",
+        );
+      snapshot = page.snapshot;
       for (const entry of page.entries) found.set(entry.path, entry);
-      offset += page.entries.length;
-      if (!page.entries.length || offset >= page.total) break;
+      if (page.next_offset === null) break;
+      const next = page.next_offset ?? offset + page.entries.length;
+      if (next <= offset || next >= page.total) break;
+      offset = next;
     }
   }
   return requested.map((path) => {
@@ -135,4 +147,19 @@ export async function resolveEntries(
       );
     return entry;
   });
+}
+
+export function listingUrl(
+  directory: string,
+  offset = 0,
+  snapshot?: string,
+  refresh = false,
+) {
+  const query = new URLSearchParams({
+    path: directory,
+    offset: String(offset),
+  });
+  if (snapshot) query.set("snapshot", snapshot);
+  if (refresh) query.set("refresh", "true");
+  return `api/files?${query}`;
 }

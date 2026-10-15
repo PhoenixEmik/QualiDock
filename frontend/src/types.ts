@@ -50,6 +50,8 @@ export interface Listing {
   parent: string | null;
   entries: Entry[];
   total: number;
+  snapshot?: string;
+  next_offset?: number | null;
 }
 export interface ToolInfo {
   name: string;

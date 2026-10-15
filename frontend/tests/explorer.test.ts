@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   explorerRows,
+  listingUrl,
   matchesRow,
   resolveEntries,
   rowInputPaths,
@@ -182,5 +183,69 @@ test("missing or inaccessible mates fail instead of inventing file metadata", as
       throw new Error("Path is outside the configured roots");
     }),
     /outside the configured roots/,
+  );
+});
+
+test("selection sends snapshot tokens and advances over filtered empty pages", async () => {
+  const input = entry("target.fastq");
+  const calls: unknown[][] = [];
+  const resolved = await resolveEntries(
+    [input.path],
+    [],
+    async (directory, offset, snapshot) => {
+      calls.push([directory, offset, snapshot]);
+      if (offset === 0)
+        return {
+          path: directory,
+          parent: null,
+          entries: [],
+          total: 3,
+          snapshot: "stable",
+          next_offset: 2,
+        };
+      return {
+        path: directory,
+        parent: null,
+        entries: [input],
+        total: 3,
+        snapshot: "stable",
+        next_offset: null,
+      };
+    },
+  );
+  assert.deepEqual(resolved, [input]);
+  assert.deepEqual(calls, [
+    ["/data", 0, undefined],
+    ["/data", 2, "stable"],
+  ]);
+});
+
+test("selection refuses to mix directory snapshots after filesystem changes", async () => {
+  const input = entry("missing.fastq");
+  await assert.rejects(
+    resolveEntries([input.path], [], async (directory, offset) => ({
+      path: directory,
+      parent: null,
+      entries: [entry(offset ? "other2.fastq" : "other.fastq")],
+      total: 3,
+      snapshot: offset ? "changed" : "original",
+      next_offset: offset + 1,
+    })),
+    /listing changed/,
+  );
+});
+
+test("listing queries preserve path and snapshot boundaries", () => {
+  const query = new URLSearchParams(
+    listingUrl("/data/a & b", 500, "token&refresh=true").split("?")[1],
+  );
+  assert.equal(query.get("path"), "/data/a & b");
+  assert.equal(query.get("snapshot"), "token&refresh=true");
+  assert.equal(query.has("refresh"), false);
+  assert.equal(
+    new URLSearchParams(
+      listingUrl("/data", 0, undefined, true).split("?")[1],
+    ).get("refresh"),
+    "true",
   );
 });

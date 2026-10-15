@@ -36,6 +36,8 @@ Without `QUALIDOCK_ROOTS`, the app uses the generated `example-data` directory. 
 
 Use **New analysis** in the Workspace, or configure the current selection, to choose FastQC + MultiQC, FastQC only, or MultiQC only and set a bounded thread count. Selecting a confirmed pair in Samples includes both mates, even if directory pagination splits them. Files mode supports individual-read selection; partial selections remain visible when switching views.
 
+Large folders use bounded name snapshots and page-only metadata reads; see [browsing behavior and the 100,000-entry benchmark](docs/BROWSING.md). A changed or expired listing requires Refresh; source selections remain intact.
+
 Each analysis retains native per-base quality boxplots, mean quality, GC distributions, base content, length, N content, adapter content, and module checks when actual parsed data is available. Its Reports section downloads official HTML/ZIP outputs, normalized metrics, logs, and manifests. HTML remains an attachment.
 
 Mate detection recognizes `_R1`/`_R2`, `.R1`/`.R2`, `-R1`/`-R2`, and corresponding `1`/`2` suffixes, optionally followed by `_001` (or equivalent separator). A pair is confirmed only when exactly one of each mate exists in the same directory. Both mates must be selected; unpaired files can also run. Each FASTQ is assessed independently.

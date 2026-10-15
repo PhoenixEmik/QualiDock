@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from typing import Literal
 
 from .config import Settings
-from .files import PathViolation
+from .files import PathViolation, DirectoryChanged
 from .manager import RunManager
 
 
@@ -87,6 +87,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def missing(request, exc):
         return Response("Analysis not found", status_code=404)
 
+    @app.exception_handler(DirectoryChanged)
+    async def stale_directory(request, exc):
+        return Response(str(exc), status_code=409)
+
     @app.exception_handler(ValueError)
     async def invalid(request, exc):
         return Response(str(exc), status_code=400)
@@ -111,10 +115,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "tool_details": manager.tool_info}
 
     @app.get("/api/files")
-    async def files(path: str, offset: int = 0, limit: int = 500):
+    async def files(path: str, offset: int = 0, limit: int = 500, snapshot: str | None = None, refresh: bool = False):
         if offset < 0 or not 1 <= limit <= 500:
             raise HTTPException(400, "Invalid pagination")
-        return manager.files.browse(path, offset, limit)
+        return await asyncio.to_thread(manager.files.browse, path, offset, limit, snapshot, refresh)
 
     @app.get("/api/runs")
     async def runs():

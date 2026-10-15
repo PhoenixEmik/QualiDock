@@ -1,5 +1,11 @@
 from pathlib import Path
 import re
+import os
+import stat as file_stat
+import threading
+import time
+import uuid
+from collections import OrderedDict
 
 FASTQ = re.compile(r"\.(?:fastq|fq)(?:\.gz)?$", re.I)
 PAIR = re.compile(r"^(.*?)([._-])(?:R)?([12])((?:[._-]00\d)?)$", re.I)
@@ -9,11 +15,22 @@ class PathViolation(ValueError):
     pass
 
 
+class DirectoryChanged(ValueError):
+    pass
+
+
+MAX_INDEX_ENTRIES = 200000
+MAX_CACHED_DIRECTORIES = 8
+CACHE_IDLE_SECONDS = 300
+
+
 class FileAccess:
     def __init__(self, roots: list[Path]):
         self.roots = [p.resolve(strict=True) for p in roots]
         if not self.roots or not all(p.is_dir() for p in self.roots):
             raise ValueError("Configure at least one existing directory root")
+        self._snapshots = OrderedDict()
+        self._index_lock = threading.RLock()
 
     def resolve(self, raw: str) -> Path:
         if "\x00" in raw or ".." in Path(raw).parts:
@@ -29,38 +46,104 @@ class FileAccess:
             raise PathViolation("Path is outside the configured roots")
         return resolved
 
-    def browse(self, raw: str, offset: int = 0, limit: int = 500) -> dict:
+    @staticmethod
+    def signature(directory):
+        stat = directory.stat()
+        return stat.st_dev, stat.st_ino, stat.st_mtime_ns, stat.st_ctime_ns
+
+    def _entry(self, directory, name):
+        path = directory / name
+        info = path.lstat()
+        if file_stat.S_ISLNK(info.st_mode):
+            target = self.resolve(str(path))
+            info = target.stat()
+        if not (file_stat.S_ISREG(info.st_mode) or file_stat.S_ISDIR(info.st_mode)):
+            return None
+        kind = "directory" if file_stat.S_ISDIR(info.st_mode) else "fastq" if FASTQ.search(name) else "fastqc" if name.endswith("_fastqc.zip") or name == "fastqc_data.txt" else "file"
+        pair = PAIR.match(FASTQ.sub("", name)) if kind == "fastq" else None
+        return {"name": name, "path": str(path), "kind": kind,
+                "size": info.st_size if kind != "directory" else None, "modified": info.st_mtime,
+                "read": f"R{pair[3]}" if pair else None,
+                "pair_key": str(directory / (pair[1] + pair[4])) if pair else None,
+                "paired": False, "mate": None}
+
+    def _snapshot(self, directory, token, refresh):
+        signature = self.signature(directory)
+        with self._index_lock:
+            cached = self._snapshots.get(str(directory))
+            valid = cached and cached['signature'] == signature and time.monotonic() - cached['accessed'] <= CACHE_IDLE_SECONDS
+            if token and (not valid or cached['token'] != token):
+                raise DirectoryChanged("Directory changed or listing expired. Refresh the directory before loading more files.")
+            if valid and not refresh:
+                cached['accessed'] = time.monotonic()
+                self._snapshots.move_to_end(str(directory))
+                return cached
+            names, groups = [], {}
+            with os.scandir(directory) as children:
+                for child in children:
+                    if child.name.startswith('.'):
+                        continue
+                    try:
+                        if child.is_symlink():
+                            entry = self._entry(directory, child.name)
+                            if entry is None:
+                                continue
+                            is_directory = entry['kind'] == 'directory'
+                        else:
+                            is_directory = child.is_dir(follow_symlinks=False)
+                            if not is_directory and not child.is_file(follow_symlinks=False):
+                                continue
+                        names.append((child.name, is_directory))
+                        if len(names) > MAX_INDEX_ENTRIES:
+                            raise ValueError(f"Directory exceeds {MAX_INDEX_ENTRIES:,} entries. Choose a smaller subdirectory.")
+                        if not is_directory and FASTQ.search(child.name):
+                            pair = PAIR.match(FASTQ.sub('', child.name))
+                            if pair:
+                                groups.setdefault(pair[1] + pair[4], {}).setdefault('R' + pair[3], []).append(child.name)
+                    except (PathViolation, OSError):
+                        continue
+            names.sort(key=lambda item: (not item[1], item[0].casefold(), item[0]))
+            if self.signature(directory) != signature:
+                raise DirectoryChanged("Directory changed while indexing. Refresh and try again.")
+            cached = {'signature': signature, 'names': names, 'groups': groups, 'token': uuid.uuid4().hex, 'accessed': time.monotonic()}
+            self._snapshots.pop(str(directory), None)
+            while self._snapshots and (len(self._snapshots) >= MAX_CACHED_DIRECTORIES or sum(len(value['names']) for value in self._snapshots.values()) + len(names) > MAX_INDEX_ENTRIES):
+                self._snapshots.popitem(last=False)
+            self._snapshots[str(directory)] = cached
+            return cached
+
+    def browse(self, raw: str, offset: int = 0, limit: int = 500, snapshot: str | None = None, refresh: bool = False) -> dict:
+        if offset < 0 or not 1 <= limit <= 500 or refresh and offset:
+            raise ValueError("Invalid directory pagination")
         directory = self.resolve(raw)
         if not directory.is_dir():
             raise PathViolation("Choose a directory")
-        entries = []
-        for path in directory.iterdir():
-            if path.name.startswith("."):
+        cached = self._snapshot(directory, snapshot, refresh)
+        entries, checked = [], {}
+        def entry(name):
+            if name not in checked:
+                try:
+                    checked[name] = self._entry(directory, name)
+                except (PathViolation, OSError):
+                    checked[name] = None
+            return checked[name]
+        for name, _ in cached['names'][offset:offset + limit]:
+            current = entry(name)
+            if current is None:
                 continue
-            try:
-                target = self.resolve(str(path))
-                if not target.is_dir() and not target.is_file():
-                    continue
-                stat = target.stat()
-                kind = "directory" if target.is_dir() else "fastq" if FASTQ.search(path.name) else "fastqc" if path.name.endswith("_fastqc.zip") or path.name == "fastqc_data.txt" else "file"
-                stem = FASTQ.sub("", path.name)
-                pair = PAIR.match(stem) if kind == "fastq" else None
-                entries.append({"name": path.name, "path": str(path), "kind": kind,
-                                "size": stat.st_size if target.is_file() else None,
-                                "modified": stat.st_mtime, "read": f"R{pair[3]}" if pair else None,
-                                "pair_key": str(directory / (pair[1] + pair[4])) if pair else None})
-            except (PathViolation, OSError):
-                continue
-        # Only mark a pair when both mates are present, with exactly one candidate per read.
-        groups: dict[str, dict[str, list[str]]] = {}
-        for entry in entries:
-            if entry["pair_key"]:
-                groups.setdefault(entry["pair_key"], {}).setdefault(entry["read"], []).append(entry["path"])
-        for entry in entries:
-            group = groups.get(entry["pair_key"], {})
-            entry["paired"] = len(group.get("R1", [])) == len(group.get("R2", [])) == 1
-            entry["mate"] = group["R2" if entry["read"] == "R1" else "R1"][0] if entry["paired"] else None
-        entries.sort(key=lambda e: (e["kind"] != "directory", e["name"].casefold()))
+            if current['pair_key']:
+                pair = PAIR.match(FASTQ.sub('', name))
+                group = cached['groups'].get(pair[1] + pair[4], {})
+                if len(group.get('R1', [])) == len(group.get('R2', [])) == 1:
+                    mate = entry(group['R2' if current['read'] == 'R1' else 'R1'][0])
+                    if mate and mate['kind'] == 'fastq':
+                        current['paired'], current['mate'] = True, mate['path']
+            entries.append(current)
+        # Never combine pages from different filesystem generations or a replaced parent.
+        if self.resolve(str(directory)) != directory or self.signature(directory) != cached['signature']:
+            raise DirectoryChanged("Directory changed while reading the page. Refresh and try again.")
         parent = directory.parent if any(directory.parent.is_relative_to(r) for r in self.roots) else None
-        return {"path": str(directory), "parent": str(parent) if parent else None,
-                "entries": entries[offset:offset + limit], "total": len(entries)}
+        total = len(cached['names'])
+        following = offset + limit
+        return {"path": str(directory), "parent": str(parent) if parent else None, "entries": entries,
+                "total": total, "snapshot": cached['token'], "next_offset": following if following < total else None}

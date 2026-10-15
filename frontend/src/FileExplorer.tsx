@@ -33,7 +33,7 @@ interface Props {
   setPath: (value: string) => void;
   setSearch: (value: string) => void;
   setMode: (value: ExplorerMode) => void;
-  browse: (path: string, offset?: number) => Promise<void>;
+  browse: (path: string, offset?: number, refresh?: boolean) => Promise<void>;
   select: (paths: string[], checked: boolean) => Promise<void>;
 }
 
@@ -104,7 +104,7 @@ export default function FileExplorer({
           <button
             className="icon-button"
             aria-label="Refresh directory"
-            onClick={() => listing && void browse(listing.path)}
+            onClick={() => listing && void browse(listing.path, 0, true)}
             disabled={busy || !listing}
           >
             <RefreshCw size={16} className={busy ? "spin" : ""} />
@@ -376,14 +376,21 @@ export default function FileExplorer({
             ? `${rows.length} entries shown · ${listing.entries.length} of ${listing.total} files and folders loaded`
             : "No directory loaded"}
         </span>
-        {listing && listing.entries.length < listing.total && (
-          <button
-            disabled={busy}
-            onClick={() => void browse(listing.path, listing.entries.length)}
-          >
-            Load more
-          </button>
-        )}
+        {listing &&
+          listing.next_offset !== null &&
+          (listing.next_offset ?? listing.entries.length) < listing.total && (
+            <button
+              disabled={busy}
+              onClick={() =>
+                void browse(
+                  listing.path,
+                  listing.next_offset ?? listing.entries.length,
+                )
+              }
+            >
+              Load more
+            </button>
+          )}
       </div>
     </section>
   );
