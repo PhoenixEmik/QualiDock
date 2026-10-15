@@ -27,12 +27,24 @@ jobs:
         working-directory: frontend
   real-qc:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        multiqc: ['1.25.1', '1.35', 'latest-1x']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install -e '.[test]' 'multiqc>=1.25,<2'
+      - name: Install QC compatibility target
+        env:
+          MULTIQC_TARGET: ${{ matrix.multiqc }}
+        run: |
+          if [ "$MULTIQC_TARGET" = "latest-1x" ]; then
+            python -m pip install -e '.[test]' 'multiqc>=1.25,<2'
+          else
+            python -m pip install -e '.[test]' "multiqc==$MULTIQC_TARGET"
+          fi
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -42,6 +54,12 @@ jobs:
           unzip -q /tmp/fastqc.zip -d /tmp
           chmod +x /tmp/FastQC/fastqc
           echo /tmp/FastQC >> "$GITHUB_PATH"
+      - run: python scripts/capture-multiqc-fixture.py --output validation/multiqc
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: multiqc-${{ matrix.multiqc }}-evidence
+          path: validation/multiqc
       - run: python scripts/create-example-data.py --reads 1000
       - run: python scripts/smoke-real-qc.py
       - run: pytest -q backend/tests/test_real_tools.py
