@@ -20,6 +20,7 @@ import { bytes, date, modeLabel, url } from "./api";
 import { Empty, State } from "./Feedback";
 import type { DetailTab, Run, Sample, MultiQCSummary } from "./types";
 import QcModule from "./QcModule";
+import ReportViewer from "./ReportViewer";
 import { findModule, moduleNames } from "./qc";
 
 const active = (run: Run) => ["running", "queued"].includes(run.state);
@@ -494,10 +495,13 @@ export default function AnalysisDetail({
           <div className="report-intro">
             <ShieldCheck size={18} />
             <span>
-              Official HTML reports download as files. Native charts use parsed
-              QC data.
+              Official HTML reports open in an isolated preview. Original
+              reports and data remain available to download.
             </span>
           </div>
+          {tab === "reports" && (
+            <ReportViewer key={currentRun.id} run={currentRun} />
+          )}
           {multiqc && !multiqc.rows.length && (
             <p className="inline-note" role="status">
               {multiqc.message ||

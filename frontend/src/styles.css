@@ -1176,6 +1176,54 @@ dd {
   font-size: 11px;
   margin-bottom: 22px;
 }
+.report-viewer {
+  margin-bottom: 24px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  overflow: hidden;
+  background: #fff;
+}
+.report-viewer-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.report-viewer-toolbar select {
+  flex: 1;
+  min-width: 160px;
+  max-width: 100%;
+  padding: 8px;
+}
+.report-preview iframe {
+  display: block;
+  width: 100%;
+  height: 65vh;
+  min-height: 420px;
+  border: 0;
+  background: #fff;
+}
+.report-viewer-expanded .report-preview iframe {
+  height: 90dvh;
+  min-height: 520px;
+}
+.report-preview-message {
+  padding: 18px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.report-preview-message .button {
+  margin-top: 12px;
+}
+.report-preview-help {
+  border-top: 1px solid var(--line);
+  padding: 10px 12px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
 .reports-section .file-name {
   max-width: none;
   font-size: 12px;

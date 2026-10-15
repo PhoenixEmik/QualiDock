@@ -16,6 +16,7 @@ from typing import Literal
 from .config import Settings
 from .files import PathViolation, DirectoryChanged
 from .manager import RunManager
+from .preview import PREVIEW_PATH, REPORT_CSP, application_csp
 
 
 class SessionRequest(BaseModel):
@@ -60,6 +61,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         api = request.scope["path"].startswith("/api/")
         if api:
             origin = request.headers.get("origin")
+            # Sandboxed reports have an opaque Origin. Also reject cross-site
+            # navigations to private APIs (ordinary attachment navigation remains
+            # available to the authenticated, same-origin application).
+            if request.headers.get("sec-fetch-site") == "cross-site":
+                return Response("Cross-origin access denied", 403)
             # Browser mutations always require a custom header; cross-origin forms cannot supply it.
             if request.method not in {"GET", "HEAD", "OPTIONS"} and request.headers.get("x-qualidock-request") != "1":
                 return Response("Missing request header", 403)
@@ -73,8 +79,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers.setdefault("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Content-Security-Policy", application_csp(request.headers.get("host", ""), settings.prefix))
         if api:
             response.headers["Cache-Control"] = "no-store"
         return response
@@ -163,8 +169,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/runs/{run_id}/download")
     async def download(run_id: str, path: str):
         artifact = manager.artifact(run_id, path)
-        # All artifacts are attachments, including complete HTML. No HTML is embedded in the UI.
+        # Downloads remain opaque attachments, including complete HTML.
         return FileResponse(artifact, media_type="application/octet-stream", filename=artifact.name, headers={"Content-Security-Policy": "sandbox; default-src 'none'"})
+
+    @app.api_route(PREVIEW_PATH, methods=["GET", "HEAD"])
+    async def preview(run_id: str, path: str):
+        if "\x00" in path or "\\" in path or Path(path).is_absolute() or ".." in Path(path).parts:
+            raise PathViolation("Invalid report artifact path")
+        try:
+            artifact = await asyncio.to_thread(manager.artifact, run_id, path)
+        except FileNotFoundError:
+            raise HTTPException(404, "The saved report is no longer available")
+        except PermissionError:
+            raise HTTPException(403, "The saved report is not readable")
+        if artifact.suffix.lower() != ".html":
+            raise HTTPException(415, "Only registered HTML reports can be previewed; download this file instead")
+        return FileResponse(artifact, media_type="text/html", filename=artifact.name,
+                            content_disposition_type="inline", headers={
+                                "Content-Security-Policy": REPORT_CSP,
+                                "X-Frame-Options": "SAMEORIGIN",
+                                "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=(), fullscreen=()",
+                            })
 
     @app.get("/api/events")
     async def events(request: Request):

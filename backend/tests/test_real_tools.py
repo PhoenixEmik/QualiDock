@@ -43,9 +43,13 @@ def test_real_fastqc_preserves_source_values_and_history(tmp_path):
             assert any(b['base'] == '10-14' for b in sample['per_base_quality'])
             response = client.get(f"/api/runs/{run['id']}/download", params={'path': sample['id'].replace('.zip', '.html')})
             assert response.status_code == 200 and 'attachment' in response.headers['content-disposition']
+            preview = client.get('/api/report-preview', params={'run_id': run['id'], 'path': sample['id'].replace('.zip', '.html')})
+            assert preview.status_code == 200 and preview.content == response.content
+            assert 'inline' in preview.headers['content-disposition']
     with TestClient(create_app(settings)) as client:
         client.headers.update({'Authorization': f'Bearer {settings.token}'})
         assert client.get(f"/api/runs/{run['id']}/metrics").json()['samples'] == samples
+        assert client.get('/api/report-preview', params={'run_id': run['id'], 'path': samples[0]['id'].replace('.zip', '.html')}).status_code == 200
     assert before == {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
 
 
@@ -65,7 +69,10 @@ def test_real_combined_and_existing_results_multiqc(tmp_path):
             time.sleep(0.1)
         assert run['state'] == 'completed', client.get(f'/api/runs/{run_id}/logs').json()
         assert run['executions'][-1]['exit_code'] == 0
-        assert client.get(f'/api/runs/{run_id}/download', params={'path': 'multiqc/multiqc_report.html'}).status_code == 200
+        report = client.get(f'/api/runs/{run_id}/download', params={'path': 'multiqc/multiqc_report.html'})
+        assert report.status_code == 200
+        preview = client.get('/api/report-preview', params={'run_id': run_id, 'path': 'multiqc/multiqc_report.html'})
+        assert preview.status_code == 200 and preview.content == report.content
         summary = client.get(f'/api/runs/{run_id}/metrics').json()['multiqc']
         assert len(summary['rows']) == 2 and summary['columns']
         response = client.post(f'/api/runs/{run_id}/multiqc')
@@ -79,3 +86,9 @@ def test_real_combined_and_existing_results_multiqc(tmp_path):
         assert aggregate['state'] == 'completed', client.get(f'/api/runs/{aggregate_id}/logs').json()
         assert all(e['tool'] == 'multiqc' for e in aggregate['executions'])
         assert len(client.get(f'/api/runs/{aggregate_id}/metrics').json()['multiqc']['rows']) == 2
+        imported_html = next(r['path'] for r in aggregate['reports'] if r['path'].startswith('inputs/') and r['path'].endswith('.html'))
+        for path in (imported_html, 'multiqc/multiqc_report.html'):
+            assert client.get('/api/report-preview', params={'run_id': aggregate_id, 'path': path}).status_code == 200
+    with TestClient(create_app(settings)) as restored:
+        restored.headers.update({'Authorization': f'Bearer {settings.token}'})
+        assert restored.get('/api/report-preview', params={'run_id': run_id, 'path': 'multiqc/multiqc_report.html'}).content == report.content

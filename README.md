@@ -1,6 +1,6 @@
 # QualiDock
 
-A single-user sequencing QC workspace for Linux workstations and HPC compute nodes. Browse existing FASTQ files, run FastQC and MultiQC, inspect native interactive charts, and download persistent reports.
+A single-user sequencing QC workspace for Linux workstations and HPC compute nodes. Browse existing FASTQ files, run FastQC and MultiQC, inspect native interactive charts, preview official HTML reports, and download persistent results.
 
 **Status: v0.1 development, not an accepted release.** Standalone Linux and an HPC deployment through Open OnDemand must pass end-to-end acceptance before tagging v0.1.0. See [validation](docs/VALIDATION.md).
 
@@ -38,7 +38,7 @@ Use **New analysis** in the Workspace, or configure the current selection, to ch
 
 Large folders use bounded name snapshots and page-only metadata reads; see [browsing behavior and the 100,000-entry benchmark](docs/BROWSING.md). A changed or expired listing requires Refresh; source selections remain intact.
 
-Each analysis retains native per-base quality boxplots, mean quality, GC distributions, base content, length, N content, adapter content, and module checks when actual parsed data is available. Its Reports section downloads official HTML/ZIP outputs, normalized metrics, logs, and manifests. HTML remains an attachment.
+Each analysis retains native per-base quality boxplots, mean quality, GC distributions, base content, length, N content, adapter content, and module checks when actual parsed data is available. Its Reports section previews registered HTML outputs in an opaque-origin sandbox, with MultiQC selected first when present. Original HTML/ZIP outputs, normalized metrics, logs, and manifests remain downloadable. Strict isolation blocks browser storage, external assets/services, form-based controls such as MultiQC text filters, and in-report exports; use the original download for those features. See [report viewer behavior and validation](docs/REPORT-VIEWER.md).
 
 Mate detection recognizes `_R1`/`_R2`, `.R1`/`.R2`, `-R1`/`-R2`, and corresponding `1`/`2` suffixes, optionally followed by `_001` (or equivalent separator). A pair is confirmed only when exactly one of each mate exists in the same directory. Both mates must be selected; unpaired files can also run. Each FASTQ is assessed independently.
 

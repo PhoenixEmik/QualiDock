@@ -35,10 +35,12 @@ files are passed by path to FastQC, without loading or copying reads.
 - Finished FastQC analyses offer **Generate MultiQC**. It creates a separate
   analysis from that run's saved reports without requiring the result store to
   be added to the input roots or rerunning FastQC.
-- Reports retain attachment-only HTML downloads, normalized metrics, official
+- Reports retain original HTML attachments, normalized metrics, official
   outputs, imported report snapshots, logs, and manifests. MultiQC's structured
   general statistics are shown as stored, without unit conversions or display
-  scaling. No report HTML or JavaScript enters the application DOM.
+  scaling. No report HTML or JavaScript enters the application DOM. The later
+  [isolated report viewer](REPORT-VIEWER.md) adds sandboxed HTML previews through
+  a dedicated endpoint while preserving these attachments.
 
 ## Persistence and API compatibility
 

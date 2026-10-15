@@ -80,3 +80,40 @@ jobs:
         with:
           name: linux-resource-evidence
           path: validation/linux
+  report-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install -e '.[test]' 'multiqc==1.35' 'playwright>=1.49,<2'
+      - run: python -m playwright install --with-deps ${{ matrix.browser }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: |
+          curl -fsSL https://github.com/s-andrews/FastQC/releases/download/v0.13.0/fastqc_v0.13.0.zip -o /tmp/fastqc.zip
+          unzip -q /tmp/fastqc.zip -d /tmp
+          chmod +x /tmp/FastQC/fastqc
+          echo /tmp/FastQC >> "$GITHUB_PATH"
+      - run: npm ci && npm run build
+        working-directory: frontend
+      - name: Real reports, opaque-origin isolation, proxy paths and restart
+        env:
+          QUALIDOCK_BROWSER: ${{ matrix.browser }}
+        run: pytest -q tests/browser --junitxml=validation/report-browser.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: report-browser-${{ matrix.browser }}
+          path: validation/report-browser.xml
