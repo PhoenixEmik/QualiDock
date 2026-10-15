@@ -67,3 +67,15 @@ export function scientificLabel(metric: string, column: string) {
     ? "Observed GC count"
     : column;
 }
+
+// Accessible read identities for multi-sample overlays, independent of QC statuses.
+export const overlayColors = [
+  "#0072B2",
+  "#D55E00",
+  "#332288",
+  "#CC79A7",
+  "#009E73",
+  "#56B4E9",
+  "#882255",
+  "#666666",
+];

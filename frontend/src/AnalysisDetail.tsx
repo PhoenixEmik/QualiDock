@@ -25,6 +25,11 @@ import ModuleNavigation from "./ModuleNavigation";
 import PairComparison from "./PairComparison";
 import ModuleHelp from "./ModuleHelp";
 import SampleDetails from "./SampleDetails";
+import { analyticsSamples } from "./analytics";
+import AnalyticsSelection from "./AnalyticsSelection";
+import GeneralStatistics from "./GeneralStatistics";
+import StatusMatrix from "./StatusMatrix";
+import CompareSamples from "./CompareSamples";
 
 const active = (run: Run) => ["running", "queued"].includes(run.state);
 const detailTabs = [
@@ -64,6 +69,27 @@ export default function AnalysisDetail({
   cancel,
   reselect,
 }: Props) {
+  const [analyticsView, setAnalyticsView] = useState("Overview");
+  const entities = useMemo(
+    () => analyticsSamples(currentRun, samples, multiqc),
+    [currentRun, samples, multiqc],
+  );
+  const [selection, setSelection] = useState<{
+    run: string;
+    ids: Set<string>;
+  } | null>(null);
+  const selected = useMemo(
+    () =>
+      new Set(
+        (selection?.run === currentRun.id
+          ? [...selection.ids]
+          : entities.slice(0, 6).map((e) => e.id)
+        ).filter((id) => entities.some((e) => e.id === id)),
+      ),
+    [selection, entities, currentRun.id],
+  );
+  const select = (ids: Set<string>) =>
+    setSelection({ run: currentRun.id, ids });
   const [detailsOpen, setDetailsOpen] = useState(true);
   const [sampleId, setSampleId] = useState("");
   const [metric, setMetric] = useState("Per base sequence quality");
@@ -273,7 +299,63 @@ export default function AnalysisDetail({
         aria-labelledby="detail-tab-metrics"
         tabIndex={0}
       >
+        {tab === "metrics" && (
+          <>
+            <div
+              className="view-toggle analytics-views"
+              role="group"
+              aria-label="Native QC views"
+            >
+              {["Overview", "Sample Details", "Compare Samples"].map((view) => (
+                <button
+                  key={view}
+                  className={analyticsView === view ? "active" : ""}
+                  aria-pressed={analyticsView === view}
+                  onClick={() => setAnalyticsView(view)}
+                >
+                  {view}
+                </button>
+              ))}
+            </div>
+            <AnalyticsSelection
+              entities={entities}
+              selected={selected}
+              select={select}
+            />
+            {analyticsView === "Overview" && (
+              <>
+                <GeneralStatistics
+                  summary={multiqc}
+                  entities={entities}
+                  selected={selected}
+                  select={select}
+                />
+                <StatusMatrix
+                  entities={entities}
+                  selected={selected}
+                  select={select}
+                  inspect={(id, module) => {
+                    setSampleId(id);
+                    setMetric(module);
+                    setQcMode("single");
+                    setAnalyticsView("Sample Details");
+                    requestAnimationFrame(() =>
+                      document.getElementById("qc-metric-heading")?.focus(),
+                    );
+                  }}
+                />
+                {metricsLoading && (
+                  <p role="status">Loading saved QC metrics…</p>
+                )}
+              </>
+            )}
+            {analyticsView === "Compare Samples" && (
+              <CompareSamples entities={entities} selected={selected} />
+            )}
+          </>
+        )}
         {tab === "metrics" &&
+          analyticsView === "Sample Details" &&
           (samples.length ? (
             <>
               <p className="metric-summary">
@@ -537,50 +619,6 @@ export default function AnalysisDetail({
           </div>
           {tab === "reports" && (
             <ReportViewer key={currentRun.id} run={currentRun} />
-          )}
-          {multiqc && !multiqc.rows.length && (
-            <p className="inline-note" role="status">
-              {multiqc.message ||
-                "MultiQC General Statistics are unavailable for this analysis."}
-            </p>
-          )}
-          {multiqc && multiqc.rows.length > 0 && (
-            <section className="sample-table-section">
-              <h2>MultiQC sample summary</h2>
-              <p className="inline-note">
-                General statistics as stored by MultiQC, without display scaling
-                or unit conversions.
-              </p>
-              <div className="table-scroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Sample</th>
-                      {multiqc.columns.map((column) => (
-                        <th
-                          key={column.key}
-                          title={`${column.namespace}: ${column.description} (${column.raw_key})`}
-                        >
-                          {column.title}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {multiqc.rows.map((row) => (
-                      <tr key={row.sample}>
-                        <td>{row.sample}</td>
-                        {multiqc.columns.map((column) => (
-                          <td className="mono" key={column.key}>
-                            {row.values[column.key] ?? "—"}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
           )}
           {currentRun.reports.length ? (
             <div className="table-scroll">

@@ -147,3 +147,15 @@ def test_genuine_versioned_multiqc_regression(version):
                 if value is not None:
                     assert rows[sample][f'{section}:{key}'] == value
             assert values['total_sequences'] == 400  # Raw read count, never rescale to millions.
+
+@pytest.mark.parametrize('version', ['1.25.1', '1.35'])
+def test_multiqc_raw_units_and_version_are_not_display_scaling(version):
+    path = Path(__file__).parent / 'fixtures/multiqc' / version / 'general-stats.json'
+    parsed = parse_multiqc(path)
+    assert parsed['version'] == version
+    assert parsed['tool'] == 'MultiQC'
+    total = next(c for c in parsed['columns'] if c['raw_key'] == 'total_sequences')
+    assert total['unit'].strip() == 'M'
+    assert total['raw_unit'] == 'reads'
+    assert parsed['rows'][0]['values'][total['key']] == 400
+    assert next(c for c in parsed['columns'] if c['raw_key'] == 'percent_gc')['raw_unit'] == '%'

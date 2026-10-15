@@ -72,6 +72,8 @@ export interface ToolInfo {
   error: string | null;
 }
 export interface MultiQCSummary {
+  tool?: string;
+  version?: string | null;
   status?: "available" | "empty" | "missing" | "unsupported" | "invalid";
   message?: string | null;
   columns: {
@@ -81,6 +83,9 @@ export interface MultiQCSummary {
     namespace: string;
     unit: string;
     raw_key: string;
+    raw_unit?: string;
+    section?: string;
+    hidden?: boolean;
   }[];
   rows: { sample: string; values: Record<string, string | number> }[];
 }

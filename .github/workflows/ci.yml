@@ -116,4 +116,6 @@ jobs:
         if: always()
         with:
           name: report-browser-${{ matrix.browser }}
-          path: validation/report-browser.xml
+          path: |
+            validation/report-browser.xml
+            validation/native-*.png

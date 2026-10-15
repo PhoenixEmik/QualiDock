@@ -17,6 +17,7 @@ def test_modules_comparison_raw_exports_and_keyboard(workspace, browser):
         page = context.new_page()
         open_run(page, workspace, "Browser combined")
         page.get_by_role("tab", name="QC metrics", exact=True).click()
+        page.get_by_role("button", name="Sample Details", exact=True).click()
         page.get_by_label("Select FASTQ sample").select_option(samples[0]["id"])
         navigation = page.get_by_role("navigation", name="FastQC modules")
         assert navigation.get_by_role("button").count() >= 12
@@ -45,6 +46,7 @@ def test_modules_comparison_raw_exports_and_keyboard(workspace, browser):
         raw = page.locator("details.qc-raw-data").first
         raw.locator("summary").click()
         module = next(module for module in samples[0]["modules"] if module["name"] == metric)
+        expect(raw.locator("thead th")).to_have_count(len(module["columns"]))
         assert raw.locator("thead th").all_text_contents() == module["columns"]
         assert raw.locator("tbody tr").first.locator("td").all_text_contents() == module["rows"][0]
         for extension, delimiter in (("CSV", ","), ("TSV", "\t")):
@@ -71,6 +73,7 @@ def test_historical_without_pairing_keeps_individual_results(workspace, browser)
         page = context.new_page()
         open_run(page, workspace, "Browser historical")
         page.get_by_role("tab", name="QC metrics", exact=True).click()
+        page.get_by_role("button", name="Sample Details", exact=True).click()
         expect(page.get_by_role("button", name="R1 / R2 Comparison", exact=True)).to_be_disabled()
         expect(page.get_by_text("No confirmed pair is available.", exact=False)).to_be_visible()
         expect(page.get_by_label("Select FASTQ sample")).to_be_visible()

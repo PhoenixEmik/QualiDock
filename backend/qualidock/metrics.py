@@ -157,7 +157,10 @@ def parse_multiqc(path: Path) -> dict:
             def label(name, default=""):
                 value = column.get(name, default)
                 return value if isinstance(value, str) else default
-            columns.append({"key": f"{section}:{key}", "title": label("title", key), "description": label("description"), "namespace": label("namespace"), "unit": label("suffix"), "raw_key": key})
+            # Suffixes describe MultiQC's formatted display, not necessarily its
+            # saved values (e.g. FastQC total_sequences=400, suffix=' M').
+            raw_unit = "reads" if key == "total_sequences" and label("namespace").lower() == "fastqc" else label("suffix").strip() if label("suffix").strip() in {"%", "bp"} and column.get("modify") is None else ""
+            columns.append({"key": f"{section}:{key}", "title": label("title", key), "description": label("description"), "namespace": label("namespace"), "unit": label("suffix"), "raw_key": key, "raw_unit": raw_unit, "section": section, "hidden": column.get("hidden") is True})
         for sample, values in table.items():
             row = rows.setdefault(sample, {"sample": sample, "values": {}})
             for key, value in values.items():
@@ -168,4 +171,4 @@ def parse_multiqc(path: Path) -> dict:
                 row["values"][f"{section}:{key}"] = value
     if not rows or not columns or not any(row["values"] for row in rows.values()):
         return unavailable("empty", "MultiQC produced an empty General Statistics table.")
-    return {"status": "available", "message": None, "columns": columns, "rows": list(rows.values())}
+    return {"status": "available", "message": None, "columns": columns, "rows": list(rows.values()), "tool": "MultiQC", "version": data.get("config_version") if isinstance(data.get("config_version"), str) else None}
