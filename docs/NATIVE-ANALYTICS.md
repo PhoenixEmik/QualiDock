@@ -47,10 +47,23 @@ Clear Selection and single-file Only actions. The initial chart selection uses a
 most six files. Selection persists while switching QC views in the same open
 analysis; it is not written to manifests or browser storage.
 
+## Overview summary
+
+QC Analytics displays the number of read files with saved FastQC results, the
+number of pairs confirmed by the existing mutual input metadata and both parsed
+results, and the number of read files containing at least one saved FastQC FAIL
+module. Counts cover the entire analysis and do not change with search, filters
+or shared selection. A failed module is not a new overall sample verdict; tool
+execution failures are not substituted for module classifications. Historical
+records without pairing metadata show Unavailable rather than guessed pairs.
+Missing classifications likewise remain unavailable. Loading uses an explicit
+loading state instead of showing temporary zero counts.
+
 ## Status matrix
 
 The scrollable, sticky-heading table presents official PASS/WARN/FAIL and unavailable
-module states. Search filenames, filter rows by status, sort by warning/failure
+module states using check, warning-triangle, cross and minus symbols, with a
+matching text legend, tooltips and full accessible cell names. Search filenames, filter rows by status, sort by warning/failure
 counts, show selected files, or hide modules without warnings/failures. Every cell
 is a keyboard-accessible button opening the corresponding existing Sample Details
 module. Warning/failure counts describe modules, not a new overall sample verdict.

@@ -27,6 +27,7 @@ import ModuleHelp from "./ModuleHelp";
 import SampleDetails from "./SampleDetails";
 import { analyticsSamples } from "./analytics";
 import AnalyticsSelection from "./AnalyticsSelection";
+import AnalyticsSummary from "./AnalyticsSummary";
 import GeneralStatistics from "./GeneralStatistics";
 import StatusMatrix from "./StatusMatrix";
 import CompareSamples from "./CompareSamples";
@@ -317,6 +318,13 @@ export default function AnalysisDetail({
                 </button>
               ))}
             </div>
+            {analyticsView === "Overview" && (
+              <AnalyticsSummary
+                run={currentRun}
+                samples={samples}
+                loading={metricsLoading}
+              />
+            )}
             <AnalyticsSelection
               entities={entities}
               selected={selected}

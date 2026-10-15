@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { fixture } from "./fastqcFixture.ts";
 import {
   analyticsSamples,
+  overviewCounts,
   sortStats,
   statsExport,
   rawUnit,
@@ -362,4 +363,91 @@ test("all-missing numeric modules have an explicit unavailable state", () => {
   const result = multiComparison(analyticsSamples(run, [changed]), module.name);
   assert.equal(result.groups.length, 0);
   assert.match(result.unavailable[0], /no numeric values/);
+});
+
+test("overview counts use genuine saved module statuses and confirmed pairs", () => {
+  const paired = {
+    ...run,
+    input_pairing: samples.map((sample, i) => ({
+      path: run.inputs[i],
+      name: sample.name,
+      read: i ? "R2" : "R1",
+      pair_key: "/data/coverage",
+      paired: true,
+      mate: run.inputs[1 - i],
+    })),
+  };
+  assert.deepEqual(overviewCounts(paired, samples), {
+    readFiles: 2,
+    readPairs: 1,
+    withFailures: 2,
+  });
+  const clean = structuredClone(samples[0]);
+  clean.status = "fail"; // The aggregate field is not evidence of a module FAIL.
+  for (const module of clean.modules) module.status = "pass";
+  assert.equal(overviewCounts(run, [clean]).withFailures, 0);
+  clean.modules[0].status = "warn";
+  assert.equal(overviewCounts(run, [clean]).withFailures, 0);
+  clean.modules[0].status = "fail";
+  clean.status = "pass";
+  assert.equal(overviewCounts(run, [clean]).withFailures, 1);
+  assert.equal(overviewCounts(paired, [samples[0]]).readPairs, 0);
+});
+test("overview never guesses historical pairs or missing QC classifications", () => {
+  assert.deepEqual(overviewCounts(run, samples), {
+    readFiles: 2,
+    readPairs: null,
+    withFailures: 2,
+  });
+  assert.deepEqual(overviewCounts({ ...run, input_pairing: [] }, []), {
+    readFiles: 0,
+    readPairs: null,
+    withFailures: null,
+  });
+  assert.equal(
+    overviewCounts(run, [{ ...samples[0], modules: [] }]).withFailures,
+    null,
+  );
+});
+test("overview keeps ambiguous filenames and multiple lane pairs as separate read files", () => {
+  const laneSamples = [
+    fixture("R1"),
+    fixture("R2"),
+    fixture("R1"),
+    fixture("R2"),
+  ].map((sample, i) => {
+    const clone = structuredClone(sample),
+      name = `coverage_L00${Math.floor(i / 2) + 1}_R${(i % 2) + 1}.fastq.gz`;
+    clone.id = `fastqc/${name}_fastqc.zip`;
+    clone.name = name;
+    findModule(clone, "Basic Statistics")!.rows.find(
+      (row) => row[0] === "Filename",
+    )![1] = name;
+    return clone;
+  });
+  const inputs = laneSamples.map((sample) => `/data/${sample.name}`);
+  const paired = {
+    ...run,
+    inputs,
+    input_pairing: laneSamples.map((sample, i) => ({
+      path: inputs[i],
+      name: sample.name,
+      read: i % 2 ? "R2" : "R1",
+      pair_key: `/data/lane${Math.floor(i / 2)}`,
+      paired: true,
+      mate: inputs[i ^ 1],
+    })),
+  };
+  assert.deepEqual(overviewCounts(paired, laneSamples), {
+    readFiles: 4,
+    readPairs: 2,
+    withFailures: 4,
+  });
+  assert.equal(
+    overviewCounts(paired, [
+      ...laneSamples,
+      { ...laneSamples[0], id: "inputs/another-report.zip" },
+    ]).readPairs,
+    1,
+  );
 });

@@ -74,6 +74,22 @@ export function analyticsSamples(
   }
   return entities;
 }
+/** Overview counts are independent of filtering/selection and never use the
+ * derived overall Sample.status as evidence of a failed FastQC module.
+ */
+export function overviewCounts(run: Run, samples: Sample[]) {
+  return {
+    readFiles: samples.length,
+    readPairs: run.input_pairing?.length
+      ? confirmedPairs(run, samples).length
+      : null,
+    withFailures: samples.some((sample) => sample.modules.length > 0)
+      ? samples.filter((sample) =>
+          sample.modules.some((module) => module.status === "fail"),
+        ).length
+      : null,
+  };
+}
 export type StatColumn = MultiQCSummary["columns"][number];
 export function rawUnit(column: StatColumn) {
   if (column.raw_unit !== undefined) return column.raw_unit;

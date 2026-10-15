@@ -1,10 +1,19 @@
 import { useMemo, useState } from "react";
+import { Check, TriangleAlert, X, Minus } from "lucide-react";
+
 import {
   statusMatrix,
   statusValues,
   type AnalyticsSample,
   toggleSelection,
 } from "./analytics";
+
+const statusIcons = {
+  pass: Check,
+  warn: TriangleAlert,
+  fail: X,
+  unavailable: Minus,
+};
 export default function StatusMatrix({
   entities,
   selected,
@@ -149,6 +158,7 @@ export default function StatusMatrix({
                 </th>
                 {columns.map((c) => {
                   const status = row.statuses[c.i];
+                  const StatusIcon = statusIcons[status];
                   return (
                     <td key={c.name}>
                       <button
@@ -157,9 +167,16 @@ export default function StatusMatrix({
                         aria-label={`${row.entity.name}: ${c.name}: ${status.toUpperCase()}`}
                         onClick={() => inspect(row.entity.id, c.name)}
                       >
-                        {filter === "all" || status === filter
-                          ? status.toUpperCase()
-                          : "·"}
+                        {filter === "all" || status === filter ? (
+                          <StatusIcon
+                            size={18}
+                            strokeWidth={2}
+                            aria-hidden="true"
+                            focusable="false"
+                          />
+                        ) : (
+                          <span aria-hidden="true">·</span>
+                        )}
                       </button>
                     </td>
                   );
@@ -169,6 +186,23 @@ export default function StatusMatrix({
           </tbody>
         </table>
       </div>
+      <ul className="qc-status-legend" aria-label="QC status legend">
+        {statusValues.map((status) => {
+          const StatusIcon = statusIcons[status];
+          return (
+            <li key={status}>
+              <span className={`qc-status-key ${status}`}>
+                <StatusIcon size={16} aria-hidden="true" focusable="false" />
+              </span>
+              <span>
+                {status === "unavailable"
+                  ? "Unavailable"
+                  : status.toUpperCase()}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
       {!rows.length && (
         <p role="status">No FASTQ results match these filters.</p>
       )}
