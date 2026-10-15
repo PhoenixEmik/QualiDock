@@ -9,7 +9,7 @@ Configure the adapter for your HPC site's environment before use. An administrat
 1. Set `cluster` in `deploy/ood/form.yml` to the actual OOD cluster ID from `/etc/ood/config/clusters.d`.
 2. Set a valid PBS queue and optional account. Submission rejects the placeholder queue and invalid scheduler tokens.
 3. Install QualiDock in a shared directory with a Python virtual environment, `pip install -e .`, and built `frontend/dist`. Set the installation path default accordingly. Node is needed at build time, not on the compute node at runtime.
-4. Configure the environment modules in `template/before.sh.erb` for Java, FastQC 0.12.1, and MultiQC 1.25+. The executable checks fail if either tool is missing.
+4. Configure the environment modules in `template/before.sh.erb` for Java, FastQC 0.13.0 (0.12.1 remains compatible), and MultiQC 1.25+ below 2. The executable checks fail if either tool is missing.
 5. Choose readable input roots and a private persistent output directory. Configure directory ownership/ACLs appropriately for the current researcher.
 6. Confirm OOD allows the compute-node hostnames and selected ports in the `/node` reverse proxy, uses HTTPS, preserves the external `Host` header for same-origin checks, and passes SSE without response buffering or a short idle timeout.
 

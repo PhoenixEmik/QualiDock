@@ -24,6 +24,15 @@ export interface Run {
   error: string | null;
   reports: { path: string; size: number }[];
   sample_count: number;
+  tools?: Record<string, ToolInfo>;
+  warnings?: string[];
+  executions?: {
+    tool: string;
+    argv: string[];
+    exit_code: number | null;
+    started_at: string;
+    finished_at: string | null;
+  }[];
 }
 export interface Entry {
   name: string;
@@ -42,6 +51,25 @@ export interface Listing {
   entries: Entry[];
   total: number;
 }
+export interface ToolInfo {
+  name: string;
+  executable: string;
+  available: boolean;
+  compatible: boolean;
+  version: string | null;
+  error: string | null;
+}
+export interface MultiQCSummary {
+  columns: {
+    key: string;
+    title: string;
+    description: string;
+    namespace: string;
+    unit: string;
+    raw_key: string;
+  }[];
+  rows: { sample: string; values: Record<string, string | number> }[];
+}
 export interface Config {
   roots: string[];
   cpus: number;
@@ -49,12 +77,17 @@ export interface Config {
   max_threads: number;
   tools: { fastqc: boolean; multiqc: boolean };
   prefix: string;
+  tool_details?: Record<string, ToolInfo>;
 }
 export interface Module {
   name: string;
   status: string;
   columns: string[];
   rows: string[][];
+  metadata?: string[][];
+  comments?: string[];
+  summary_status?: string;
+  available?: boolean;
 }
 export interface BaseQuality {
   base: string;

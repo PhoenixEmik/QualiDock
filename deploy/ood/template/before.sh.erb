@@ -6,7 +6,7 @@ umask 077
 
 # REQUIRED: configure the module environment for your HPC site here.
 # module purge
-# module load java fastqc/0.12.1 multiqc
+# module load java fastqc/0.13.0 multiqc
 
 export QUALIDOCK_INSTALL=<%= Shellwords.escape(File.expand_path(context.installation_path.to_s)) %>
 export QUALIDOCK_ROOTS=<%= Shellwords.escape(JSON.generate([File.expand_path(context.input_root.to_s)])) %>

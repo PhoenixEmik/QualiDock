@@ -7,13 +7,16 @@ import json
 import os
 from pathlib import Path
 import shutil
+import time
 import uuid
 import zipfile
 
 from .config import Settings
 from .executor import Executor, LocalExecutor
 from .files import FileAccess, FASTQ, PathViolation
-from .metrics import parse_report
+from .metrics import parse_report, parse_multiqc
+from .reports import discover, metadata
+from .tools import detect_tool
 
 ACTIVE = {"queued", "running"}
 TERMINAL = {"completed", "failed", "partial", "cancelled", "interrupted"}
@@ -44,6 +47,10 @@ class RunManager:
         self.slot = asyncio.Semaphore(1)
         self.revision = 0
         self.closing = False
+        self.tool_info = {}
+        self.tool_lock = asyncio.Lock()
+        self.tool_signature = None
+        self.tool_checked_at = 0.0
 
     def start(self):
         self.settings.output.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -84,7 +91,36 @@ class RunManager:
     def list(self):
         return sorted(self.runs.values(), key=lambda r: r["created_at"], reverse=True)
 
-    def create(self, name: str, mode: str, raw_paths: list[str], threads: int):
+    async def detect_tools(self):
+        signature = []
+        for name in (self.settings.fastqc, self.settings.multiqc):
+            executable = shutil.which(name)
+            try:
+                stat = Path(executable).stat() if executable else None
+                signature.append((name, executable, stat.st_mtime_ns if stat else None))
+            except OSError:
+                signature.append((name, None, None))
+        async with self.tool_lock:
+            if signature != self.tool_signature or time.monotonic() - self.tool_checked_at >= 60:
+                fastqc, multiqc = await asyncio.gather(detect_tool("fastqc", self.settings.fastqc), detect_tool("multiqc", self.settings.multiqc))
+                self.tool_info = {"fastqc": fastqc, "multiqc": multiqc}
+                self.tool_signature = signature
+                self.tool_checked_at = time.monotonic()
+        return self.tool_info
+
+    def input_access(self, source_run_id=None):
+        if source_run_id:
+            source = self.runs[source_run_id]
+            if source["state"] in ACTIVE:
+                raise ValueError("Wait until the source analysis finishes")
+            directory = self.directory(source_run_id)
+            fastqc = directory / "fastqc"
+            if fastqc.is_symlink() or not fastqc.resolve().is_relative_to(directory.resolve()):
+                raise PathViolation("Saved FastQC directory is unavailable")
+            return FileAccess([fastqc])
+        return self.files
+
+    async def create(self, name: str, mode: str, raw_paths: list[str], threads: int, source_run_id=None):
         if self.closing:
             raise ValueError("Session is stopping")
         if self.settings.memory_mb < 1024:
@@ -93,31 +129,45 @@ class RunManager:
             raise ValueError(f"This session allows at most {self.settings.max_threads} analysis threads")
         if len([r for r in self.runs.values() if r["state"] in ACTIVE]) >= 20:
             raise ValueError("The analysis queue is full")
-        paths = list(dict.fromkeys(self.files.resolve(p) for p in raw_paths))
-        if not paths or len(paths) > 500 or any(not p.is_file() for p in paths):
-            raise ValueError("Select between 1 and 500 input files")
+        await self.detect_tools()
+        access = self.input_access(source_run_id)
+        paths = list(dict.fromkeys(access.resolve(p) for p in raw_paths))
+        if not paths or len(paths) > 500:
+            raise ValueError("Select between 1 and 500 inputs")
+        report_inputs = []
         if mode == "multiqc":
-            if any(not (p.name.endswith("_fastqc.zip") or p.name == "fastqc_data.txt") for p in paths):
-                raise ValueError("MultiQC-only accepts existing FastQC ZIPs or fastqc_data.txt files")
+            try:
+                report_inputs = await asyncio.to_thread(discover, paths, access)
+            except OSError as exc:
+                raise ValueError(f"Cannot read QC report inputs: {exc.strerror or exc}") from exc
         else:
-            if any(not FASTQ.search(p.name) for p in paths):
+            if any(not p.is_file() or not FASTQ.search(p.name) for p in paths):
                 raise ValueError("FastQC requires .fastq, .fq, .fastq.gz, or .fq.gz files")
             stems = [FASTQ.sub("", p.name) for p in paths]
             if len(stems) != len(set(stems)):
                 raise ValueError("Input filenames must have unique FASTQ stems to avoid output collisions")
-        for tool in ([self.settings.fastqc] if mode == "fastqc" else [self.settings.multiqc] if mode == "multiqc" else [self.settings.fastqc, self.settings.multiqc]):
-            if shutil.which(tool) is None:
-                raise ValueError(f"QC tool is unavailable: {Path(tool).name}. Install it or configure its executable path.")
+        required = ["fastqc"] if mode == "fastqc" else ["multiqc"] if mode == "multiqc" else ["fastqc", "multiqc"]
+        for tool in required:
+            info = self.tool_info.get(tool)
+            executable = getattr(self.settings, tool)
+            if shutil.which(executable) is None:
+                raise ValueError(f"QC tool is unavailable: {Path(executable).name}. Install it or configure its executable path.")
+            if info and not info["compatible"]:
+                raise ValueError(info["error"])
+        if self.closing or len([r for r in self.runs.values() if r["state"] in ACTIVE]) >= 20:
+            raise ValueError("Session is stopping or the analysis queue is full")
         run_id = uuid.uuid4().hex
         directory = self.settings.output / run_id
         directory.mkdir(mode=0o700)
         for sub in ("fastqc", "multiqc", "inputs"):
             (directory / sub).mkdir(mode=0o700)
         (directory / "analysis.log").touch(mode=0o600)
-        run = {"schema_version": 1, "id": run_id, "name": name.strip() or "Untitled analysis", "mode": mode,
+        run = {"schema_version": 2, "id": run_id, "name": name.strip() or "Untitled analysis", "mode": mode,
                "state": "queued", "stage": "Waiting for resources", "created_at": now(), "updated_at": now(),
                "started_at": None, "finished_at": None, "threads": threads, "inputs": [str(p) for p in paths],
-               "input_metadata": [{"path": str(p), "size": p.stat().st_size, "mtime_ns": p.stat().st_mtime_ns} for p in paths],
+               "input_metadata": [{**metadata(p), "kind": "directory" if p.is_dir() else "file"} for p in paths],
+               "report_inputs": report_inputs, "source_run_id": source_run_id, "tools": {tool: dict(self.tool_info.get(tool, {})) for tool in required},
+               "executions": [], "parameters": {"threads": threads, "memory_mb": self.settings.memory_mb, "executor": "local"},
                "progress": 0, "error": None, "warnings": [], "reports": [], "sample_count": 0}
         self.runs[run_id] = run
         self.update(run)
@@ -126,70 +176,128 @@ class RunManager:
 
     def checked_inputs(self, run):
         paths = []
+        access = self.input_access(run.get("source_run_id"))
         for metadata in run["input_metadata"]:
-            path = self.files.resolve(metadata["path"])
+            path = access.resolve(metadata["path"])
+            if metadata.get("kind") == "directory":
+                if not path.is_dir():
+                    raise ValueError("Input directory is unavailable")
+                paths.append(path)
+                continue
             stat = path.stat()
             if not path.is_file() or stat.st_size != metadata["size"] or stat.st_mtime_ns != metadata["mtime_ns"]:
                 raise ValueError(f"Input changed while queued: {path.name}")
             paths.append(path)
         return paths
 
+    async def command(self, run, tool, argv, directory):
+        execution = {"tool": tool, "argv": argv, "started_at": now(), "finished_at": None, "exit_code": None}
+        run.setdefault("executions", []).append(execution)
+        self.update(run)
+        try:
+            code = await self.executor.execute(run["id"], argv, directory, directory / "analysis.log", run["threads"])
+            execution["exit_code"] = code
+            return code
+        finally:
+            execution["finished_at"] = now()
+            self.update(run)
+
     async def execute(self, run):
         run_id = run["id"]
         directory = self.directory(run_id)
-        metrics = {"schema_version": 1, "samples": []}
+        metrics = {"schema_version": 2, "samples": []}
         errors = []
         try:
             async with self.slot:
                 if run_id in self.cancelled:
                     return
                 self.update(run, state="running", stage="Preparing inputs", started_at=now())
-                paths = self.checked_inputs(run)
+                tools = await self.detect_tools()
+                required = ["fastqc"] if run["mode"] == "fastqc" else ["multiqc"] if run["mode"] == "multiqc" else ["fastqc", "multiqc"]
+                self.update(run, tools={name: dict(tools[name]) for name in required})
+                with (directory / "analysis.log").open("a") as stream:
+                    for name in required:
+                        stream.write(f"{name}: {tools[name]['version'] or 'version unavailable'} ({tools[name]['executable']})\n")
+                        if not tools[name]["compatible"]:
+                            raise ValueError(tools[name]["error"])
+                paths = await asyncio.to_thread(self.checked_inputs, run)
+                if run_id in self.cancelled:
+                    return
                 if run["mode"] != "multiqc":
                     self.update(run, stage="FastQC", progress=10)
-                    command = [self.settings.fastqc, "--outdir", str(directory / "fastqc"), "--threads", str(run["threads"]), "--memory", "512", "--format", "fastq", *map(str, paths)]
-                    code = await self.executor.execute(run_id, command, directory, directory / "analysis.log", run["threads"])
+                    command = [run["tools"]["fastqc"]["executable"], "--outdir", str(directory / "fastqc"), "--threads", str(run["threads"]), "--memory", "512", "--format", "fastq", *map(str, paths)]
+                    code = await self.command(run, "fastqc", command, directory)
                     if code:
                         errors.append(f"FastQC exited with code {code}. See analysis log.")
                     reports = sorted((directory / "fastqc").glob("*_fastqc.zip"))
                 else:
                     reports = []
-                    for index, path in enumerate(paths):
-                        # Copy only selected report files; never recursively scan user directories or follow their symlinks.
-                        destination = directory / "inputs" / str(index)
-                        destination.mkdir()
-                        target = destination / path.name
-                        shutil.copyfile(path, target)
-                        reports.append(target)
+                    access = self.input_access(run.get("source_run_id"))
+                    records = run.get("report_inputs") or await asyncio.to_thread(discover, paths, access)
+                    def snapshot():
+                        for index, record in enumerate(records):
+                            destination = directory / "inputs" / str(index)
+                            destination.mkdir()
+                            for entry in [record, *record.get("companions", [])]:
+                                source = access.resolve(entry["path"])
+                                if source.is_symlink() or metadata(source) != {key: entry[key] for key in ("path", "size", "mtime_ns")}:
+                                    raise ValueError(f"Input changed while queued: {source.name}")
+                                shutil.copyfile(source, destination / source.name)
+                            reports.append(destination / Path(record["path"]).name)
+                    await asyncio.to_thread(snapshot)
+                successful = []
+                sample_names = set()
                 for path in reports:
                     try:
-                        metrics["samples"].append(parse_report(path, str(path.relative_to(directory))))
-                    except (ValueError, OSError, zipfile.BadZipFile, UnicodeError) as exc:
+                        sample = await asyncio.to_thread(parse_report, path, str(path.relative_to(directory)))
+                        metrics["samples"].append(sample)
+                        # MultiQC cleans FASTQ suffixes from sample names. Avoid silently overwriting duplicates.
+                        sample_name = FASTQ.sub("", sample["name"])
+                        if run["mode"] != "fastqc" and sample_name in sample_names:
+                            errors.append(f"Duplicate sample name not aggregated by MultiQC: {sample['name']}")
+                        else:
+                            successful.append(path)
+                            sample_names.add(sample_name)
+                    except (ValueError, OSError, zipfile.BadZipFile, UnicodeError, RuntimeError, NotImplementedError) as exc:
                         errors.append(f"Cannot parse {path.name}: {exc}")
-                save_json(directory / "metrics.json", metrics)
-                self.update(run, sample_count=len(metrics["samples"]), progress=65)
+                await asyncio.to_thread(save_json, directory / "metrics.json", metrics)
+                self.update(run, sample_count=len(metrics["samples"]), warnings=[warning for sample in metrics["samples"] for warning in sample.get("warnings", [])], progress=65)
                 if run_id in self.cancelled:
                     return
                 if run["mode"] != "fastqc":
-                    if not reports:
+                    if not successful:
                         errors.append("No FastQC reports were produced for MultiQC.")
                     else:
                         self.update(run, stage="MultiQC", progress=75)
-                        scan = directory / ("inputs" if run["mode"] == "multiqc" else "fastqc")
-                        code = await self.executor.execute(run_id, [self.settings.multiqc, str(scan), "--outdir", str(directory / "multiqc"), "--force", "--data-format", "json", "--no-version-check"], directory, directory / "analysis.log", run["threads"])
+                        # An explicit list includes only successfully parsed, run-local QC reports.
+                        file_list = directory / "multiqc-inputs.txt"
+                        if any("\n" in str(path) or "\r" in str(path) for path in successful):
+                            raise ValueError("MultiQC report paths cannot contain newlines")
+                        file_list.write_text("".join(str(path) + "\n" for path in successful))
+                        code = await self.command(run, "multiqc", [run["tools"]["multiqc"]["executable"], "--file-list", str(file_list), "--outdir", str(directory / "multiqc"), "--force", "--data-format", "json", "--no-version-check"], directory)
                         if code:
                             errors.append(f"MultiQC exited with code {code}. See analysis log.")
                         elif not (directory / "multiqc/multiqc_report.html").is_file():
                             errors.append("MultiQC did not produce an HTML report.")
                 if run_id in self.cancelled:
                     return
-                if len(metrics["samples"]) != len(paths):
-                    errors.append(f"Parsed {len(metrics['samples'])} of {len(paths)} expected FastQC results.")
+                structured = directory / "multiqc/multiqc_data/multiqc_data.json"
+                if structured.is_file():
+                    try:
+                        metrics["multiqc"] = await asyncio.to_thread(parse_multiqc, structured)
+                    except (ValueError, OSError, UnicodeError, TypeError) as exc:
+                        run["warnings"].append(f"MultiQC summary unavailable: {exc}")
+                await asyncio.to_thread(save_json, directory / "metrics.json", metrics)
+                expected = len(run.get("report_inputs", [])) if run["mode"] == "multiqc" else len(paths)
+                if len(metrics["samples"]) != expected:
+                    errors.append(f"Parsed {len(metrics['samples'])} of {expected} expected FastQC results.")
                 state = "partial" if errors and metrics["samples"] else "failed" if errors else "completed"
                 self.update(run, state=state, stage="Finished", progress=100, finished_at=now(), error=" ".join(errors) or None)
         except Exception as exc:
             if run_id not in self.cancelled:
-                self.update(run, state="partial" if metrics["samples"] else "failed", stage="Stopped", error=str(exc), finished_at=now())
+                if metrics["samples"]:
+                    await asyncio.to_thread(save_json, directory / "metrics.json", metrics)
+                self.update(run, state="partial" if metrics["samples"] else "failed", sample_count=len(metrics["samples"]), stage="Stopped", error=str(exc), finished_at=now())
                 with (directory / "analysis.log").open("a") as stream:
                     stream.write(f"\nQualiDock: {exc}\n")
         finally:
@@ -201,7 +309,7 @@ class RunManager:
         allowed = {".html", ".zip", ".json", ".log", ".txt", ".tsv", ".csv", ".yaml", ".parquet", ".png", ".svg"}
         reports = []
         for path in sorted(directory.rglob("*")):
-            if path.is_file() and not path.is_symlink() and path.resolve().is_relative_to(directory.resolve()) and path.suffix in allowed and "inputs" not in path.relative_to(directory).parts:
+            if path.is_file() and not path.is_symlink() and path.resolve().is_relative_to(directory.resolve()) and path.suffix in allowed:
                 reports.append({"path": str(path.relative_to(directory)), "size": path.stat().st_size})
         self.update(run, reports=reports)
 

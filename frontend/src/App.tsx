@@ -24,6 +24,7 @@ import type {
   Listing,
   Run,
   Sample,
+  MultiQCSummary,
   View,
 } from "./types";
 import { Empty, State } from "./Feedback";
@@ -61,6 +62,8 @@ export default function App() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [runId, setRunId] = useState("");
+  const [multiqc, setMultiqc] = useState<MultiQCSummary>();
+  const [multiqcDirectory, setMultiqcDirectory] = useState("");
   const [samples, setSamples] = useState<Sample[]>([]);
   const [metricsLoading, setMetricsLoading] = useState(false);
   const [detailTab, setDetailTab] = useState<DetailTab>("overview");
@@ -191,9 +194,14 @@ export default function App() {
     if (!authenticated || !runId || view !== "analysis") return;
     let cancelled = false;
     setMetricsLoading(true);
-    void api<{ samples: Sample[] }>(`api/runs/${runId}/metrics`)
+    void api<{ samples: Sample[]; multiqc?: MultiQCSummary }>(
+      `api/runs/${runId}/metrics`,
+    )
       .then((result) => {
-        if (!cancelled) setSamples(result.samples);
+        if (!cancelled) {
+          setSamples(result.samples);
+          setMultiqc(result.multiqc);
+        }
       })
       .catch((err) => {
         if (!cancelled) fail(err);
@@ -322,6 +330,7 @@ export default function App() {
   const showRun = (run: Run) => {
     setRunId(run.id);
     setSamples([]);
+    setMultiqc(undefined);
     setLogs("");
     setLogsLoading(true);
     setMetricsLoading(true);
@@ -337,13 +346,16 @@ export default function App() {
         body: JSON.stringify({
           name,
           mode,
-          paths: [...selected.values()]
-            .filter((entry) =>
-              mode === "multiqc"
-                ? entry.kind === "fastqc"
-                : entry.kind === "fastq",
-            )
-            .map((entry) => entry.path),
+          paths:
+            mode === "multiqc" && multiqcDirectory.trim()
+              ? [multiqcDirectory.trim()]
+              : [...selected.values()]
+                  .filter((entry) =>
+                    mode === "multiqc"
+                      ? entry.kind === "fastqc"
+                      : entry.kind === "fastq",
+                  )
+                  .map((entry) => entry.path),
           threads,
         }),
       });
@@ -354,6 +366,22 @@ export default function App() {
       );
       showRun(run);
       setNotice("Analysis queued. You can continue browsing files.");
+    } catch (err) {
+      fail(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const aggregate = async (id: string) => {
+    setBusy(true);
+    setError("");
+    try {
+      const run = await api<Run>(`api/runs/${id}/multiqc`, { method: "POST" });
+      setRuns((previous) => [
+        run,
+        ...previous.filter((item) => item.id !== run.id),
+      ]);
+      showRun(run);
     } catch (err) {
       fail(err);
     } finally {
@@ -527,10 +555,19 @@ export default function App() {
               {config?.cpus} CPU ·{" "}
               {((config?.memory_mb || 0) / 1024).toFixed(1)} GB memory
             </span>
-            <small>
-              FastQC {config?.tools.fastqc ? "available" : "unavailable"}
+            <small
+              title={Object.values(config?.tool_details || {})
+                .map((tool) => tool.error)
+                .filter(Boolean)
+                .join("\n")}
+            >
+              FastQC{" "}
+              {config?.tool_details?.fastqc.version ||
+                (config?.tools.fastqc ? "available" : "unavailable")}
               <br />
-              MultiQC {config?.tools.multiqc ? "available" : "unavailable"}
+              MultiQC{" "}
+              {config?.tool_details?.multiqc.version ||
+                (config?.tools.multiqc ? "available" : "unavailable")}
             </small>
             <small className="connection-status">
               {updates === "live"
@@ -668,6 +705,8 @@ export default function App() {
           {view === "new" && (
             <NewAnalysisForm
               config={config}
+              multiqcDirectory={multiqcDirectory}
+              setMultiqcDirectory={setMultiqcDirectory}
               selected={selected}
               busy={busy}
               name={name}
@@ -825,6 +864,9 @@ export default function App() {
                 key={currentRun.id}
                 currentRun={currentRun}
                 samples={samples}
+                multiqc={multiqc}
+                aggregate={aggregate}
+                multiqcAvailable={!!config?.tools.multiqc}
                 logs={logs}
                 logsLoading={logsLoading}
                 metricsLoading={metricsLoading}

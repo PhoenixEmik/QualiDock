@@ -2,6 +2,10 @@
 
 This repository is an MVP development implementation, not a validated v0.1.0 release.
 
+## Phase 2 verification — 2026-10-15
+
+See [Phase 2 implementation and validation](PHASE2.md) for the current module coverage, actual FastQC 0.13.0 checks, MultiQC execution tests, backward-compatible persistence fields, and remaining real-MultiQC/Linux/browser/HPC acceptance work. The older record below describes the initial implementation environment.
+
 ## Local verification record — 2026-10-14
 
 - **29 backend tests passed** on Python 3.13 in the managed macOS workspace. QC orchestration used real fixture subprocesses. The macOS RSS sampler was replaced in tests because the sandbox denies `ps`; separate tests exercise Linux `/proc` parsing and the over-budget termination response.
@@ -36,7 +40,7 @@ The managed macOS development sandbox denies `ps`, so its backend tests replace 
 - [x] Frontend TypeScript and Vite production build with the real ECharts dependency.
 - [ ] Browser QA of Workspace, analysis setup, Analyses, all analysis detail sections, authentication, live SSE, downloads, and mobile layout.
 - [ ] Linux backend suite with real process and resource monitoring.
-- [ ] Real FastQC 0.12.1 + MultiQC end-to-end smoke on standalone Linux.
+- [ ] Real FastQC 0.13.0 + MultiQC end-to-end smoke on standalone Linux.
 - [ ] Accurate native chart comparison to official FastQC data, including grouped bases and quartiles.
 - [ ] HPC site configuration and end-to-end acceptance under the actual OOD reverse proxy.
 - [ ] Large-file cancellation, memory-limit failure, graceful shutdown, and abrupt-session interruption on Linux/PBS.

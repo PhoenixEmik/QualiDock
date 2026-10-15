@@ -320,7 +320,7 @@ def test_queued_input_change_is_rejected(client, setup):
 
 def test_multiqc_failure_keeps_fastqc_metrics(client, setup):
     settings, root = setup
-    Path(settings.multiqc).write_text(f"#!{sys.executable}\nimport sys;print('MultiQC failed');sys.exit(2)\n")
+    Path(settings.multiqc).write_text(f"#!{sys.executable}\nimport sys;print('multiqc, version 1.35' if '--version' in sys.argv else 'MultiQC failed');sys.exit(0 if '--version' in sys.argv else 2)\n")
     run = wait(client, start(client, root)["id"])
     assert run["state"] == "partial"
     assert run["sample_count"] == 2 and "MultiQC exited with code 2" in run["error"]

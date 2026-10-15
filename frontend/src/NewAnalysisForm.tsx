@@ -15,6 +15,8 @@ import type { Config, Entry, Run } from "./types";
 
 interface Props {
   config: Config | null;
+  multiqcDirectory: string;
+  setMultiqcDirectory: (value: string) => void;
   selected: Map<string, Entry>;
   busy: boolean;
   name: string;
@@ -29,6 +31,8 @@ interface Props {
 }
 export default function NewAnalysisForm({
   config,
+  multiqcDirectory,
+  setMultiqcDirectory,
   selected,
   busy,
   name,
@@ -94,6 +98,26 @@ export default function NewAnalysisForm({
             <h2>Input files</h2>
             <small>{configuredPaths.length} selected</small>
           </div>
+          {mode === "multiqc" && (
+            <div>
+              <label className="field-label" htmlFor="multiqc-directory">
+                Existing QC results directory (optional)
+              </label>
+              <input
+                id="multiqc-directory"
+                className="wide-input"
+                value={multiqcDirectory}
+                disabled={busy}
+                onChange={(event) => setMultiqcDirectory(event.target.value)}
+                placeholder="/absolute/path/to/fastqc-results"
+              />
+              <p className="inline-note">
+                Use a directory within a configured storage root, or select
+                individual FastQC reports below. A directory overrides the file
+                selection; FASTQ files are never copied or rerun.
+              </p>
+            </div>
+          )}
           {selected.size ? (
             <>
               <div className="selected-files">
@@ -134,7 +158,7 @@ export default function NewAnalysisForm({
           ) : (
             <Empty icon={Files} title="Choose your input files">
               {mode === "multiqc"
-                ? "Select FastQC ZIPs or fastqc_data.txt files in the workspace."
+                ? "Enter a QC results directory, or select FastQC ZIPs or fastqc_data.txt files in the workspace."
                 : "Select FASTQ files in the workspace. No upload is needed."}
             </Empty>
           )}
@@ -179,7 +203,11 @@ export default function NewAnalysisForm({
           </div>
           <div>
             <dt>Input files</dt>
-            <dd>{configuredPaths.length}</dd>
+            <dd>
+              {mode === "multiqc" && multiqcDirectory.trim()
+                ? "Directory import"
+                : configuredPaths.length}
+            </dd>
           </div>
           <div>
             <dt>CPU threads</dt>
@@ -194,15 +222,24 @@ export default function NewAnalysisForm({
           ((!config.tools.fastqc && mode !== "multiqc") ||
             (!config.tools.multiqc && mode !== "fastqc")) && (
             <p className="tool-warning">
-              A required QC tool is unavailable on this host. Configure it
-              before starting.
+              {Object.values(config.tool_details || {})
+                .filter(
+                  (tool) =>
+                    (tool.name === "fastqc"
+                      ? mode !== "multiqc"
+                      : mode !== "fastqc") && tool.error,
+                )
+                .map((tool) => tool.error)
+                .join(" ") ||
+                "A required QC tool is unavailable on this host. Configure it before starting."}
             </p>
           )}
         <button
           className="button primary"
           disabled={
             busy ||
-            !configuredPaths.length ||
+            (!configuredPaths.length &&
+              !(mode === "multiqc" && multiqcDirectory.trim())) ||
             (!!config &&
               ((!config.tools.fastqc && mode !== "multiqc") ||
                 (!config.tools.multiqc && mode !== "fastqc")))

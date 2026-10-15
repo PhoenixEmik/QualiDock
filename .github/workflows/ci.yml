@@ -38,9 +38,10 @@ jobs:
           distribution: temurin
           java-version: '17'
       - run: |
-          curl -fsSL https://www.bioinformatics.babraham.ac.uk/projects/fastqc/fastqc_v0.12.1.zip -o /tmp/fastqc.zip
+          curl -fsSL https://github.com/s-andrews/FastQC/releases/download/v0.13.0/fastqc_v0.13.0.zip -o /tmp/fastqc.zip
           unzip -q /tmp/fastqc.zip -d /tmp
           chmod +x /tmp/FastQC/fastqc
           echo /tmp/FastQC >> "$GITHUB_PATH"
       - run: python scripts/create-example-data.py --reads 1000
       - run: python scripts/smoke-real-qc.py
+      - run: pytest -q backend/tests/test_real_tools.py

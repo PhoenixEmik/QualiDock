@@ -18,8 +18,9 @@ import {
 } from "lucide-react";
 import { bytes, date, modeLabel, url } from "./api";
 import { Empty, State } from "./Feedback";
-import type { DetailTab, Run, Sample } from "./types";
-import QualityChart from "./QualityChart";
+import type { DetailTab, Run, Sample, MultiQCSummary } from "./types";
+import QcModule from "./QcModule";
+import { findModule, moduleNames } from "./qc";
 
 const active = (run: Run) => ["running", "queued"].includes(run.state);
 const detailTabs = [
@@ -30,6 +31,9 @@ const detailTabs = [
 interface Props {
   currentRun: Run;
   samples: Sample[];
+  multiqc?: MultiQCSummary;
+  aggregate: (id: string) => Promise<void>;
+  multiqcAvailable: boolean;
   logs: string;
   tab: DetailTab;
   setTab: (value: DetailTab) => void;
@@ -43,6 +47,9 @@ interface Props {
 export default function AnalysisDetail({
   currentRun,
   samples,
+  multiqc,
+  aggregate,
+  multiqcAvailable,
   logs,
   tab,
   setTab,
@@ -53,6 +60,7 @@ export default function AnalysisDetail({
   cancel,
   reselect,
 }: Props) {
+  const [detailsOpen, setDetailsOpen] = useState(true);
   const [sampleId, setSampleId] = useState("");
   const [metric, setMetric] = useState("Per base sequence quality");
   const currentSample =
@@ -64,10 +72,29 @@ export default function AnalysisDetail({
           <State value={currentRun.state} />
           <span>
             {modeLabel(currentRun.mode)} · {currentRun.inputs.length} input
-            files
+            inputs
           </span>
         </div>
         <div>
+          {!active(currentRun) &&
+            currentRun.reports.some(
+              (report) =>
+                report.path.startsWith("fastqc/") &&
+                report.path.endsWith("_fastqc.zip"),
+            ) && (
+              <button
+                className="button small"
+                disabled={busy || !multiqcAvailable}
+                title={
+                  multiqcAvailable
+                    ? "Aggregate these saved FastQC results without rerunning FastQC"
+                    : "A compatible MultiQC installation is required"
+                }
+                onClick={() => void aggregate(currentRun.id)}
+              >
+                Generate MultiQC
+              </button>
+            )}
           {active(currentRun) ? (
             <button
               className="button small danger"
@@ -169,8 +196,31 @@ export default function AnalysisDetail({
             <dd className="mono">{currentRun.id}</dd>
           </div>
         </dl>
+        {currentRun.tools && (
+          <dl className="job-information">
+            {Object.entries(currentRun.tools).map(([name, tool]) => (
+              <div key={name}>
+                <dt>{name}</dt>
+                <dd>{tool.version || "Version unavailable"}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+        {currentRun.executions?.map((execution, index) => (
+          <p className="inline-note" key={index}>
+            {execution.tool}:{" "}
+            {execution.exit_code === null
+              ? "Awaiting exit status"
+              : `exit ${execution.exit_code}`}
+          </p>
+        ))}
+        {currentRun.warnings?.map((warning, index) => (
+          <p className="inline-note" key={index}>
+            {warning}
+          </p>
+        ))}
         <details className="analysis-inputs">
-          <summary>Input files ({currentRun.inputs.length})</summary>
+          <summary>Input references ({currentRun.inputs.length})</summary>
           <ul>
             {currentRun.inputs.map((input) => (
               <li key={input} className="mono">
@@ -208,10 +258,25 @@ export default function AnalysisDetail({
                 {samples.every((sample) => sample.total_sequences !== null)
                   ? `${samples.reduce((sum, sample) => sum + (sample.total_sequences || 0), 0).toLocaleString()} sequences`
                   : "Sequence totals unavailable"}{" "}
-                · {samples.filter((sample) => sample.status !== "pass").length}{" "}
+                ·{" "}
+                {
+                  samples.filter((sample) =>
+                    ["warn", "fail"].includes(sample.status),
+                  ).length
+                }{" "}
                 files with QC warnings or failures
               </p>
-              <div className="dashboard-layout">
+              <button
+                className="button small inspector-toggle"
+                aria-expanded={detailsOpen}
+                aria-controls="sample-details"
+                onClick={() => setDetailsOpen((value) => !value)}
+              >
+                {detailsOpen ? "Hide" : "Show"} sample details
+              </button>
+              <div
+                className={`dashboard-layout ${detailsOpen ? "" : "details-collapsed"}`}
+              >
                 <section className="chart-section">
                   <div className="chart-heading">
                     <div>
@@ -223,17 +288,20 @@ export default function AnalysisDetail({
                       value={metric}
                       onChange={(e) => setMetric(e.target.value)}
                     >
-                      {[
-                        "Per base sequence quality",
-                        "Per sequence quality scores",
-                        "Per base sequence content",
-                        "Per sequence GC content",
-                        "Per base N content",
-                        "Sequence Length Distribution",
-                        "Adapter Content",
-                      ].map((m) => (
-                        <option key={m}>{m}</option>
-                      ))}
+                      {(currentSample ? moduleNames(currentSample) : []).map(
+                        (m) => (
+                          <option key={m} value={m}>
+                            {m} ·{" "}
+                            {currentSample &&
+                            findModule(currentSample, m)?.available !== false
+                              ? (
+                                  findModule(currentSample, m)?.status ||
+                                  "unavailable"
+                                ).toUpperCase()
+                              : "UNAVAILABLE"}
+                          </option>
+                        ),
+                      )}
                     </select>
                   </div>
                   <div className="sample-selector">
@@ -252,33 +320,32 @@ export default function AnalysisDetail({
                     {currentSample && (
                       <State
                         value={
-                          currentSample.modules.find((m) => m.name === metric)
-                            ?.status || "unknown"
+                          (findModule(currentSample, metric)?.available ===
+                          false
+                            ? "unavailable"
+                            : findModule(currentSample, metric)?.status) ||
+                          "unavailable"
                         }
                       />
                     )}
                   </div>
-                  {currentSample &&
-                  currentSample.modules.some(
-                    (m) => m.name === metric && m.rows.length,
-                  ) ? (
-                    <QualityChart sample={currentSample} metric={metric} />
-                  ) : (
-                    <Empty
-                      icon={LayoutDashboard}
-                      title="This metric is unavailable"
-                    >
-                      FastQC did not produce this metric for the selected file.
-                    </Empty>
+                  {currentSample && (
+                    <QcModule sample={currentSample} metric={metric} />
                   )}
                   <div className="chart-note">
                     <CircleHelp size={13} />
                     {metric === "Per base sequence quality"
                       ? "Boxes show the 25th–75th percentiles. Whiskers show the 10th–90th percentiles. Scroll to zoom."
-                      : "Parsed directly from the official FastQC output. Scroll to zoom."}
+                      : metric === "Per tile sequence quality"
+                        ? "Reported deviations from mean quality by tile and base bin. Scroll to zoom."
+                        : "Parsed directly from the official FastQC output. Exact values are available in the table."}
                   </div>
                 </section>
-                <aside className="sample-inspector">
+                <aside
+                  id="sample-details"
+                  className="sample-inspector"
+                  hidden={!detailsOpen}
+                >
                   <div className="summary-label">SAMPLE DETAILS</div>
                   <FileText size={27} strokeWidth={1.3} />
                   <h3>{currentSample?.name}</h3>
@@ -286,7 +353,7 @@ export default function AnalysisDetail({
                     <div>
                       <dt>Sequences</dt>
                       <dd>
-                        {currentSample?.total_sequences?.toLocaleString() ||
+                        {currentSample?.total_sequences?.toLocaleString() ??
                           "—"}
                       </dd>
                     </div>
@@ -317,8 +384,10 @@ export default function AnalysisDetail({
                             <Check size={13} />
                           ) : module.status === "warn" ? (
                             "!"
-                          ) : (
+                          ) : module.status === "fail" ? (
                             <X size={13} />
+                          ) : (
+                            "?"
                           )}
                         </span>
                       </div>
@@ -368,7 +437,7 @@ export default function AnalysisDetail({
                             <State value={sample.status} />
                           </td>
                           <td className="mono">
-                            {sample.total_sequences?.toLocaleString() || "—"}
+                            {sample.total_sequences?.toLocaleString() ?? "—"}
                           </td>
                           <td>{sample.sequence_length} bp</td>
                           <td>{sample.gc_percent ?? "—"}%</td>
@@ -429,6 +498,44 @@ export default function AnalysisDetail({
               QC data.
             </span>
           </div>
+          {multiqc && multiqc.rows.length > 0 && (
+            <section className="sample-table-section">
+              <h2>MultiQC sample summary</h2>
+              <p className="inline-note">
+                General statistics as stored by MultiQC, without display scaling
+                or unit conversions.
+              </p>
+              <div className="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Sample</th>
+                      {multiqc.columns.map((column) => (
+                        <th
+                          key={column.key}
+                          title={`${column.namespace}: ${column.description} (${column.raw_key})`}
+                        >
+                          {column.title}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {multiqc.rows.map((row) => (
+                      <tr key={row.sample}>
+                        <td>{row.sample}</td>
+                        {multiqc.columns.map((column) => (
+                          <td className="mono" key={column.key}>
+                            {row.values[column.key] ?? "—"}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
           {currentRun.reports.length ? (
             <div className="table-scroll">
               <table>

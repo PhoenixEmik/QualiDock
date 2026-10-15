@@ -1851,3 +1851,41 @@ dd {
   cursor: pointer;
   overflow-wrap: anywhere;
 }
+
+/* QC modules retain the existing chart and table styles. */
+.dashboard-layout.details-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+.sample-inspector[hidden] {
+  display: none;
+}
+.inspector-toggle {
+  margin: 0 0 12px;
+}
+.qc-data-table {
+  max-height: 440px;
+  overflow: auto;
+}
+.qc-data-table caption {
+  text-align: left;
+  padding: 12px;
+  color: var(--muted);
+}
+.qc-data-table td {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.qc-raw-data summary {
+  cursor: pointer;
+  padding: 12px;
+}
+.state.unavailable,
+.state.unknown {
+  color: #59665f;
+  background: #edf0ed;
+}
+.analysis-detail-heading > div:last-child {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}

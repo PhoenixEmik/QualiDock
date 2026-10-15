@@ -5,7 +5,6 @@ import json
 import os
 from pathlib import Path
 import secrets
-import shutil
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request, Response
@@ -108,7 +107,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def config():
         return {"roots": [str(p) for p in manager.files.roots], "cpus": settings.cpus,
                 "memory_mb": settings.memory_mb, "max_threads": settings.max_threads, "prefix": settings.prefix,
-                "tools": {"fastqc": shutil.which(settings.fastqc) is not None, "multiqc": shutil.which(settings.multiqc) is not None}}
+                "tools": {name: info["compatible"] for name, info in (await manager.detect_tools()).items()},
+                "tool_details": manager.tool_info}
 
     @app.get("/api/files")
     async def files(path: str, offset: int = 0, limit: int = 500):
@@ -122,7 +122,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/api/runs", status_code=201)
     async def create_run(body: AnalysisRequest):
-        return manager.create(body.name, body.mode, body.paths, body.threads)
+        return await manager.create(body.name, body.mode, body.paths, body.threads)
+
+    @app.post("/api/runs/{run_id}/multiqc", status_code=201)
+    async def aggregate(run_id: str):
+        source = manager.runs[run_id]
+        return await manager.create(f"MultiQC · {source['name']}"[:120], "multiqc", [str(manager.directory(run_id) / "fastqc")], min(source.get("threads", 1), settings.max_threads), source_run_id=run_id)
 
     @app.get("/api/runs/{run_id}")
     async def run(run_id: str):
