@@ -20,6 +20,8 @@ export interface Run {
   finished_at: string | null;
   threads: number;
   inputs: string[];
+  input_pairing?: InputPairing[];
+  pairing_note?: string | null;
   progress: number;
   error: string | null;
   reports: { path: string; size: number }[];
@@ -33,6 +35,14 @@ export interface Run {
     started_at: string;
     finished_at: string | null;
   }[];
+}
+export interface InputPairing {
+  path: string;
+  name: string;
+  read: string | null;
+  pair_key: string | null;
+  paired: boolean;
+  mate: string | null;
 }
 export interface Entry {
   name: string;

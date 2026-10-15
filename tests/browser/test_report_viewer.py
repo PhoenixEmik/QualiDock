@@ -113,6 +113,15 @@ parent.postMessage({type:'qualidock-report-ready',html:'<img onerror=alert(1)>'}
             instance.combined = instance.finish(client, client.post("api/runs", json={"name": "Browser combined", "mode": "both", "paths": paths}))
             instance.aggregated = instance.finish(client, client.post(f"api/runs/{instance.fastqc['id']}/multiqc"))
             instance.imported = instance.finish(client, client.post("api/runs", json={"name": "Browser imported", "mode": "multiqc", "paths": [str(output / instance.fastqc["id"] / "fastqc")]}))
+        # A genuine completed result without the new optional pairing fields.
+        historical = {**instance.fastqc, "id": uuid.uuid4().hex, "name": "Browser historical"}
+        historical.pop("input_pairing", None)
+        historical.pop("pairing_note", None)
+        shutil.copytree(output / instance.fastqc["id"], output / historical["id"])
+        save_json(output / historical["id"] / "manifest.json", historical)
+        instance.historical = historical
+        instance.stop()
+        instance.start()
         yield instance
     finally:
         instance.stop()
@@ -137,6 +146,17 @@ def open_run(page, workspace, name):
     return page.locator(".report-preview iframe").content_frame
 
 
+def quality_plot(frame):
+    # MultiQC also creates a hidden General Statistics violin plot. A global
+    # .first() locator waits for that hidden SVG forever; navigate to a specific
+    # genuine FastQC plot instead of weakening the assertion or report sandbox.
+    frame.locator('a[href="#fastqc_per_base_sequence_quality"]').first.click()
+    plot = frame.locator("#fastqc_per_base_sequence_quality_plot")
+    plot.scroll_into_view_if_needed()
+    plot.locator(".main-svg").first.wait_for(timeout=30000)
+    return plot
+
+
 def test_real_reports_and_interactions(workspace, browser):
     with browser.new_context(viewport={"width": 1440, "height": 1000}) as context:
         page = context.new_page()
@@ -146,10 +166,7 @@ def test_real_reports_and_interactions(workspace, browser):
         assert page.locator(".report-preview iframe").get_attribute("referrerpolicy") == "no-referrer"
         # Genuine MultiQC 1.35: compressed plot data, Plotly figures and tables.
         assert frame.locator("#general_stats_table_table tbody tr").count() >= 2
-        frame.locator('a[href="#fastqc"]').first.click()
-        frame.locator("#fastqc").wait_for(state="visible")
-        frame.locator(".js-plotly-plot .main-svg").first.wait_for(timeout=30000)
-        chart = frame.locator(".js-plotly-plot").first
+        chart = quality_plot(frame)
         chart.hover()
         assert chart.locator(".modebar").count() > 0
         # Strict allow-scripts deliberately blocks native form submission before
@@ -157,7 +174,7 @@ def test_real_reports_and_interactions(workspace, browser):
         # do not fake success by dispatching a synthetic submit in the test.
         hide = frame.locator("#mqc_hidesamples")
         assert hide.count() == 1
-        toolbar_hide = frame.locator('a[href="#mqc_hidesamples"]')
+        toolbar_hide = frame.locator('a[href="#mqc_hidesamples"][title="Hide"]')
         toolbar_hide.first.click()
         hide_input = hide.locator("#mqc_hidesamples_filter")
         hide_input.fill("coverage_R1")
@@ -212,14 +229,12 @@ def test_loading_missing_reports_and_restart(workspace, browser):
             open_run(page, workspace, run["name"])
             if run["mode"] == "multiqc":
                 frame = page.locator(".report-preview iframe").content_frame
-                frame.locator('a[href="#fastqc"]').first.click()
-                frame.locator(".js-plotly-plot .main-svg").first.wait_for(timeout=30000)
+                quality_plot(frame)
         workspace.stop()
         workspace.start()
         open_run(page, workspace, "Browser combined")
         frame = page.locator(".report-preview iframe").content_frame
-        frame.locator('a[href="#fastqc"]').first.click()
-        frame.locator(".js-plotly-plot .main-svg").first.wait_for(timeout=30000)
+        quality_plot(frame)
         # HTTP errors are checked before embedding, even though onLoad alone
         # cannot distinguish an opaque error page from a successfully loaded report.
         page.route("**/api/report-preview?*", lambda route: route.fulfill(status=404) if route.request.method == "HEAD" else route.continue_())

@@ -14,7 +14,9 @@ export const supportedModules = [
   "Per tile sequence quality",
   "Kmer Content",
 ];
-const key = (name: string) => name.toLowerCase().replace(/[\s_-]/g, "");
+export const moduleKey = (name: string) =>
+  name.toLowerCase().replace(/[\s_-]/g, "");
+const key = moduleKey;
 export const findModule = (sample: Sample, name: string) =>
   sample.modules.find((m) => key(m.name) === key(name));
 export const moduleNames = (sample: Sample) => [
@@ -23,6 +25,17 @@ export const moduleNames = (sample: Sample) => [
     .map((m) => m.name)
     .filter((name) => !supportedModules.some((m) => key(m) === key(name))),
 ];
+export function moduleStatus(sample: Sample, name: string) {
+  const module = findModule(sample, name);
+  return !module || module.available === false ? "unavailable" : module.status;
+}
+export function reportedStat(sample: Sample, name: string) {
+  return findModule(sample, "Basic Statistics")?.rows.find(
+    (row) => row[0] === name,
+  )?.[1];
+}
+export const inputFilename = (sample: Sample) =>
+  reportedStat(sample, "Filename") || sample.name;
 export function numeric(raw: string | undefined): number | null {
   if (raw === undefined || !raw.trim()) return null;
   const value = Number(raw);
@@ -77,7 +90,10 @@ export function rowTooltip(module: Module, index: number): string {
   const row = module.rows[index];
   return row
     ? module.columns
-        .map((column, i) => `${column}: ${row[i] ?? "Unavailable"}`)
+        .map(
+          (column, i) =>
+            `${column}: ${row[i] === undefined || !row[i].trim() ? "Unavailable (blank)" : row[i]}`,
+        )
         .join("\n")
     : "";
 }

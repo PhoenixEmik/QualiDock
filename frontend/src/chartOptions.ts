@@ -6,6 +6,7 @@ import {
   rowTooltip,
   numeric,
   qualityData,
+  moduleKey,
 } from "./qc.ts";
 
 /** Only arrange FastQC's reported points; do not derive scientific statistics. */
@@ -17,7 +18,7 @@ export function chartOptions(
   if (!module) return {};
   const quality = sample.per_base_quality;
   const reportedQuality = qualityData(sample);
-  const isQuality = metric === "Per base sequence quality";
+  const isQuality = moduleKey(metric) === "perbasesequencequality";
   const data = chartData(module);
   const heatmap = data.kind === "heatmap";
   const palette = [
@@ -36,18 +37,24 @@ export function chartOptions(
   if (isQuality) {
     series = [
       {
-        name: "10th–90th percentile",
+        name: "Quartiles · 10th–90th whiskers",
         type: "boxplot",
         itemStyle: { color: "#dcebe0", borderColor: "#81a994" },
         data: reportedQuality.boxes.map((box) =>
-          box.map((value) => value ?? NaN),
+          box.some((value) => value === null || !Number.isFinite(value))
+            ? [NaN, NaN, NaN, NaN, NaN]
+            : (box as number[]),
         ),
       },
       {
         name: "Mean quality",
         type: "line",
         data: reportedQuality.means,
-        symbol: quality.length === 1 ? "circle" : "none",
+        connectNulls: false,
+        symbol:
+          reportedQuality.means.filter((value) => value !== null).length === 1
+            ? "circle"
+            : "none",
         lineStyle: { color: palette[0], width: 2.5 },
         itemStyle: { color: palette[0] },
       },
@@ -70,6 +77,7 @@ export function chartOptions(
           name: series.name,
           type: data.kind,
           showSymbol: module.rows.length === 1,
+          connectNulls: false,
           data: series.data,
           lineStyle: { width: 2, color: palette[index % palette.length] },
           itemStyle: { color: palette[index % palette.length] },
@@ -89,6 +97,20 @@ export function chartOptions(
     (max, value) => Math.max(max, value),
     tileValues[0] ?? 0,
   );
+  const heatmapRows = heatmap
+    ? module.rows.filter((row) => numeric(row[2]) !== null)
+    : [];
+  const units: Record<string, string> = {
+    persequencequalityscores: "Read count",
+    perbasesequencecontent: "Base content (%)",
+    persequencegccontent: "Read count",
+    perbasencontent: "N content (%)",
+    sequencelengthdistribution: "Read count",
+    sequenceduplicationlevels: "Percentage (%)",
+    adaptercontent: "Adapter content (%)",
+    pertilesequencequality: "Tile",
+    kmercontent: "Observed / expected",
+  };
   return {
     animation: false,
     textStyle: {
@@ -102,12 +124,13 @@ export function chartOptions(
       renderMode: "richText",
       confine: true,
       formatter: (params: unknown) => {
-        const p = (Array.isArray(params) ? params[0] : params) as {
-          dataIndex: number;
-        };
-        const index = heatmap
-          ? module.rows.filter((row) => numeric(row[2]) !== null)[p.dataIndex]
-          : null;
+        const p = (Array.isArray(params) ? params[0] : params) as
+          | {
+              dataIndex: number;
+            }
+          | undefined;
+        if (!p) return "Unavailable";
+        const index = heatmap ? heatmapRows[p.dataIndex] : null;
         if (index)
           return module.columns
             .map((name, i) => `${name}: ${index[i] ?? "Unavailable"}`)
@@ -133,14 +156,15 @@ export function chartOptions(
       nameLocation: "middle",
       nameGap: 32,
       axisTick: { show: false },
-      axisLabel: { fontSize: 10 },
+      axisLabel: { fontSize: 10, hideOverlap: true },
     },
     yAxis: {
       type: heatmap ? "category" : "value",
       data: heatmap ? data.tiles : undefined,
       min: isQuality ? 0 : undefined,
       max: isQuality ? Math.ceil(maxQuality / 5) * 5 : undefined,
-      name: heatmap ? "Tile" : isQuality ? "Phred score" : undefined,
+      name: isQuality ? "Phred score" : units[moduleKey(metric)],
+      nameTextStyle: { fontSize: 10 },
       splitLine: { lineStyle: { color: "#e8ece9", type: "dashed" } },
       axisLabel: { fontSize: 10 },
     },
@@ -157,9 +181,10 @@ export function chartOptions(
         }
       : undefined,
     dataZoom: [
-      { type: "inside" },
+      { type: "inside", filterMode: "empty" },
       {
         type: "slider",
+        filterMode: "empty",
         height: 14,
         bottom: 40,
         brushSelect: false,

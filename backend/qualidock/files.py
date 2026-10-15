@@ -112,6 +112,40 @@ class FileAccess:
             self._snapshots[str(directory)] = cached
             return cached
 
+    def _pair(self, current, cached, entry):
+        if current and current['pair_key']:
+            pair = PAIR.match(FASTQ.sub('', current['name']))
+            group = cached['groups'].get(pair[1] + pair[4], {})
+            if len(group.get('R1', [])) == len(group.get('R2', [])) == 1:
+                mate = entry(group['R2' if current['read'] == 'R1' else 'R1'][0])
+                if mate and mate['kind'] == 'fastq':
+                    current['paired'], current['mate'] = True, mate['path']
+        return current
+
+    def pairing(self, paths: list[Path]) -> list[dict]:
+        """Persist the same confirmed relationships used by the explorer.
+
+        Inspect directory naming groups, including unselected ambiguous names,
+        but read metadata only for requested files and their potential mates.
+        """
+        result = []
+        for directory in dict.fromkeys(path.parent for path in paths):
+            self.resolve(str(directory))
+            cached = self._snapshot(directory, None, False)
+            checked = {}
+            def entry(name):
+                if name not in checked:
+                    checked[name] = self._entry(directory, name)
+                return checked[name]
+            for path in paths:
+                if path.parent == directory:
+                    current = self._pair(entry(path.name), cached, entry)
+                    if current:
+                        result.append({key: current[key] for key in ('path', 'name', 'read', 'pair_key', 'paired', 'mate')})
+            if self.resolve(str(directory)) != directory or self.signature(directory) != cached['signature']:
+                raise DirectoryChanged("Directory changed while confirming pairs. Refresh and retry.")
+        return result
+
     def browse(self, raw: str, offset: int = 0, limit: int = 500, snapshot: str | None = None, refresh: bool = False) -> dict:
         if offset < 0 or not 1 <= limit <= 500 or refresh and offset:
             raise ValueError("Invalid directory pagination")
@@ -131,14 +165,7 @@ class FileAccess:
             current = entry(name)
             if current is None:
                 continue
-            if current['pair_key']:
-                pair = PAIR.match(FASTQ.sub('', name))
-                group = cached['groups'].get(pair[1] + pair[4], {})
-                if len(group.get('R1', [])) == len(group.get('R2', [])) == 1:
-                    mate = entry(group['R2' if current['read'] == 'R1' else 'R1'][0])
-                    if mate and mate['kind'] == 'fastq':
-                        current['paired'], current['mate'] = True, mate['path']
-            entries.append(current)
+            entries.append(self._pair(current, cached, entry))
         # Never combine pages from different filesystem generations or a replaced parent.
         if self.resolve(str(directory)) != directory or self.signature(directory) != cached['signature']:
             raise DirectoryChanged("Directory changed while reading the page. Refresh and try again.")

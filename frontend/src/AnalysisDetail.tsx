@@ -1,8 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ArrowDownToLine,
   ArrowRight,
-  Check,
   CircleHelp,
   Clock3,
   FileArchive,
@@ -14,14 +13,18 @@ import {
   ShieldCheck,
   Square,
   Terminal,
-  X,
 } from "lucide-react";
 import { bytes, date, modeLabel, url } from "./api";
 import { Empty, State } from "./Feedback";
 import type { DetailTab, Run, Sample, MultiQCSummary } from "./types";
 import QcModule from "./QcModule";
 import ReportViewer from "./ReportViewer";
-import { findModule, moduleNames } from "./qc";
+import { findModule } from "./qc";
+import { confirmedPairs } from "./pairing";
+import ModuleNavigation from "./ModuleNavigation";
+import PairComparison from "./PairComparison";
+import ModuleHelp from "./ModuleHelp";
+import SampleDetails from "./SampleDetails";
 
 const active = (run: Run) => ["running", "queued"].includes(run.state);
 const detailTabs = [
@@ -66,14 +69,33 @@ export default function AnalysisDetail({
   const [metric, setMetric] = useState("Per base sequence quality");
   const currentSample =
     samples.find((sample) => sample.id === sampleId) || samples[0];
+  const [qcMode, setQcMode] = useState<"single" | "comparison">("single");
+  const [pairId, setPairId] = useState("");
+  const pairs = useMemo(
+    () => confirmedPairs(currentRun, samples),
+    [currentRun.input_pairing, currentRun.inputs, samples],
+  );
+  const pair =
+    pairs.find((pair) => pair.id === pairId) ||
+    pairs.find(
+      (pair) =>
+        pair.r1.id === currentSample?.id || pair.r2.id === currentSample?.id,
+    ) ||
+    pairs[0];
+  const comparing = qcMode === "comparison" && !!pair;
+  const visibleSamples = comparing
+    ? [pair.r1, pair.r2]
+    : currentSample
+      ? [currentSample]
+      : [];
   return (
     <section className="analysis-detail" aria-label="Analysis details">
       <div className="analysis-detail-heading">
         <div>
           <State value={currentRun.state} />
           <span>
-            {modeLabel(currentRun.mode)} · {currentRun.inputs.length} input
-            inputs
+            {modeLabel(currentRun.mode)} · {currentRun.inputs.length}{" "}
+            {currentRun.inputs.length === 1 ? "input" : "inputs"}
           </span>
         </div>
         <div>
@@ -267,6 +289,34 @@ export default function AnalysisDetail({
                 }{" "}
                 files with QC warnings or failures
               </p>
+              <div className="qc-view-controls">
+                <div className="view-toggle" role="group" aria-label="QC view">
+                  <button
+                    aria-pressed={!comparing}
+                    className={!comparing ? "active" : ""}
+                    onClick={() => {
+                      setQcMode("single");
+                      if (comparing) setSampleId(pair.r1.id);
+                    }}
+                  >
+                    Single Sample
+                  </button>
+                  <button
+                    aria-pressed={comparing}
+                    className={comparing ? "active" : ""}
+                    disabled={!pairs.length}
+                    onClick={() => setQcMode("comparison")}
+                  >
+                    R1 / R2 Comparison
+                  </button>
+                </div>
+                {!pairs.length && (
+                  <p className="inline-note">
+                    {currentRun.pairing_note ||
+                      "No confirmed pair is available. Both read results and unambiguous saved pairing metadata are required; historical records without this metadata remain available individually."}
+                  </p>
+                )}
+              </div>
               <button
                 className="button small inspector-toggle"
                 aria-expanded={detailsOpen}
@@ -281,62 +331,89 @@ export default function AnalysisDetail({
                 <section className="chart-section">
                   <div className="chart-heading">
                     <div>
-                      <h2>{metric}</h2>
-                      <span>{currentSample?.encoding}</span>
+                      <h2 id="qc-metric-heading" tabIndex={-1}>
+                        {metric}
+                      </h2>
+                      <span>
+                        {comparing
+                          ? `${pair.r1.encoding} · ${pair.r2.encoding}`
+                          : currentSample?.encoding}
+                      </span>
                     </div>
-                    <select
-                      aria-label="Select QC metric"
-                      value={metric}
-                      onChange={(e) => setMetric(e.target.value)}
-                    >
-                      {(currentSample ? moduleNames(currentSample) : []).map(
-                        (m) => (
-                          <option key={m} value={m}>
-                            {m} ·{" "}
-                            {currentSample &&
-                            findModule(currentSample, m)?.available !== false
-                              ? (
-                                  findModule(currentSample, m)?.status ||
-                                  "unavailable"
-                                ).toUpperCase()
-                              : "UNAVAILABLE"}
-                          </option>
-                        ),
-                      )}
-                    </select>
                   </div>
                   <div className="sample-selector">
-                    <label htmlFor="sample">SAMPLE</label>
-                    <select
-                      id="sample"
-                      value={currentSample?.id || ""}
-                      onChange={(e) => setSampleId(e.target.value)}
-                    >
-                      {samples.map((sample) => (
-                        <option key={sample.id} value={sample.id}>
-                          {sample.name}
-                        </option>
-                      ))}
-                    </select>
-                    {currentSample && (
-                      <State
-                        value={
-                          (findModule(currentSample, metric)?.available ===
-                          false
-                            ? "unavailable"
-                            : findModule(currentSample, metric)?.status) ||
-                          "unavailable"
-                        }
-                      />
+                    {comparing ? (
+                      <>
+                        <label htmlFor="qc-pair">PAIR</label>
+                        <select
+                          id="qc-pair"
+                          aria-label="Select confirmed pair"
+                          title={pair.id}
+                          value={pair.id}
+                          onChange={(event) => setPairId(event.target.value)}
+                        >
+                          {pairs.map((pair) => (
+                            <option key={pair.id} value={pair.id}>
+                              {pair.name} · {pair.r1.name} / {pair.r2.name}
+                            </option>
+                          ))}
+                        </select>
+                      </>
+                    ) : (
+                      <>
+                        <label htmlFor="sample">SAMPLE</label>
+                        <select
+                          id="sample"
+                          aria-label="Select FASTQ sample"
+                          value={currentSample?.id || ""}
+                          onChange={(event) => {
+                            setSampleId(event.target.value);
+                            setPairId("");
+                          }}
+                        >
+                          {samples.map((sample) => (
+                            <option key={sample.id} value={sample.id}>
+                              {sample.name}
+                            </option>
+                          ))}
+                        </select>
+                        {currentSample && (
+                          <State
+                            value={
+                              (findModule(currentSample, metric)?.available ===
+                              false
+                                ? "unavailable"
+                                : findModule(currentSample, metric)?.status) ||
+                              "unavailable"
+                            }
+                          />
+                        )}
+                      </>
                     )}
                   </div>
-                  {currentSample && (
-                    <QcModule sample={currentSample} metric={metric} />
+                  <ModuleNavigation
+                    samples={visibleSamples}
+                    metric={metric}
+                    select={setMetric}
+                  />
+                  {comparing ? (
+                    <PairComparison
+                      key={`${pair.id}:${metric}`}
+                      pair={pair}
+                      metric={metric}
+                    />
+                  ) : (
+                    currentSample && (
+                      <QcModule sample={currentSample} metric={metric} />
+                    )
                   )}
+                  <ModuleHelp key={metric} metric={metric} />
                   <div className="chart-note">
                     <CircleHelp size={13} />
                     {metric === "Per base sequence quality"
-                      ? "Boxes show the 25th–75th percentiles. Whiskers show the 10th–90th percentiles. Scroll to zoom."
+                      ? comparing
+                        ? "Comparison curves use reported means; optional medians and all percentiles remain in the tooltip and Raw Data. No Q20/Q30 percentages are inferred."
+                        : "Boxes show the 25th–75th percentiles and the median. Whiskers show the 10th–90th percentiles. Scroll to zoom."
                       : metric === "Per tile sequence quality"
                         ? "Reported deviations from mean quality by tile and base bin. Scroll to zoom."
                         : "Parsed directly from the official FastQC output. Exact values are available in the table."}
@@ -348,52 +425,7 @@ export default function AnalysisDetail({
                   hidden={!detailsOpen}
                 >
                   <div className="summary-label">SAMPLE DETAILS</div>
-                  <FileText size={27} strokeWidth={1.3} />
-                  <h3>{currentSample?.name}</h3>
-                  <dl>
-                    <div>
-                      <dt>Sequences</dt>
-                      <dd>
-                        {currentSample?.total_sequences?.toLocaleString() ??
-                          "—"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Read length</dt>
-                      <dd>{currentSample?.sequence_length || "—"} bp</dd>
-                    </div>
-                    <div>
-                      <dt>GC content</dt>
-                      <dd>{currentSample?.gc_percent ?? "—"}%</dd>
-                    </div>
-                    <div>
-                      <dt>FastQC version</dt>
-                      <dd>{currentSample?.fastqc_version}</dd>
-                    </div>
-                  </dl>
-                  <div className="inspector-divider" />
-                  <h4>Module checks</h4>
-                  <div className="module-checks">
-                    {currentSample?.modules.map((module) => (
-                      <div key={module.name}>
-                        <span>{module.name}</span>
-                        <span
-                          className={`module-status ${module.status}`}
-                          title={module.status}
-                        >
-                          {module.status === "pass" ? (
-                            <Check size={13} />
-                          ) : module.status === "warn" ? (
-                            "!"
-                          ) : module.status === "fail" ? (
-                            <X size={13} />
-                          ) : (
-                            "?"
-                          )}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  <SampleDetails samples={visibleSamples} />
                 </aside>
               </div>
               <section className="sample-table-section">
@@ -428,7 +460,11 @@ export default function AnalysisDetail({
                           <td>
                             <button
                               className="file-name"
-                              onClick={() => setSampleId(sample.id)}
+                              onClick={() => {
+                                setSampleId(sample.id);
+                                setPairId("");
+                                setQcMode("single");
+                              }}
                             >
                               <FileText size={17} />
                               {sample.name}

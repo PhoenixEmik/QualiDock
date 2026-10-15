@@ -106,15 +106,23 @@ FastQC 0.13.0 must be on PATH, or set `QUALIDOCK_FASTQC`. Set `QUALIDOCK_MULTIQC
 for an explicit MultiQC installation. Playwright is a validation dependency only;
 it is not required by the deployed application. CI includes both browser targets.
 
-During implementation the managed macOS environment rejected loopback socket
+During the initial implementation the managed macOS environment rejected loopback socket
 binding and native browser window access. Thus HTTP/real-tool tests and the
 production build were run locally: **125 backend tests passed** with the real
 FastQC 0.13.0 / MultiQC 1.35 installations configured, **41 frontend tests passed**,
 and the TypeScript/Vite build passed. All 12 module tables and existing secure
-download links also passed server-render checks. **The new browser suite has not yet been
-executed**. Do not treat its presence in CI as a passing result. Actual browser
+download links also passed server-render checks. At that handoff the new browser
+suite had not been executed; the subsequent CI result is recorded below. Actual browser
 interaction, sandbox enforcement, and HTTPS OOD site acceptance remain validation
 gates. Safari/WebKit is not yet covered.
+
+Subsequent CI at [`e46ca0d`](https://github.com/PhoenixEmik/QualiDock/actions/runs/38714868496)
+did execute both browsers. All opaque-origin security cases passed, while six
+report-rendering waits per browser failed. The tests now navigate to a specific
+FastQC quality plot instead of the first global SVG, which may belong to a hidden
+General Statistics violin plot. That selector change is pending another CI run;
+full rendering acceptance is still not established. Phase 3A also adds explicit
+[native QC browser coverage](NATIVE-FASTQC.md). No sandbox restriction was relaxed.
 
 ## Files changed
 

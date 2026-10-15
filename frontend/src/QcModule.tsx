@@ -1,6 +1,7 @@
 import type { Sample } from "./types";
 import { findModule, tableOnly } from "./qc";
 import QualityChart from "./QualityChart";
+import RawData from "./RawData";
 
 export default function QcModule({
   sample,
@@ -14,33 +15,10 @@ export default function QcModule({
     return (
       <p className="inline-note">
         This module is unavailable in this FastQC result.
+        {module?.summary_status &&
+          ` summary.txt reports ${module.summary_status.toUpperCase()}, but no module data is available.`}
       </p>
     );
-  const table = (
-    <div className="table-scroll qc-data-table">
-      <table>
-        <caption>Values reported by FastQC</caption>
-        <thead>
-          <tr>
-            {module.columns.map((column, index) => (
-              <th key={index}>{column}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {module.rows.map((row, index) => (
-            <tr key={index}>
-              {row.map((value, column) => (
-                <td key={column} className="mono">
-                  {value || "Unavailable"}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
   return (
     <>
       {module.metadata?.map((row, index) => (
@@ -55,17 +33,17 @@ export default function QcModule({
             : "FastQC reported no data rows for this module."}{" "}
           Module status: {module.status.toUpperCase()}.
         </p>
-      ) : tableOnly(module) ? (
-        table
-      ) : (
+      ) : !tableOnly(module) ? (
         <>
           <QualityChart sample={sample} metric={metric} />
-          <details className="qc-raw-data">
-            <summary>Show exact reported values</summary>
-            {table}
-          </details>
         </>
-      )}
+      ) : null}
+      <RawData
+        key={`${sample.id}:${metric}`}
+        module={module}
+        sampleName={sample.name}
+        initiallyOpen={tableOnly(module)}
+      />
       {module.summary_status && module.summary_status !== module.status && (
         <p className="error">
           summary.txt reports {module.summary_status.toUpperCase()};

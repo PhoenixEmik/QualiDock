@@ -135,6 +135,8 @@ class RunManager:
         if not paths or len(paths) > 500:
             raise ValueError("Select between 1 and 500 inputs")
         report_inputs = []
+        input_pairing = []
+        pairing_note = None
         if mode == "multiqc":
             try:
                 report_inputs = await asyncio.to_thread(discover, paths, access)
@@ -146,6 +148,12 @@ class RunManager:
             stems = [FASTQ.sub("", p.name) for p in paths]
             if len(stems) != len(set(stems)):
                 raise ValueError("Input filenames must have unique FASTQ stems to avoid output collisions")
+            try:
+                input_pairing = await asyncio.to_thread(access.pairing, paths)
+            except (ValueError, OSError):
+                # Pairing is optional display metadata. A directory index limit
+                # or an unavailable mate must not prevent valid FastQC inputs.
+                pairing_note = "Pairing could not be confirmed; reads remain available individually."
         required = ["fastqc"] if mode == "fastqc" else ["multiqc"] if mode == "multiqc" else ["fastqc", "multiqc"]
         for tool in required:
             info = self.tool_info.get(tool)
@@ -166,6 +174,8 @@ class RunManager:
                "state": "queued", "stage": "Waiting for resources", "created_at": now(), "updated_at": now(),
                "started_at": None, "finished_at": None, "threads": threads, "inputs": [str(p) for p in paths],
                "input_metadata": [{**metadata(p), "kind": "directory" if p.is_dir() else "file"} for p in paths],
+               "input_pairing": input_pairing,
+               "pairing_note": pairing_note,
                "report_inputs": report_inputs, "source_run_id": source_run_id, "tools": {tool: dict(self.tool_info.get(tool, {})) for tool in required},
                "executions": [], "parameters": {"threads": threads, "memory_mb": self.settings.memory_mb, "executor": "local"},
                "progress": 0, "error": None, "warnings": [], "reports": [], "sample_count": 0}
