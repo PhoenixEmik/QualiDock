@@ -159,3 +159,12 @@ def test_multiqc_raw_units_and_version_are_not_display_scaling(version):
     assert total['raw_unit'] == 'reads'
     assert parsed['rows'][0]['values'][total['key']] == 400
     assert next(c for c in parsed['columns'] if c['raw_key'] == 'percent_gc')['raw_unit'] == '%'
+
+
+def test_multiqc_unverified_display_suffix_is_not_a_raw_unit(tmp_path):
+    # Schema edge case only: no new scientific values or calculations.
+    path = tmp_path / 'stats.json'
+    path.write_text(json.dumps({'report_general_stats_headers': [{'fraction': {'namespace': 'Other tool', 'suffix': '%', 'modify': None}}], 'report_general_stats_data': [{'sample': {'fraction': 0}}]}))
+    result = parse_multiqc(path)
+    assert result['columns'][0]['raw_unit'] == ''
+    assert result['rows'][0]['values']['0:fraction'] == 0

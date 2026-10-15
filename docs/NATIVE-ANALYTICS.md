@@ -18,13 +18,13 @@ Optional MultiQC summary fields `tool` and `version`, and column fields
 `raw_unit`, `section` and `hidden`, supplement the existing format. No endpoints,
 manifest versions, database migrations or tool execution changes are required.
 Historical summaries remain readable without modification. Original source JSON
-and reports stay available in Reports. Legacy summaries without metadata display
-the version as unavailable; their analysis tool version remains in Overview & logs.
+and reports stay available in Reports. Legacy summaries use the saved analysis tool version when available; otherwise
+the version is explicitly unavailable.
 
 MultiQC display suffixes are not reliable units for saved values: the genuine
 fixtures save `total_sequences=400` with a display suffix of `M`. The table keeps
-400 and labels this verified FastQC field as reads. Verified percent and bp
-fields retain those units when no modifier is supplied. Unknown/modified units
+400 and labels this verified FastQC field as reads. Verified FastQC percent and bp
+fields retain their source units. Unknown/modified units
 are shown as raw rather than guessing a conversion. Tooltips preserve the
 original description, field identifier and display suffix. Values are not rounded
 or converted by this adapter; numerical JSON values retain the existing JavaScript

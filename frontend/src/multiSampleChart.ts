@@ -82,9 +82,14 @@ export function overlayOptions(
             ],
           width: 2,
           type: ["solid", "dashed", "dotted"][
-            [...new Set(group.series.map((s) => s.column))].indexOf(
+            ([...new Set(group.series.map((s) => s.column))].indexOf(
               series.column,
-            ) % 3
+            ) +
+              Math.floor(
+                group.members.findIndex((m) => m.id === series.entity.id) /
+                  overlayColors.length,
+              )) %
+              3
           ] as "solid" | "dashed" | "dotted",
         },
         itemStyle: {

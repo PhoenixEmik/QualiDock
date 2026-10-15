@@ -326,6 +326,7 @@ export default function AnalysisDetail({
               <>
                 <GeneralStatistics
                   summary={multiqc}
+                  version={currentRun.tools?.multiqc?.version}
                   entities={entities}
                   selected={selected}
                   select={select}

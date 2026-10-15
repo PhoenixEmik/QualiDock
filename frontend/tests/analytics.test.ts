@@ -319,3 +319,38 @@ test("all verified comparison modules preserve source data and render finite res
     }
   }
 });
+
+test("unverified MultiQC suffixes never become scientific raw units", () => {
+  assert.equal(
+    rawUnit({
+      key: "x",
+      title: "X",
+      description: "",
+      namespace: "Other tool",
+      unit: "%",
+      raw_key: "fraction",
+    }),
+    "",
+  );
+  assert.equal(
+    rawUnit({
+      key: "x",
+      title: "X",
+      description: "",
+      namespace: "FastQC",
+      unit: "%",
+      raw_key: "unknown",
+    }),
+    "",
+  );
+});
+test("unknown columns are not plotted as counts and theoretical GC data is not substituted", () => {
+  const changed = structuredClone(samples[0]);
+  const module = findModule(changed, "Per sequence GC content")!;
+  module.columns[1] = "Theoretical distribution";
+  assert.equal(
+    multiComparison(analyticsSamples(run, [changed]), module.name).groups
+      .length,
+    0,
+  );
+});

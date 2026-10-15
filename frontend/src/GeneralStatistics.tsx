@@ -14,8 +14,10 @@ export default function GeneralStatistics({
   entities,
   selected,
   select,
+  version,
 }: {
   summary?: MultiQCSummary;
+  version?: string | null;
   entities: AnalyticsSample[];
   selected: Set<string>;
   select: (s: Set<string>) => void;
@@ -61,7 +63,7 @@ export default function GeneralStatistics({
       <div className="section-heading">
         <h2>General Statistics</h2>
         <span className="subtle">
-          MultiQC {summary?.version || "version in analysis metadata"}
+          MultiQC {summary?.version || version || "version unavailable"}
         </span>
       </div>
       <p className="inline-note">

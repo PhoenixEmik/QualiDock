@@ -238,8 +238,8 @@ def test_multiqc_temporary_state_never_exposes_parent_storage_or_cookies(workspa
           return {parentDOM:blocked(()=>parent.document.body),parentCookie:blocked(()=>parent.document.cookie),cookie:document.cookie,local:localStorage.getItem('qualidock-parent-canary'),session:sessionStorage.getItem('qualidock-parent-canary')};
         }""")
         assert boundary == {"parentDOM": True, "parentCookie": True, "cookie": "", "local": None, "session": None}
-        frame.locator("body").evaluate("localStorage.setItem('mqc-theme','dark'); sessionStorage.setItem('report-only','value'); document.cookie='preview_only=must-not-persist'")
-        assert frame.locator("body").evaluate("localStorage.getItem('mqc-theme')") == "dark"
+        frame.locator("body").evaluate("() => {localStorage.setItem('mqc-theme','dark'); sessionStorage.setItem('report-only','value'); document.cookie='preview_only=must-not-persist'}")
+        assert frame.locator("body").evaluate("() => localStorage.getItem('mqc-theme')") == "dark"
         assert page.evaluate("localStorage.getItem('mqc-theme')") is None
         assert not any(cookie["name"] == "preview_only" for cookie in context.cookies())
         assert frame.locator("body").evaluate("""async () => {try{await fetch('/api/config',{credentials:'include'});return false}catch(_){return true}}""")
@@ -250,8 +250,8 @@ def test_multiqc_temporary_state_never_exposes_parent_storage_or_cookies(workspa
         page.locator(".report-preview[aria-busy=false] iframe").wait_for()
         frame = page.locator(".report-preview iframe").content_frame
         quality_plot(frame)
-        assert frame.locator("body").evaluate("localStorage.getItem('mqc-theme')") is None
-        assert frame.locator("body").evaluate("sessionStorage.getItem('report-only')") is None
+        assert frame.locator("body").evaluate("() => localStorage.getItem('mqc-theme')") is None
+        assert frame.locator("body").evaluate("() => sessionStorage.getItem('report-only')") is None
         assert page.evaluate("localStorage.getItem('qualidock-parent-canary')") == "private"
 
 

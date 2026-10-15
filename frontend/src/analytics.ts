@@ -78,12 +78,19 @@ export type StatColumn = MultiQCSummary["columns"][number];
 export function rawUnit(column: StatColumn) {
   if (column.raw_unit !== undefined) return column.raw_unit;
   // Historical summaries stored the display suffix. Apply only verified raw units.
-  if (
-    column.namespace.toLowerCase() === "fastqc" &&
-    column.raw_key === "total_sequences"
-  )
-    return "reads";
-  return ["%", "bp"].includes(column.unit.trim()) ? column.unit.trim() : "";
+  if (column.namespace.toLowerCase() !== "fastqc") return "";
+  return (
+    (
+      {
+        total_sequences: "reads",
+        percent_duplicates: "%",
+        percent_gc: "%",
+        percent_fails: "%",
+        avg_sequence_length: "bp",
+        median_sequence_length: "bp",
+      } as Record<string, string>
+    )[column.raw_key] || ""
+  );
 }
 export type Sort = { key: string; direction: 1 | -1 };
 export function sortStats(
@@ -192,6 +199,23 @@ export interface ComparisonData {
   notes: string[];
   unavailable: string[];
 }
+function comparisonColumns(module: Module, key: string): string[] {
+  if (key === "perbasesequencequality")
+    return module.columns.includes("Mean") ? ["Mean"] : [];
+  if (
+    [
+      "persequencequalityscores",
+      "persequencegccontent",
+      "sequencelengthdistribution",
+    ].includes(key)
+  )
+    return module.columns.includes("Count") ? ["Count"] : [];
+  if (key === "sequenceduplicationlevels")
+    return module.columns
+      .slice(1)
+      .filter((column) => /^Percentage of (deduplicated|total)$/.test(column));
+  return module.columns.slice(1); // Adapter names are reported categories, never inferred.
+}
 export function multiComparison(
   entities: AnalyticsSample[],
   metric: string,
@@ -228,8 +252,8 @@ export function multiComparison(
       unavailable.push(`${entity.name} (ambiguous repeated axis/columns)`);
       continue;
     }
-    if (quality && !module.columns.includes("Mean")) {
-      unavailable.push(`${entity.name} (Mean unavailable)`);
+    if (!comparisonColumns(module, key).length) {
+      unavailable.push(`${entity.name} (supported metric columns unavailable)`);
       continue;
     }
     if (normalized) {
@@ -293,7 +317,7 @@ export function multiComparison(
       group.modules.forEach((module, index) => {
         const entity = group.members[index],
           rows = new Map(module.rows.map((row) => [row[0], row]));
-        const columns = quality ? ["Mean"] : module.columns.slice(1);
+        const columns = comparisonColumns(module, key);
         for (const column of columns) {
           const c = module.columns.indexOf(column),
             raw = group.categories.map((label) => rows.get(label)?.[c]);

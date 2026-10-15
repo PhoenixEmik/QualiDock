@@ -2307,7 +2307,19 @@ tr.row-selected:hover {
     padding: 12px;
   }
 }
-.analytics-table tbody th { text-transform: none; letter-spacing: normal; background: inherit; }
-.analytics-series { margin: 10px 0; }
-.analytics-series summary { cursor: pointer; font-size: 12px; }
-.analytics-series .analytics-actions { max-height: 220px; overflow: auto; }
+.analytics-table tbody th {
+  text-transform: none;
+  letter-spacing: normal;
+  background: inherit;
+}
+.analytics-series {
+  margin: 10px 0;
+}
+.analytics-series summary {
+  cursor: pointer;
+  font-size: 12px;
+}
+.analytics-series .analytics-actions {
+  max-height: 220px;
+  overflow: auto;
+}

@@ -159,7 +159,9 @@ def parse_multiqc(path: Path) -> dict:
                 return value if isinstance(value, str) else default
             # Suffixes describe MultiQC's formatted display, not necessarily its
             # saved values (e.g. FastQC total_sequences=400, suffix=' M').
-            raw_unit = "reads" if key == "total_sequences" and label("namespace").lower() == "fastqc" else label("suffix").strip() if label("suffix").strip() in {"%", "bp"} and column.get("modify") is None else ""
+            raw_unit = ""
+            if label("namespace").lower() == "fastqc":
+                raw_unit = {"total_sequences": "reads", "percent_duplicates": "%", "percent_gc": "%", "percent_fails": "%", "avg_sequence_length": "bp", "median_sequence_length": "bp"}.get(key, "")
             columns.append({"key": f"{section}:{key}", "title": label("title", key), "description": label("description"), "namespace": label("namespace"), "unit": label("suffix"), "raw_key": key, "raw_unit": raw_unit, "section": section, "hidden": column.get("hidden") is True})
         for sample, values in table.items():
             row = rows.setdefault(sample, {"sample": sample, "values": {}})
