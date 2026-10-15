@@ -1416,6 +1416,23 @@ dd {
   min-width: 210px;
   max-width: 500px;
 }
+.file-table tbody td {
+  vertical-align: top;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  line-height: 20px;
+}
+.file-table tbody .check-cell input {
+  margin: 3px 0 0;
+  vertical-align: top;
+}
+.file-table .file-name {
+  min-height: 20px;
+  line-height: 20px;
+}
+.file-table .file-name svg {
+  flex-shrink: 0;
+}
 .file-name span {
   overflow-wrap: anywhere;
 }
@@ -1424,7 +1441,7 @@ dd {
   font-size: 11px;
 }
 .read-pairing {
-  padding: 10px 0;
+  padding: 0;
 }
 .read-pairing small {
   display: block;
@@ -1436,13 +1453,19 @@ dd {
   color: var(--muted);
 }
 .sample-files {
-  margin: 6px 0 10px 28px;
+  margin: 4px 0 0 28px;
   font-size: 11px;
   color: var(--muted);
 }
 .sample-files summary {
   cursor: pointer;
   line-height: 1.6;
+  width: fit-content;
+}
+.sample-files summary:focus-visible {
+  outline: 2px solid #398c70;
+  outline-offset: 3px;
+  border-radius: 2px;
 }
 .sample-files ul {
   list-style: none;
@@ -1820,7 +1843,7 @@ dd {
     flex-wrap: wrap;
   }
   .quality-chart {
-    height: 290px;
+    height: 320px;
   }
   .sample-selector select {
     max-width: 65%;

@@ -95,7 +95,8 @@ export function chartOptions(
       fontFamily: "Inter, -apple-system, sans-serif",
       color: "#52665c",
     },
-    grid: { left: 60, right: heatmap ? 85 : 24, top: 30, bottom: 100 },
+    // Reserve separate rows for axis labels/title, zoom controls, and legend.
+    grid: { left: 60, right: heatmap ? 85 : 24, top: 30, bottom: 124 },
     tooltip: {
       trigger: heatmap || isQuality ? "item" : "axis",
       renderMode: "richText",
@@ -118,7 +119,7 @@ export function chartOptions(
       ? undefined
       : {
           type: "scroll",
-          bottom: 0,
+          bottom: 4,
           itemWidth: 14,
           itemHeight: 8,
           textStyle: { fontSize: 11 },
@@ -159,11 +160,20 @@ export function chartOptions(
       { type: "inside" },
       {
         type: "slider",
-        height: 12,
-        bottom: 50,
+        height: 14,
+        bottom: 40,
+        brushSelect: false,
         borderColor: "transparent",
         backgroundColor: "#f1f4f1",
         fillerColor: "#dbe6de",
+        dataBackground: {
+          lineStyle: { color: "#81a994" },
+          areaStyle: { color: "#dcebe0" },
+        },
+        selectedDataBackground: {
+          lineStyle: { color: "#5c8f77" },
+          areaStyle: { color: "#b9d4c4" },
+        },
         handleStyle: { color: "#5c8f77" },
       },
     ],
