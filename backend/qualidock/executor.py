@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import signal
 import sys
+import time
 
 
 class Executor(ABC):
@@ -19,10 +20,14 @@ class LocalExecutor(Executor):
         self.memory_mb = memory_mb
         self.processes: dict[str, asyncio.subprocess.Process] = {}
         self.cancelled: set[str] = set()
+        self.observations: dict[str, dict] = {}
 
     async def execute(self, run_id, argv, cwd, log, cpus):
         if run_id in self.cancelled:
             return 130
+        observation = {"peak_sampled_rss_bytes": None, "rss_samples": 0, "sample_interval_seconds": 0.5, "termination_reason": None}
+        self.observations[run_id] = observation
+        started = time.monotonic()
         env = os.environ.copy()
         env.update({k: str(cpus) for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS")})
         # Do not leak the web session credential into analysis subprocesses.
@@ -41,7 +46,10 @@ class LocalExecutor(Executor):
                     return 130
                 while process.returncode is None:
                     rss = await self.group_memory(process.pid)
+                    observation["rss_samples"] += 1
+                    observation["peak_sampled_rss_bytes"] = max(observation["peak_sampled_rss_bytes"] or 0, rss)
                     if rss > self.memory_mb * 1024 * 1024:
+                        observation["termination_reason"] = "memory_limit"
                         output.write(b"\nResource limit exceeded: analysis process tree used too much memory.\n")
                         await self.cancel(run_id)
                         return 137
@@ -55,6 +63,7 @@ class LocalExecutor(Executor):
                 await self.stop_group(run_id)
                 await waiter
                 self.processes.pop(run_id, None)
+                observation["elapsed_seconds"] = time.monotonic() - started
 
     @staticmethod
     async def group_memory(group: int) -> int:

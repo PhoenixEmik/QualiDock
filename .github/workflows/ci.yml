@@ -63,3 +63,20 @@ jobs:
       - run: python scripts/create-example-data.py --reads 1000
       - run: python scripts/smoke-real-qc.py
       - run: pytest -q backend/tests/test_real_tools.py
+  linux-resources:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f scripts/linux-validation.Dockerfile -t qualidock-linux-validation .
+      - name: Validate actual tools inside a 1 CPU / 1 GiB cgroup
+        run: |
+          mkdir -p validation/linux
+          docker run --rm --cpus=1 --memory=1g --memory-swap=1g \
+            --cap-drop=ALL --security-opt=no-new-privileges \
+            -v "$PWD/validation/linux:/evidence" qualidock-linux-validation
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linux-resource-evidence
+          path: validation/linux

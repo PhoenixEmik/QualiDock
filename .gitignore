@@ -12,3 +12,4 @@ example-data/
 .DS_Store
 .env
 coverage.xml
+validation/

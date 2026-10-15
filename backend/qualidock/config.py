@@ -3,6 +3,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 import secrets
+from .resources import cgroup_limits
 
 
 def available_cpus() -> int:
@@ -10,12 +11,9 @@ def available_cpus() -> int:
     for key in ("QUALIDOCK_CPUS", "PBS_NP", "NCPUS", "SLURM_CPUS_PER_TASK"):
         if os.environ.get(key):
             limits.append(max(1, int(os.environ[key])))
-    try:
-        quota, period = Path("/sys/fs/cgroup/cpu.max").read_text().split()
-        if quota != "max":
-            limits.append(max(1, int(quota) // int(period)))
-    except (OSError, ValueError):
-        pass
+    quota = cgroup_limits()["cpus"]
+    if quota is not None:
+        limits.append(quota)
     return min(limits)
 
 
@@ -26,13 +24,9 @@ def available_memory_mb() -> int:
         limits.append(os.sysconf("SC_PHYS_PAGES") * os.sysconf("SC_PAGE_SIZE") // (1024 * 1024))
     except (ValueError, OSError):
         pass
-    for filename in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
-        try:
-            value = Path(filename).read_text().strip()
-            if value != "max":
-                limits.append(int(value) // (1024 * 1024))
-        except (OSError, ValueError):
-            pass
+    memory = cgroup_limits()["memory_mb"]
+    if memory is not None:
+        limits.append(memory)
     return min(limits)
 
 

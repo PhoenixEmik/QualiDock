@@ -200,6 +200,9 @@ class RunManager:
             return code
         finally:
             execution["finished_at"] = now()
+            observation = getattr(self.executor, "observations", {}).get(run["id"])
+            if observation:
+                execution["resources"] = dict(observation)
             self.update(run)
 
     async def execute(self, run):
