@@ -17,6 +17,7 @@ import type { SampleConfiguration } from "./types";
 import type { Config, Entry, Run } from "./types";
 
 interface Props {
+  projectName?: string;
   config: Config | null;
   sampleConfiguration: SampleConfiguration | null;
   setSampleConfiguration: (value: SampleConfiguration) => void;
@@ -38,6 +39,7 @@ interface Props {
   submit: () => Promise<void>;
 }
 export default function NewAnalysisForm({
+  projectName,
   config,
   sampleConfiguration,
   setSampleConfiguration,
@@ -85,26 +87,28 @@ export default function NewAnalysisForm({
           />
           <div className="field-label">QC workflow</div>
           <div className="mode-options" role="group" aria-label="QC workflow">
-            {(["both", "fastqc", "multiqc"] as const).map((value) => (
-              <button
-                key={value}
-                className={`mode-option ${mode === value ? "chosen" : ""}`}
-                aria-pressed={mode === value}
-                disabled={busy}
-                onClick={() => setMode(value)}
-              >
-                <span className="radio-dot" />
-                <strong>{modeLabel(value)}</strong>
-                <small>
-                  {value === "both"
-                    ? "Individual read QC and a combined report"
-                    : value === "fastqc"
-                      ? "Individual read quality assessment"
-                      : "Combine existing FastQC or fastp JSON reports"}
-                </small>
-                {mode === value && <Check size={15} />}
-              </button>
-            ))}
+            {(["both", "fastqc", "multiqc"] as const)
+              .filter((value) => !projectName || value !== "multiqc")
+              .map((value) => (
+                <button
+                  key={value}
+                  className={`mode-option ${mode === value ? "chosen" : ""}`}
+                  aria-pressed={mode === value}
+                  disabled={busy}
+                  onClick={() => setMode(value)}
+                >
+                  <span className="radio-dot" />
+                  <strong>{modeLabel(value)}</strong>
+                  <small>
+                    {value === "both"
+                      ? "Individual read QC and a combined report"
+                      : value === "fastqc"
+                        ? "Individual read quality assessment"
+                        : "Combine existing FastQC or fastp JSON reports"}
+                  </small>
+                  {mode === value && <Check size={15} />}
+                </button>
+              ))}
           </div>
         </section>
         <section className="form-section">

@@ -61,6 +61,7 @@ def test_project_sample_run_assignment_review_report_navigation_and_restart(work
             page.get_by_role('button', name='Create sample', exact=True).click()
             form = page.get_by_role('form', name='Create sample', exact=True)
             form.get_by_label('Sample name', exact=True).fill('Same sample label')
+            form.get_by_text('Optional metadata', exact=True).click()
             form.get_by_label('Declared identifier', exact=True).fill(identifier)
             form.get_by_label('Assay / protocol', exact=True).fill('RNA-seq fixture declaration')
             form.get_by_label('Expected yield minimum', exact=True).fill('0')
@@ -72,6 +73,7 @@ def test_project_sample_run_assignment_review_report_navigation_and_restart(work
         page.get_by_role('button', name='Create sequencing run', exact=True).click()
         form = page.get_by_role('form', name='Create sequencing run', exact=True)
         form.get_by_label('Sequencing run name', exact=True).fill('Declared run A')
+        form.get_by_text('Optional metadata', exact=True).click()
         form.get_by_label('Platform (declared)', exact=True).fill('Illumina fixture declaration')
         form.get_by_label('Sequencing date (declared)', exact=True).fill('2026-10-16')
         form.get_by_label('Input stage (declared)', exact=True).select_option('raw_fastq')
@@ -171,3 +173,108 @@ def test_large_sample_import_search_edit_keyboard_mobile_and_distinct_projects(w
             second = client.post('api/projects/' + other['id'] + '/samples', json={'fields': sample['declared']}).json()
             assert second['id'] != sample['id'] and second['project_id'] != sample['project_id']
         assert not page.locator('script').filter(has_text='Literal <script> metadata').count()
+
+
+def test_project_batch_preview_execution_sources_and_restart(workspace, browser):
+    # Synthetic explicit project identities; real existing FastQC and source fixtures.
+    with workspace.api() as client:
+        project = client.post('api/projects', json={'fields': {'display_name': 'Browser batch cohort'}}).json()
+        base = 'api/projects/' + project['id']
+        sample = client.post(base + '/samples', json={'fields': {'display_name': 'Declared batch sample'}}).json()
+        runs = [client.post(base + '/sequencing-runs', json={'fields': {'display_name': f'Declared batch run {i}', 'input_stage': 'raw_fastq'}}).json() for i in [1, 2]]
+        files = client.get('api/runs/' + workspace.fastqc['id'] + '/delivery').json()['files']
+        assert len(files) == 2
+        assignments = [{'file_id': file['file_id'], 'sample_id': sample['id'], 'sequencing_run_id': run['id'], 'read': 'unpaired'} for file, run in zip(files, runs)]
+        response = client.post(base + '/analyses', json={'analysis_id': workspace.fastqc['id'], 'assignments': assignments})
+        assert response.status_code == 201, response.text
+    before_sources = {path: hashlib.sha256(path.read_bytes()).hexdigest() for path in INPUTS.glob('*.fastq.gz')}
+    manifest = workspace.settings.output / workspace.fastqc['id'] / 'manifest.json'
+    before_manifest = manifest.read_bytes()
+    with browser.new_context(viewport={'width': 1440, 'height': 1100}) as context:
+        page = context.new_page(); login(page, workspace)
+        page.get_by_role('table', name='project records', exact=True).locator('tbody tr').filter(has_text='Browser batch cohort').get_by_role('button', name='Open project', exact=True).click()
+        page.get_by_role('tab', name='Batch QC', exact=True).click()
+        page.get_by_role('button', name='Choose samples', exact=True).click()
+        samples = page.get_by_role('region', name='Choose batch samples', exact=True)
+        samples.get_by_role('button', name='Select this page', exact=True).click()
+        expect(samples).to_contain_text('1 selected')
+        samples.get_by_role('button', name='Clear selection', exact=True).click()
+        page.get_by_role('button', name='Preview batch plan', exact=True).click()
+        expect(page.get_by_role('alert')).to_contain_text('Select at least one')
+        samples.get_by_role('button', name='Select this page', exact=True).click()
+        page.get_by_role('button', name='Choose sequencing runs', exact=True).click()
+        sequencing = page.get_by_role('region', name='Choose batch sequencing runs', exact=True)
+        sequencing.get_by_role('button', name='Select this page', exact=True).click()
+        expect(sequencing).to_contain_text('2 selected')
+        page.get_by_label('Batch QC mode', exact=True).select_option('fastqc')
+        page.get_by_role('button', name='Preview batch plan', exact=True).click()
+        preview_panel = page.get_by_role('region', name='Batch plan preview', exact=True)
+        expect(preview_panel).to_contain_text('2 FASTQs · 2 run/chunk units')
+        expect(preview_panel).to_contain_text('fastqc 0.13.0')
+        expect(preview_panel).to_contain_text('Run new QC')
+        page.get_by_role('button', name='Confirm and queue batch', exact=True).click()
+        status = page.get_by_role('region', name='Batch execution status', exact=True)
+        expect(status.get_by_role('heading', name='Batch completed', exact=True)).to_be_visible(timeout=120000)
+        expect(status).to_contain_text('Release: not evaluated')
+        expect(status.get_by_role('table')).to_have_count(2)
+        for table in status.get_by_role('table').all():
+            expect(table).to_contain_text('completed · passed')
+            expect(table).to_contain_text('target not evaluated')
+        with workspace.api() as client:
+            record = client.get(base + '/batches').json()['items'][0]
+            actual = client.get(base + '/batches/' + record['id']).json()
+            assert len(actual['units']) == 2 and all(unit['owned'] for unit in actual['units'])
+            assert all(unit['stages']['qc']['state'] == unit['stages']['integrity']['state'] == 'completed' for unit in actual['units'])
+        Path('validation').mkdir(exist_ok=True)
+        page.screenshot(path='validation/native-project-batch' + workspace.settings.prefix.replace('/', '-') + '.png', full_page=True)
+        status.get_by_role('button', name='QC metrics', exact=True).first.click()
+        expect(page.get_by_role('tab', name='QC metrics', exact=True)).to_have_attribute('aria-selected', 'true')
+        workspace.stop(); workspace.start(); login(page, workspace)
+        page.get_by_role('table', name='project records', exact=True).locator('tbody tr').filter(has_text='Browser batch cohort').get_by_role('button', name='Open project', exact=True).click()
+        page.get_by_role('tab', name='Batch QC', exact=True).click()
+        page.get_by_role('button', name='Open batch attempt', exact=True).first.click()
+        expect(page.get_by_role('region', name='Batch execution status', exact=True)).to_contain_text(record['id'])
+        page.set_viewport_size({'width': 390, 'height': 844})
+        page.wait_for_function('() => document.documentElement.scrollWidth <= innerWidth', timeout=3000)
+    assert before_manifest == manifest.read_bytes()
+    assert before_sources == {path: hashlib.sha256(path.read_bytes()).hexdigest() for path in before_sources}
+
+
+def test_project_browse_first_requires_only_name_and_bulk_selects_fastqs(workspace, browser):
+    before = {path: hashlib.sha256(path.read_bytes()).hexdigest() for path in INPUTS.glob('*.fastq.gz')}
+    with browser.new_context(viewport={'width': 1440, 'height': 1100}) as context:
+        page = context.new_page(); login(page, workspace)
+        page.get_by_role('button', name='Create project', exact=True).click()
+        form = page.get_by_role('form', name='Create project', exact=True)
+        expect(form.get_by_label('Declared identifier', exact=True)).not_to_be_visible()
+        form.get_by_label('Project name', exact=True).fill('Browse-first project')
+        form.get_by_role('button', name='Save project', exact=True).click()
+        page.get_by_role('button', name='Browse & select FASTQs', exact=True).click()
+        expect(page.get_by_role('region', name='Add FASTQs to project', exact=True)).to_contain_text('Browse-first project')
+        page.get_by_label('Directory path', exact=True).fill(str(INPUTS))
+        page.get_by_role('button', name='Go', exact=True).click()
+        page.get_by_label('Select all visible samples and reports', exact=True).check()
+        page.get_by_role('button', name='Configure analysis', exact=True).click()
+        # Existing grouping/pair review is reused; no sample/run metadata forms.
+        expect(page.get_by_role('heading', name='New analysis', exact=True)).to_be_visible()
+        assert page.get_by_role('form', name='Create sample', exact=True).count() == 0
+        page.get_by_role('button', name='FastQC only', exact=False).click()
+        with page.expect_response(lambda response: '/start-analysis' in response.url and response.request.method == 'POST') as started:
+            page.get_by_role('button', name='Run analysis', exact=True).click()
+        assert started.value.status == 201, started.value.text()
+        child = workspace.finish(None, started.value.json())
+        with workspace.api() as client:
+            project = next(row for row in client.get('api/projects').json()['items'] if row['declared']['display_name'] == 'Browse-first project')
+            detail = client.get('api/projects/' + project['id']).json()
+            assert detail['counts'] == {'sample': 1, 'sequencing_run': 1, 'analyses': 1, 'associations': 2}
+            sample = client.get('api/projects/' + project['id'] + '/samples').json()['items'][0]
+            assert 'assay' not in sample['declared'] and 'expected_yield' not in sample['declared']
+            rows = client.get('api/projects/' + project['id'] + '/associations').json()['items']
+            assert all(row['current_report_id'] for row in rows)
+        assert child['project_intake']['state'] == 'registered'
+        page.get_by_role('button', name='Workspace', exact=True).click()
+        page.get_by_role('tab', name='Projects', exact=True).click()
+        expect(page.get_by_role('heading', name='Browse-first project', exact=True)).to_be_visible()
+        Path('validation').mkdir(exist_ok=True)
+        page.screenshot(path='validation/native-project-browse-first' + workspace.settings.prefix.replace('/', '-') + '.png', full_page=True)
+    assert before == {path: hashlib.sha256(path.read_bytes()).hexdigest() for path in before}

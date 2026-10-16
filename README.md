@@ -135,9 +135,14 @@ Versioned per-analysis release contracts, reasoned review/waivers and cancellabl
 
 Optional offline Kraken2 screening can attach preliminary per-read-file taxonomic evidence using explicitly configured local references. It never installs/downloads tools or uploads reads at runtime. See [Offline screening](docs/OFFLINE-SCREENING.md) for setup, provenance, coverage definitions and scientific limitations.
 
-The next phase adds a private persistent [project/sample/sequencing-run registry](docs/PROJECTS.md)
-alongside existing analysis manifests. **Workspace → Projects** provides declared
+A private persistent [project/sample/sequencing-run registry](docs/PROJECTS.md)
+works alongside existing analysis manifests. Create a project with just a name,
+then browse and bulk-select FASTQs; review existing groups/pairs and start QC
+without filling separate sample/run metadata forms. Optional details can be added later. **Workspace → Projects** provides declared
 sample/run metadata, CSV/JSON import previews and explicit file associations with
 audited corrections. Legacy analyses remain unassigned until explicitly linked;
-existing QC and Reports open directly from a project. See [per-issue implementation status](docs/NEXT-PHASE.md)
+existing QC and Reports open directly from a project.
+[Project batch QC and validation](docs/BATCH-QC.md) adds browsable checkbox cohorts,
+previewed scopes, safe reuse and queue/cancel/retry with source provenance.
+See [per-issue implementation status](docs/NEXT-PHASE.md)
 for project UI, batch workflows, cohort analytics and controlled delivery progress.

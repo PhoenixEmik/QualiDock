@@ -66,6 +66,7 @@ export interface FileAssignment {
   source: "user_confirmed" | "user_assigned";
 }
 export interface ProjectAssociation {
+  current_report_id?: string | null;
   analysis_id?: string;
   id: string;
   file_id: string;

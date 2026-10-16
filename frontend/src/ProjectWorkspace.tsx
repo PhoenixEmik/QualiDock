@@ -13,6 +13,7 @@ import { entityLabel } from "./project";
 import ProjectEntityForm from "./ProjectEntityForm";
 import ProjectImport from "./ProjectImport";
 import ProjectAssignments from "./ProjectAssignments";
+import ProjectBatch from "./ProjectBatch";
 
 const blankPage = <T,>(): CatalogPage<T> => ({
   items: [],
@@ -188,8 +189,9 @@ function EntityList({
       {busy && <p role="status">Loading {title} records…</p>}
       {!busy && !error && !page.total && (
         <p className="inline-note">
-          No {title} records match. Create a record or change the search/status
-          filter.
+          {kind === "sample"
+            ? "No samples yet. Use Browse & select FASTQs above to add whole samples, or create a record manually."
+            : `No ${title} records match. Change the search/status filter or add a record.`}
         </p>
       )}
       {!!page.items.length && (
@@ -197,7 +199,7 @@ function EntityList({
           <table aria-label={`${title} records`}>
             <thead>
               <tr>
-                <th>Name / stable ID</th>
+                <th>Name</th>
                 <th>Declared identifier</th>
                 <th>
                   {kind === "sample"
@@ -215,13 +217,13 @@ function EntityList({
                 <tr key={entity.id}>
                   <td className="project-label">
                     {entity.declared.display_name}
-                    <small>{entity.id}</small>
+                    <small title={entity.id}>{entity.id.slice(-8)}</small>
                   </td>
-                  <td>{entity.declared.declared_identifier || "Unknown"}</td>
+                  <td>{entity.declared.declared_identifier || "—"}</td>
                   <td>
                     {kind === "sample" ? (
                       <>
-                        {entity.declared.assay || "Unknown assay"}
+                        {entity.declared.assay || "Not specified"}
                         <small>
                           {entity.declared.expected_yield
                             ? `${entity.declared.expected_yield.minimum.toLocaleString()} ${entity.declared.expected_yield.metric} (declared)`
@@ -230,7 +232,7 @@ function EntityList({
                       </>
                     ) : kind === "sequencing_run" ? (
                       <>
-                        {entity.declared.platform || "Unknown platform"}
+                        {entity.declared.platform || "Not specified"}
                         <small>
                           {entity.declared.sequenced_at || "Unknown date"} ·{" "}
                           {entity.declared.input_stage || "unknown"}
@@ -686,14 +688,16 @@ function LinkedAnalyses({
                         <small>{row.sequencing_run_id}</small>
                       </td>
                       <td>
-                        {row.analysis_id && row.observed.report_id ? (
+                        {row.analysis_id &&
+                        (row.current_report_id || row.observed.report_id) ? (
                           <button
                             className="button small"
                             onClick={() =>
                               openAnalysis(
                                 row.analysis_id!,
                                 "metrics",
-                                row.observed.report_id!,
+                                row.current_report_id ||
+                                  row.observed.report_id!,
                               )
                             }
                           >
@@ -793,16 +797,23 @@ function ProjectDetail({
   id,
   back,
   openAnalysis,
+  browseFiles,
 }: {
   id: string;
   back: () => void;
+  browseFiles: (project: ProjectEntity) => void;
   openAnalysis: (id: string, tab: DetailTab, reportId?: string) => void;
 }) {
   const [project, setProject] = useState<ProjectEntity | null>(null),
     [error, setError] = useState(""),
     [editing, setEditing] = useState(false),
     [refresh, setRefresh] = useState(0);
-  const tabs = ["Samples", "Sequencing runs", "Analyses & evidence"];
+  const tabs = [
+    "Samples",
+    "Sequencing runs",
+    "Analyses & evidence",
+    "Batch QC",
+  ];
   const [tab, setTab] = useState(tabs[0]),
     [filter, setFilter] = useState<ProjectEntity | null>(null);
   const heading = useRef<HTMLHeadingElement>(null),
@@ -855,10 +866,28 @@ function ProjectDetail({
           <h2 ref={heading} tabIndex={-1}>
             {project.declared.display_name}
           </h2>
-          <p className="inline-note project-hash">
-            {project.id} · {project.declared.status} · revision{" "}
-            {project.revision}
-          </p>
+          <div className="project-actions">
+            <button
+              className="button primary"
+              disabled={project.declared.status !== "active"}
+              onClick={() => browseFiles(project)}
+            >
+              Browse & select FASTQs
+            </button>
+            <span className="inline-note">
+              Select files or whole samples, review detected groups, then run
+              QC. No sample/run forms required.
+            </span>
+          </div>
+          <details>
+            <summary className="inline-note">
+              Project reference & version
+            </summary>
+            <p className="inline-note project-hash">
+              {project.id} · {project.declared.status} · revision{" "}
+              {project.revision}
+            </p>
+          </details>
           <p className="inline-note">
             {project.counts?.sample ?? 0} sample records ·{" "}
             {project.counts?.sequencing_run ?? 0} sequencing runs ·{" "}
@@ -942,6 +971,9 @@ function ProjectDetail({
                 filter={filter}
               />
             )}
+            {tab === tabs[3] && (
+              <ProjectBatch projectId={id} openAnalysis={openAnalysis} />
+            )}
           </div>
         </>
       )}
@@ -953,9 +985,11 @@ export default function ProjectWorkspace({
   projectId,
   selectProject,
   openAnalysis,
+  browseFiles,
 }: {
   projectId: string;
   selectProject: (id: string) => void;
+  browseFiles: (project: ProjectEntity) => void;
   openAnalysis: (id: string, tab: DetailTab, reportId?: string) => void;
 }) {
   return (
@@ -966,13 +1000,13 @@ export default function ProjectWorkspace({
           id={projectId}
           back={() => selectProject("")}
           openAnalysis={openAnalysis}
+          browseFiles={browseFiles}
         />
       ) : (
         <>
           <p className="inline-note">
-            Organize declared samples and sequencing runs, then explicitly
-            attach existing QC analyses. Standalone file analysis remains
-            available in Files.
+            Create a project with a name, browse and select FASTQs, then review
+            groups and start QC. Existing analyses can also be attached.
           </p>
           <EntityList
             kind="project"

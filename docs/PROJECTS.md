@@ -40,7 +40,9 @@ directory is unsuitable for the default persistent registry. See the official
 
 Schema version 1 introduced the registry. Version 2 adds only an optimistic
 association revision column and audit lookup indexes in an atomic migration;
-existing IDs, snapshots and scientific files remain unchanged. Existing
+existing IDs, snapshots and scientific files remain unchanged. Version 3 adds
+immutable batch plans and separately tracked execution attempts; it preserves
+all prior project/QC/release identities. Existing
 v1/v2 analysis manifests and release manifests are not migrated or rewritten.
 `PRAGMA user_version` gates future migrations. Unknown/newer versions are refused
 without rewriting the database or QC results; do not manually lower the version.
@@ -77,9 +79,11 @@ rewrites, not a malicious Unix owner editing their own database or source files.
 ## Authenticated API
 
 All endpoints retain existing session/bearer authentication, CSRF header and
-same-origin protections. New endpoints accept stable IDs, never arbitrary file
-paths. File assignments reuse the existing authorized analysis inventory and
-revalidate source access. Project responses omit filesystem paths; original
+same-origin protections. Relationship endpoints accept stable IDs. Browse-first intake accepts the same
+allowlisted FASTQ references and reviewed sample configuration as normal analysis
+creation; it reuses all existing path/pairing validations. Batch previews omit
+source paths and show the explicitly configured output root. File assignments
+reuse the authorized analysis inventory and revalidate source access; original
 reports stay behind the existing registered artifact and isolated-preview APIs.
 
 - `GET/POST /api/projects` (create body `{ "fields": { "display_name": "Study" } }`).
@@ -100,8 +104,8 @@ reports stay behind the existing registered artifact and isolated-preview APIs.
 Collections use `offset`/`limit` (default 25, maximum 100); sample/run/project lists
 also support literal `search` and `status=active|archived|all`. No multi-tenant/RBAC
 claim is made: all authenticated operations execute for the current Unix owner.
-The Project Workspace UI follows in #21; existing Workspace/Analyses navigation
-and standalone analysis creation remain available.
+Project Workspace is available under Workspace → Projects; existing
+Workspace/Analyses navigation and standalone analysis creation remain available.
 
 ## Backup, upgrade and recovery
 
@@ -187,3 +191,30 @@ Schema v1 backups migrate on startup. Before using an older project-aware versio
 that cannot read v2, restore a matching full backup. Do not lower `user_version`.
 QC-only pre-registry versions still read unchanged manifests but cannot show
 project relationships. No deployment/scheduler changes are included.
+
+## Browse-first workflow
+
+Create a project using just its name, then choose **Browse & select FASTQs**.
+The existing File Explorer supports selecting whole sample groups, lanes or
+individual reads across directories. **Configure analysis** opens the existing
+sample/pair review and QC settings. **Run analysis** creates a new organizational
+sample for each reviewed group, a sequencing-run record and all file/analysis
+links in one registry transaction. Assay, platform, sequencing date and expected
+yield remain unspecified; they can be edited later under **Optional metadata**.
+The action never identifies biology from a label or merges same-named records.
+For resequencing an existing biological sample, explicitly correct/confirm its
+association; names alone never establish that relationship.
+
+`POST /api/projects/{id}/start-analysis` reuses normal analysis creation and
+requires the existing reviewed `input_pairing`/`sample_groups` configuration.
+Its stable `request_key` and configuration fingerprint prevent duplicate work
+after network retries or restart. Metadata creation is atomic. If registration
+fails after QC allocation, the registry transaction rolls back, active QC is
+cancelled and the retained analysis ID is reported for inspection; source FASTQs
+and pre-existing results are unchanged. A failed registration key cannot silently
+create another analysis. No additional required metadata form is introduced.
+
+Batch cohort filters display searchable, paginated **checkbox tables**, with
+Select this page / Clear selection, or an explicit All project scope. Empty
+explicit selection means no selection and cannot silently select every sample.
+Internal UUIDs remain stable but names are the primary display labels.

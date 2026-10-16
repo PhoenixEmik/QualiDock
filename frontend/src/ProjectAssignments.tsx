@@ -9,7 +9,7 @@ import type {
   ProjectFile,
 } from "./project";
 
-function IdentityPicker({
+export function IdentityPicker({
   projectId,
   kind,
   value,

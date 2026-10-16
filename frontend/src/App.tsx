@@ -63,6 +63,11 @@ export default function App() {
     "files",
   );
   const [projectId, setProjectId] = useState("");
+  const [projectIntake, setProjectIntake] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const intakeRequest = useRef<{ scope: string; key: string } | null>(null);
   const [initialReportId, setInitialReportId] = useState("");
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [currentRun, setCurrentRun] = useState<Run | null>(null);
@@ -486,39 +491,63 @@ export default function App() {
     setBusy(true);
     setError("");
     try {
-      const run = await api<Run>("api/runs", {
+      const payload = {
+        name,
+        mode,
+        paths:
+          mode === "multiqc" && multiqcDirectory.trim()
+            ? [multiqcDirectory.trim()]
+            : [...selected.values()]
+                .filter((entry) =>
+                  mode === "multiqc"
+                    ? ["fastqc", "qcreport"].includes(entry.kind)
+                    : entry.kind === "fastq",
+                )
+                .map((entry) => entry.path),
+        threads,
+        output_root: outputRoot || null,
+        rerun_of: rerunOf,
+        ...(mode !== "multiqc" && sampleConfiguration
+          ? {
+              input_pairing: reconcileConfig(sampleConfiguration, [
+                ...selected.keys(),
+              ]).input_pairing,
+              sample_groups: reconcileConfig(sampleConfiguration, [
+                ...selected.keys(),
+              ]).sample_groups,
+            }
+          : {}),
+      };
+      let endpoint = "api/runs";
+      let body: object = payload;
+      if (projectIntake) {
+        if (
+          mode === "multiqc" ||
+          !payload.input_pairing ||
+          !payload.sample_groups
+        )
+          throw new Error(
+            "Review the selected FASTQ groups before starting a project analysis.",
+          );
+        const { rerun_of: _rerun, ...configuration } = payload;
+        const scope = projectIntake.id + JSON.stringify(configuration);
+        if (intakeRequest.current?.scope !== scope)
+          intakeRequest.current = { scope, key: crypto.randomUUID() };
+        endpoint = `api/projects/${projectIntake.id}/start-analysis`;
+        body = { ...configuration, request_key: intakeRequest.current.key };
+      }
+      const run = await api<Run>(endpoint, {
         method: "POST",
-        body: JSON.stringify({
-          name,
-          mode,
-          paths:
-            mode === "multiqc" && multiqcDirectory.trim()
-              ? [multiqcDirectory.trim()]
-              : [...selected.values()]
-                  .filter((entry) =>
-                    mode === "multiqc"
-                      ? ["fastqc", "qcreport"].includes(entry.kind)
-                      : entry.kind === "fastq",
-                  )
-                  .map((entry) => entry.path),
-          threads,
-          output_root: outputRoot || null,
-          rerun_of: rerunOf,
-          ...(mode !== "multiqc" && sampleConfiguration
-            ? {
-                input_pairing: reconcileConfig(sampleConfiguration, [
-                  ...selected.keys(),
-                ]).input_pairing,
-                sample_groups: reconcileConfig(sampleConfiguration, [
-                  ...selected.keys(),
-                ]).sample_groups,
-              }
-            : {}),
-        }),
+        body: JSON.stringify(body),
       });
+      setProjectIntake(null);
       setRevision((value) => value + 1);
       showRun(run);
-      setNotice("Analysis queued. You can continue browsing files.");
+      setNotice(
+        projectIntake
+          ? `Files added to ${projectIntake.name}. QC analysis queued.`
+          : "Analysis queued. You can continue browsing files.",
+      );
     } catch (err) {
       fail(err);
     } finally {
@@ -817,7 +846,7 @@ export default function App() {
               <p>
                 {view === "workspace"
                   ? workspacePanel === "projects"
-                    ? "Organize declared samples, sequencing runs, and linked QC evidence."
+                    ? "Browse datasets, organize samples, and inspect project QC results."
                     : "Browse FASTQ files, check sample pairs, and start a QC analysis."
                   : view === "analyses"
                     ? "Manage QC runs and open their logs, metrics, and reports."
@@ -828,14 +857,20 @@ export default function App() {
                         : "Choose an analysis to inspect its results."}
               </p>
             </div>
-            {view === "workspace" && (
+            {view === "workspace" && workspacePanel === "files" && (
               <button
                 className="button primary"
                 onClick={newAnalysis}
-                disabled={busy}
+                disabled={
+                  busy ||
+                  (!!projectIntake &&
+                    ![...selected.values()].some(
+                      (entry) => entry.kind === "fastq",
+                    ))
+                }
               >
                 <Plus size={16} />
-                New analysis
+                {projectIntake ? "Review selected FASTQs" : "New analysis"}
               </button>
             )}
           </header>
@@ -846,6 +881,29 @@ export default function App() {
                 <X size={15} />
               </button>
             </div>
+          )}
+          {projectIntake && (view === "workspace" || view === "new") && (
+            <section
+              className="form-section"
+              aria-label="Add FASTQs to project"
+            >
+              <strong>Adding FASTQs to {projectIntake.name}</strong>
+              <p className="inline-note">
+                Browse and select files or entire samples. Review the detected
+                groups before starting QC; new sample and sequencing-run records
+                will be created together. Identical names never auto-match
+                existing samples. You can correct or link identities later.
+              </p>
+              <button
+                className="button small"
+                onClick={() => {
+                  setProjectIntake(null);
+                  intakeRequest.current = null;
+                }}
+              >
+                Cancel adding to project
+              </button>
+            </section>
           )}
           {view === "workspace" && (
             <div
@@ -897,6 +955,24 @@ export default function App() {
               <ProjectWorkspace
                 projectId={projectId}
                 selectProject={setProjectId}
+                browseFiles={(project) => {
+                  setProjectIntake({
+                    id: project.id,
+                    name: project.declared.display_name,
+                  });
+                  setSelected(new Map());
+                  setSampleConfiguration(null);
+                  setRerunOf(null);
+                  setName(
+                    `${project.declared.display_name} · ${new Date().toISOString().slice(0, 10)}`.slice(
+                      0,
+                      120,
+                    ),
+                  );
+                  setMode("both");
+                  setWorkspacePanel("files");
+                  open("workspace");
+                }}
                 openAnalysis={(id, tab, reportId) => {
                   showRun({ id });
                   setDetailTab(tab);
@@ -952,6 +1028,7 @@ export default function App() {
           )}
           {view === "new" && (
             <NewAnalysisForm
+              projectName={projectIntake?.name}
               config={config}
               sampleConfiguration={
                 sampleConfiguration
