@@ -8,6 +8,29 @@ export type RunState =
   | "partial"
   | "cancelled"
   | "interrupted";
+export type RunSummary = Pick<
+  Run,
+  | "id"
+  | "name"
+  | "mode"
+  | "state"
+  | "stage"
+  | "created_at"
+  | "updated_at"
+  | "started_at"
+  | "finished_at"
+  | "threads"
+  | "sample_count"
+  | "error"
+> & { input_count: number };
+export interface HistoryPage {
+  items: RunSummary[];
+  offset: number;
+  limit: number;
+  total: number;
+  overall_total: number;
+  revision: number;
+}
 export interface Run {
   id: string;
   name: string;

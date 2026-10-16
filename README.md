@@ -61,6 +61,11 @@ Use **Generate MultiQC** in a finished analysis to aggregate its saved FastQC re
 
 The QC module selector covers Basic Statistics, per-base and per-sequence quality, sequence content, GC, N content, length, duplication, overrepresented sequences, adapters, per-tile quality, and K-mer content. Basic Statistics and overrepresented sequences use native tables; tiles use a heatmap; K-mers include an enrichment chart and their complete reported table. Optional or missing modules show an unavailable state. K-mer analysis follows the installed FastQC configuration and is not enabled or calculated by QualiDock. Exact table values and grouped bins are retained. Sample Details can be collapsed.
 
+History uses paginated summaries and revision-only SSE notifications; full manifests
+are fetched for the selected analysis. Legacy endpoints remain compatible. See
+[history behavior and payload benchmarks](docs/HISTORY.md). CSV/TSV exports offer
+explicit [spreadsheet-safe and verbatim formats](docs/EXPORTS.md).
+
 ## Configuration
 
 | Variable | Default | Purpose |

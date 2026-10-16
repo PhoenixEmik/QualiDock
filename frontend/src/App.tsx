@@ -28,16 +28,18 @@ import type {
   View,
   SampleConfiguration,
   RerunConfiguration,
+  RunSummary,
+  HistoryPage,
 } from "./types";
 import { Empty, State } from "./Feedback";
 import FileExplorer from "./FileExplorer";
 import AnalysisDetail from "./AnalysisDetail";
 import NewAnalysisForm from "./NewAnalysisForm";
 import { reconcileConfig } from "./sampleConfig";
-import { filteredAnalyses } from "./analysisManagement";
 import { resolveEntries, listingUrl, type ExplorerMode } from "./explorer";
 
-const active = (run: Run) => ["queued", "running"].includes(run.state);
+const active = (run: Pick<Run, "state">) =>
+  ["queued", "running"].includes(run.state);
 const nav = [
   { id: "workspace" as const, label: "Workspace", icon: Files },
   { id: "analyses" as const, label: "Analyses", icon: Activity },
@@ -56,7 +58,14 @@ export default function App() {
   const [token, setToken] = useState("");
   const [config, setConfig] = useState<Config | null>(null);
   const [view, setView] = useState<View>("workspace");
-  const [runs, setRuns] = useState<Run[]>([]);
+  const [runs, setRuns] = useState<RunSummary[]>([]);
+  const [currentRun, setCurrentRun] = useState<Run | null>(null);
+  const [revision, setRevision] = useState(0);
+  const [historyOffset, setHistoryOffset] = useState(0);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyAll, setHistoryAll] = useState(0);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [listing, setListing] = useState<Listing | null>(null);
   const listingRef = useRef<Listing | null>(null);
   const [path, setPath] = useState("");
@@ -91,7 +100,6 @@ export default function App() {
   const [updates, setUpdates] = useState<"connecting" | "live" | "polling">(
     "connecting",
   );
-  const currentRun = runs.find((run) => run.id === runId);
   const primaryView =
     view === "analysis" ? "analyses" : view === "new" ? "workspace" : view;
   const open = (next: View) => {
@@ -103,6 +111,7 @@ export default function App() {
       setAuthenticated(false);
       setConfig(null);
       setRuns([]);
+      setCurrentRun(null);
       setSamples([]);
       setSelected(new Map());
       setListing(null);
@@ -151,12 +160,8 @@ export default function App() {
     [fail],
   );
   const load = useCallback(async () => {
-    const [settings, analyses] = await Promise.all([
-      api<Config>("api/config"),
-      api<Run[]>("api/runs"),
-    ]);
+    const settings = await api<Config>("api/config");
     setConfig(settings);
-    setRuns(analyses);
     setAuthenticated(true);
     await browse(settings.roots[0]);
   }, [browse]);
@@ -192,18 +197,15 @@ export default function App() {
   useEffect(() => {
     if (!authenticated) return;
     setUpdates("connecting");
-    const source = new EventSource(url("api/events"));
-    source.addEventListener("runs", (event) =>
-      setRuns(JSON.parse((event as MessageEvent).data) as Run[]),
+    const source = new EventSource(url("api/events?format=invalidation"));
+    source.addEventListener("revision", () =>
+      setRevision((value) => value + 1),
     );
     let fallback: ReturnType<typeof setInterval> | undefined;
     source.onerror = () => {
       setUpdates("polling");
       if (!fallback)
-        fallback = setInterval(
-          () => void api<Run[]>("api/runs").then(setRuns).catch(fail),
-          5000,
-        );
+        fallback = setInterval(() => setRevision((value) => value + 1), 5000);
     };
     source.onopen = () => {
       setUpdates("live");
@@ -217,6 +219,67 @@ export default function App() {
       if (fallback) clearInterval(fallback);
     };
   }, [authenticated, fail]);
+  useEffect(() => {
+    setHistoryOffset(0);
+  }, [analysisSearch, jobFilter, analysisMode, analysisSort]);
+  useEffect(() => {
+    if (!authenticated || view !== "analyses") return;
+    let cancelled = false;
+    setHistoryLoading(true);
+    const query = new URLSearchParams({
+      offset: String(historyOffset),
+      limit: "25",
+      search: analysisSearch,
+      state: jobFilter,
+      mode: analysisMode,
+      order: analysisSort,
+    });
+    void api<HistoryPage>(`api/history?${query}`)
+      .then((page) => {
+        if (cancelled) return;
+        setRuns(page.items);
+        setHistoryTotal(page.total);
+        setHistoryAll(page.overall_total);
+        setHistoryOffset(page.offset);
+      })
+      .catch((err) => {
+        if (!cancelled) fail(err);
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    authenticated,
+    view,
+    revision,
+    historyOffset,
+    analysisSearch,
+    jobFilter,
+    analysisMode,
+    analysisSort,
+    fail,
+  ]);
+  useEffect(() => {
+    if (!authenticated || !runId || view !== "analysis") return;
+    let cancelled = false;
+    setDetailLoading(true);
+    void api<Run>(`api/runs/${runId}`)
+      .then((run) => {
+        if (!cancelled) setCurrentRun(run);
+      })
+      .catch((err) => {
+        if (!cancelled) fail(err);
+      })
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authenticated, runId, view, revision, fail]);
   useEffect(() => {
     if (!authenticated || !runId || view !== "analysis") return;
     let cancelled = false;
@@ -379,8 +442,10 @@ export default function App() {
     else if (mode === "multiqc") setMode("both");
     open("new");
   };
-  const showRun = (run: Run) => {
+  const showRun = (run: Pick<Run, "id">) => {
     setRunId(run.id);
+    setCurrentRun("inputs" in run ? (run as Run) : null);
+    setDetailLoading(true);
     setSamples([]);
     setMultiqc(undefined);
     setLogs("");
@@ -423,11 +488,7 @@ export default function App() {
             : {}),
         }),
       });
-      setRuns((previous) =>
-        previous.some((entry) => entry.id === run.id)
-          ? previous
-          : [run, ...previous],
-      );
+      setRevision((value) => value + 1);
       showRun(run);
       setNotice("Analysis queued. You can continue browsing files.");
     } catch (err) {
@@ -441,10 +502,7 @@ export default function App() {
     setError("");
     try {
       const run = await api<Run>(`api/runs/${id}/multiqc`, { method: "POST" });
-      setRuns((previous) => [
-        run,
-        ...previous.filter((item) => item.id !== run.id),
-      ]);
+      setRevision((value) => value + 1);
       showRun(run);
     } catch (err) {
       fail(err);
@@ -458,9 +516,8 @@ export default function App() {
       const result = await api<Run>(`api/runs/${id}/cancel`, {
         method: "POST",
       });
-      setRuns((previous) =>
-        previous.map((run) => (run.id === id ? result : run)),
-      );
+      if (runId === id) setCurrentRun(result);
+      setRevision((value) => value + 1);
       setNotice("Analysis cancelled. Available outputs have been kept.");
     } catch (err) {
       fail(err);
@@ -468,7 +525,7 @@ export default function App() {
       setCancellingId("");
     }
   };
-  const reselect = async (run: Run) => {
+  const reselect = async (run: Pick<Run, "id">) => {
     setBusy(true);
     setError("");
     try {
@@ -512,13 +569,7 @@ export default function App() {
       setBusy(false);
     }
   };
-  const filteredRuns = filteredAnalyses(
-    runs,
-    analysisSearch,
-    jobFilter,
-    analysisMode,
-    analysisSort,
-  );
+  const filteredRuns = runs;
   const rename = async () => {
     setBusy(true);
     setError("");
@@ -528,8 +579,13 @@ export default function App() {
         body: JSON.stringify({ name: renameName }),
       });
       setRuns((old) =>
-        old.map((run) => (run.id === updated.id ? updated : run)),
+        old.map((run) =>
+          run.id === updated.id
+            ? { ...run, name: updated.name, updated_at: updated.updated_at }
+            : run,
+        ),
       );
+      setRevision((value) => value + 1);
       setRenameId("");
       setNotice("Analysis renamed.");
     } catch (err) {
@@ -865,7 +921,7 @@ export default function App() {
                   </button>
                 </form>
               )}
-              {runs.length > 0 && (
+              {historyAll > 0 && (
                 <div className="jobs-toolbar">
                   <div
                     className="filter-tabs"
@@ -938,6 +994,7 @@ export default function App() {
                     <Search size={15} />
                     <input
                       aria-label="Search analyses"
+                      maxLength={120}
                       placeholder="Search analyses…"
                       value={analysisSearch}
                       onChange={(event) =>
@@ -987,7 +1044,7 @@ export default function App() {
                             <State value={run.state} />
                           </td>
                           <td>{modeLabel(run.mode)}</td>
-                          <td>{run.inputs.length}</td>
+                          <td>{run.input_count}</td>
                           <td className="subtle">{date(run.created_at)}</td>
                           <td className="subtle">
                             {run.finished_at ? date(run.finished_at) : "—"}
@@ -1044,10 +1101,14 @@ export default function App() {
                 <Empty
                   icon={Activity}
                   title={
-                    runs.length ? "No matching analyses" : "No analyses yet"
+                    historyLoading
+                      ? "Loading analyses…"
+                      : historyAll
+                        ? "No matching analyses"
+                        : "No analyses yet"
                   }
                   action={
-                    runs.length ? (
+                    historyAll ? (
                       <button
                         className="button"
                         onClick={() => {
@@ -1069,10 +1130,40 @@ export default function App() {
                     )
                   }
                 >
-                  {runs.length
+                  {historyAll
                     ? "Try another status or analysis name."
                     : "Start from the Workspace to select files and configure a QC run."}
                 </Empty>
+              )}
+              {historyTotal > 0 && (
+                <div
+                  className="analytics-actions"
+                  aria-label="Analysis history pages"
+                >
+                  <span>
+                    {historyOffset + 1}–
+                    {Math.min(historyOffset + 25, historyTotal)} of{" "}
+                    {historyTotal} analyses
+                  </span>
+                  <button
+                    className="button small"
+                    disabled={historyLoading || !historyOffset}
+                    onClick={() =>
+                      setHistoryOffset((value) => Math.max(0, value - 25))
+                    }
+                  >
+                    Previous analyses
+                  </button>
+                  <button
+                    className="button small"
+                    disabled={
+                      historyLoading || historyOffset + 25 >= historyTotal
+                    }
+                    onClick={() => setHistoryOffset((value) => value + 25)}
+                  >
+                    Next analyses
+                  </button>
+                </div>
               )}
             </section>
           )}
@@ -1098,7 +1189,9 @@ export default function App() {
             ) : (
               <Empty
                 icon={Activity}
-                title="Analysis not available"
+                title={
+                  detailLoading ? "Loading analysis…" : "Analysis not available"
+                }
                 action={
                   <button className="button" onClick={() => open("analyses")}>
                     Back to analyses

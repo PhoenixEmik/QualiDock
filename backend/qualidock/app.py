@@ -17,6 +17,7 @@ from .config import Settings
 from .files import PathViolation, DirectoryChanged
 from .manager import RunManager
 from .preview import PREVIEW_PATH, application_csp, report_preview, UnsupportedPreview
+from .history import page as history_page, invalidation
 
 
 class SessionRequest(BaseModel):
@@ -162,6 +163,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def runs():
         return manager.list()
 
+    @app.get("/api/history")
+    async def history(offset: int = 0, limit: int = 25, search: str = '', state: str = 'all', mode: str = 'all', order: str = 'created-desc', revision: int | None = None):
+        if revision is not None and revision != manager.revision:
+            raise HTTPException(409, 'Analysis history changed; refresh this page')
+        return history_page(manager.runs, manager.revision, offset=offset, limit=limit, search=search, state=state, mode=mode, order=order)
+
     @app.post("/api/runs", status_code=201)
     async def create_run(body: AnalysisRequest):
         return await manager.create(body.name, body.mode, body.paths, body.threads,
@@ -247,13 +254,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(403, "The saved report is not readable")
 
     @app.get("/api/events")
-    async def events(request: Request):
+    async def events(request: Request, format: Literal['legacy', 'invalidation'] = 'legacy'):
         async def stream():
             revision = -1
             while not await request.is_disconnected():
                 if revision != manager.revision:
                     revision = manager.revision
-                    yield f"id: {revision}\nevent: runs\ndata: {json.dumps(manager.list())}\n\n"
+                    event, data = ('revision', invalidation(revision)) if format == 'invalidation' else ('runs', manager.list())
+                    yield f"id: {revision}\nevent: {event}\ndata: {json.dumps(data)}\n\n"
                 else:
                     yield ": heartbeat\n\n"
                 await asyncio.sleep(1)

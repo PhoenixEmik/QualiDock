@@ -339,6 +339,8 @@ class RunManager:
                             break
                         destination = directory / batch[0]['output_directory']
                         destination.mkdir(parents=True, exist_ok=True)
+                        if destination.is_symlink() or destination.resolve() != destination or not destination.is_relative_to(directory):
+                            raise PathViolation('FastQC output namespace is unavailable or escaped its run directory')
                         for record in batch:
                             record.update(state='unknown', error='Submitted to FastQC; individual start is not reported by the tool')
                         completed = counts(run['input_outcomes'])['completed']

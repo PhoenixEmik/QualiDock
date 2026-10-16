@@ -119,3 +119,4 @@ jobs:
           path: |
             validation/report-browser.xml
             validation/native-*.png
+            validation/history-browser*.json
