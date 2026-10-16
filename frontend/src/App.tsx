@@ -104,6 +104,11 @@ export default function App() {
     setMetrics({ samples: [] });
     setSelected(new Map());
     setInputDatasets([]);
+    setSampleConfiguration(null);
+    setRerunOf(null);
+    setMultiqcDirectory("");
+    setOutputRoot("");
+    setName("");
     setListing(null);
     listingRef.current = null;
     setRunId("");
