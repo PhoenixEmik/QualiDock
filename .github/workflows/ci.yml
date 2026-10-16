@@ -126,11 +126,6 @@ jobs:
         working-directory: frontend
       - name: Provision focused processing tools
         run: bash scripts/setup-processing-ci.sh
-      - name: Native processing and before-after comparison
-        env:
-          QUALIDOCK_BROWSER: ${{ matrix.browser }}
-          QUALIDOCK_REQUIRE_PROCESSING_TESTS: '1'
-        run: pytest -q tests/browser/test_processing_browser.py --junitxml=validation/processing-browser.xml
       - name: Bounded raw and derived FASTQ Inspector
         env:
           QUALIDOCK_BROWSER: ${{ matrix.browser }}
@@ -139,6 +134,11 @@ jobs:
         env:
           QUALIDOCK_BROWSER: ${{ matrix.browser }}
         run: pytest -q tests/browser/test_lineage_browser.py --junitxml=validation/lineage-browser.xml
+      - name: Native processing and before-after comparison
+        env:
+          QUALIDOCK_BROWSER: ${{ matrix.browser }}
+          QUALIDOCK_REQUIRE_PROCESSING_TESTS: '1'
+        run: pytest -q tests/browser/test_processing_browser.py --junitxml=validation/processing-browser.xml
       - name: Real reports, opaque-origin isolation, proxy paths and restart
         if: matrix.browser == 'chromium'
         env:
