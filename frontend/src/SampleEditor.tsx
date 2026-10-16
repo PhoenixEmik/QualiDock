@@ -372,3 +372,33 @@ export default function SampleEditor({
     </section>
   );
 }
+
+/** Shared optional review; metadata remains validated by the existing API. */
+export function ReadRelationships({
+  value,
+  change,
+  prepare,
+  busy,
+}: {
+  value: SampleConfiguration | null;
+  change: (value: SampleConfiguration) => void;
+  prepare: () => Promise<unknown>;
+  busy: boolean;
+}) {
+  return (
+    <details className="processing-advanced">
+      <summary>Review read relationships (optional)</summary>
+      {value ? (
+        <SampleEditor value={value} change={change} busy={busy} />
+      ) : (
+        <button
+          className="button"
+          disabled={busy}
+          onClick={() => void prepare()}
+        >
+          Detect and review pairs
+        </button>
+      )}
+    </details>
+  );
+}

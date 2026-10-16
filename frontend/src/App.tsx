@@ -66,9 +66,12 @@ export default function App() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [runId, setRunId] = useState("");
-  const [multiqc, setMultiqc] = useState<MultiQCSummary>();
+  const [metrics, setMetrics] = useState<{
+    samples: Sample[];
+    multiqc?: MultiQCSummary;
+  }>({ samples: [] });
+  const { samples, multiqc } = metrics;
   const [multiqcDirectory, setMultiqcDirectory] = useState("");
-  const [samples, setSamples] = useState<Sample[]>([]);
   const [metricsLoading, setMetricsLoading] = useState(false);
   const [detailTab, setDetailTab] = useState<DetailTab>("overview");
   const [logs, setLogs] = useState("");
@@ -94,23 +97,27 @@ export default function App() {
     setView(next);
     setError("");
   };
-  const fail = useCallback((err: unknown) => {
-    if (err instanceof AuthError) {
-      setAuthenticated(false);
-      setConfig(null);
-      setCurrentRun(null);
-      setSamples([]);
-      setSelected(new Map());
-      setInputDatasets([]);
-      setListing(null);
-      listingRef.current = null;
-      setRunId("");
-      setView("workspace");
-    }
-    setError(
-      err instanceof Error ? err.message : "The request failed. Try again.",
-    );
+  const resetSession = useCallback(() => {
+    setAuthenticated(false);
+    setConfig(null);
+    setCurrentRun(null);
+    setMetrics({ samples: [] });
+    setSelected(new Map());
+    setInputDatasets([]);
+    setListing(null);
+    listingRef.current = null;
+    setRunId("");
+    setView("workspace");
   }, []);
+  const fail = useCallback(
+    (err: unknown) => {
+      if (err instanceof AuthError) resetSession();
+      setError(
+        err instanceof Error ? err.message : "The request failed. Try again.",
+      );
+    },
+    [resetSession],
+  );
   const browse = useCallback(
     async (next: string, offset = 0, refresh = false) => {
       setBusy(true);
@@ -223,7 +230,7 @@ export default function App() {
       if (fallback) clearInterval(fallback);
       if (reconnect) clearTimeout(reconnect);
     };
-  }, [authenticated, fail]);
+  }, [authenticated]);
   useEffect(() => {
     if (!authenticated || !runId || view !== "analysis") return;
     let cancelled = false;
@@ -251,8 +258,7 @@ export default function App() {
     )
       .then((result) => {
         if (!cancelled) {
-          setSamples(result.samples);
-          setMultiqc(result.multiqc);
+          setMetrics(result);
         }
       })
       .catch((err) => {
@@ -368,10 +374,22 @@ export default function App() {
       setBusy(false);
     }
   };
+  const fastqPaths = useMemo(
+    () =>
+      [...selected.values()]
+        .filter((entry) => entry.kind === "fastq")
+        .map((entry) => entry.path),
+    [selected],
+  );
+  const currentSampleConfiguration = useMemo(
+    () =>
+      sampleConfiguration
+        ? reconcileConfig(sampleConfiguration, fastqPaths)
+        : null,
+    [sampleConfiguration, fastqPaths],
+  );
   const prepareSamples = async () => {
-    const paths = [...selected.values()]
-      .filter((entry) => entry.kind === "fastq")
-      .map((entry) => entry.path);
+    const paths = fastqPaths;
     if (!paths.length) {
       setSampleConfiguration(null);
       return true;
@@ -413,8 +431,7 @@ export default function App() {
     setRunId(run.id);
     setCurrentRun("inputs" in run ? (run as Run) : null);
     setDetailLoading(true);
-    setSamples([]);
-    setMultiqc(undefined);
+    setMetrics({ samples: [] });
     setLogs("");
     setLogsLoading(true);
     setMetricsLoading(true);
@@ -448,20 +465,10 @@ export default function App() {
           inputDatasets,
           new Set(selected.keys()),
         ),
-        ...(mode !== "multiqc" && sampleConfiguration
+        ...(mode !== "multiqc" && currentSampleConfiguration
           ? {
-              input_pairing: reconcileConfig(
-                sampleConfiguration,
-                [...selected.values()]
-                  .filter((entry) => entry.kind === "fastq")
-                  .map((entry) => entry.path),
-              ).input_pairing,
-              sample_groups: reconcileConfig(
-                sampleConfiguration,
-                [...selected.values()]
-                  .filter((entry) => entry.kind === "fastq")
-                  .map((entry) => entry.path),
-              ).sample_groups,
+              input_pairing: currentSampleConfiguration.input_pairing,
+              sample_groups: currentSampleConfiguration.sample_groups,
             }
           : {}),
       };
@@ -733,14 +740,7 @@ export default function App() {
             onClick={async () => {
               try {
                 await api("api/session", { method: "DELETE" });
-                setAuthenticated(false);
-                setConfig(null);
-                setSelected(new Map());
-                setSamples([]);
-                setRunId("");
-                setListing(null);
-                listingRef.current = null;
-                setView("workspace");
+                resetSession();
               } catch (err) {
                 fail(err);
               }

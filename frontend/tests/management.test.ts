@@ -8,7 +8,6 @@ import {
   reconcileConfig,
 } from "../src/sampleConfig.ts";
 import { explorerRows, rowInputPaths, explorerLanes } from "../src/explorer.ts";
-import { filteredAnalyses } from "../src/analysisManagement.ts";
 import { analyticsSamples } from "../src/analytics.ts";
 import { confirmedPairs } from "../src/pairing.ts";
 import { fixture } from "./fastqcFixture.ts";
@@ -189,54 +188,7 @@ test("different directories and ambiguous names stay independent; incomplete lan
     2,
   );
 });
-test("history filtering supports exact states/workflows and leaves missing completion times last", () => {
-  const rows = [
-    {
-      id: "b",
-      name: "Pilot 2",
-      state: "completed",
-      mode: "both",
-      created_at: "2026-01-02",
-      finished_at: "2026-01-04",
-    },
-    {
-      id: "a",
-      name: "Pilot 1",
-      state: "failed",
-      mode: "fastqc",
-      created_at: "2026-01-01",
-      finished_at: "2026-01-03",
-    },
-    {
-      id: "c",
-      name: "Other",
-      state: "queued",
-      mode: "both",
-      created_at: "2026-01-03",
-      finished_at: null,
-    },
-  ] as Run[];
-  assert.deepEqual(
-    filteredAnalyses(rows, "pilot", "all", "all", "created-desc").map(
-      (r) => r.id,
-    ),
-    ["b", "a"],
-  );
-  assert.deepEqual(
-    filteredAnalyses(rows, "", "failed", "fastqc", "created-asc").map(
-      (r) => r.id,
-    ),
-    ["a"],
-  );
-  assert.deepEqual(
-    filteredAnalyses(rows, "", "all", "both", "finished-asc").map((r) => r.id),
-    ["b", "c"],
-  );
-  assert.deepEqual(
-    filteredAnalyses(rows, "", "all", "all", "finished-desc").map((r) => r.id),
-    ["b", "a", "c"],
-  );
-});
+
 test("saved manual pairing and sample/lane metadata map to genuine FastQC results without changing values", () => {
   const samples = [fixture("R1"), fixture("R2")];
   const inputs = samples.map((s) => "/data/" + s.name);

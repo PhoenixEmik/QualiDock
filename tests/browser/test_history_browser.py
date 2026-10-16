@@ -28,9 +28,15 @@ def test_bounded_history_pagination_polling_reconnect_and_selected_detail(worksp
         expect(table.locator('tbody tr')).to_have_count(16)
         page.get_by_role('button',name='Previous analyses',exact=True).click()
         expect(table.locator('tbody tr')).to_have_count(25)
+        page.get_by_role('button',name='Next analyses',exact=True).click()
+        expect(table.locator('tbody tr')).to_have_count(16)
+        filter_start=len(requests)
         page.get_by_label('Search analyses',exact=True).fill('Browser FastQC')
         page.get_by_label('Filter analysis workflow',exact=True).select_option('fastqc')
         expect(table.locator('tbody tr')).to_have_count(1)
+        from urllib.parse import urlparse,parse_qs
+        filtered_requests=[parse_qs(urlparse(url).query) for method,url in requests[filter_start:] if method=='GET' and urlparse(url).path.endswith('/api/history') and 'Browser+FastQC' in url]
+        assert filtered_requests and all(query['offset']==['0'] for query in filtered_requests)
         page.get_by_label('Search analyses',exact=True).fill('Polling renamed')
         with workspace.api() as client:
             assert client.patch(f"api/runs/{workspace.fastqc['id']}",json={'name':'Polling renamed'}).status_code==200

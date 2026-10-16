@@ -13,7 +13,7 @@ import {
   supportsExactCount,
 } from "./processing";
 import { modeLabel } from "./api";
-import SampleEditor from "./SampleEditor";
+import { ReadRelationships } from "./SampleEditor";
 import OutputDirectory from "./OutputDirectory";
 export default function ProcessingForm({
   config,
@@ -365,16 +365,12 @@ export default function ProcessingForm({
           />
         </details>
         {mode !== "seqkit-stats" && !!files.length && (
-          <details>
-            <summary>Review read pairs and sample groups</summary>
-            {samples ? (
-              <SampleEditor value={samples} change={setSamples} busy={busy} />
-            ) : (
-              <button className="button" onClick={() => void prepare()}>
-                Detect and review pairs
-              </button>
-            )}
-          </details>
+          <ReadRelationships
+            value={samples}
+            change={setSamples}
+            prepare={prepare}
+            busy={busy}
+          />
         )}
         <p className="inline-note">
           Original FASTQs stay unchanged. A unique analysis directory stores

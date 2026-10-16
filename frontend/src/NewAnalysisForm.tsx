@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { bytes, modeLabel } from "./api";
 import { Empty } from "./Feedback";
-import SampleEditor from "./SampleEditor";
+import { ReadRelationships } from "./SampleEditor";
 import OutputDirectory from "./OutputDirectory";
 import type { SampleConfiguration } from "./types";
 import type { Config, Entry, Run } from "./types";
@@ -179,26 +179,14 @@ export default function NewAnalysisForm({
             </Empty>
           )}
         </section>
-        {mode !== "multiqc" &&
-          configuredPaths.length > 0 &&
-          (sampleConfiguration ? (
-            <details className="processing-advanced">
-              <summary>Review read relationships (optional)</summary>
-              <SampleEditor
-                value={sampleConfiguration}
-                change={setSampleConfiguration}
-                busy={busy}
-              />
-            </details>
-          ) : (
-            <button
-              className="button"
-              disabled={busy}
-              onClick={() => void prepareSamples()}
-            >
-              Review sample relationships
-            </button>
-          ))}
+        {mode !== "multiqc" && configuredPaths.length > 0 && (
+          <ReadRelationships
+            value={sampleConfiguration}
+            change={setSampleConfiguration}
+            prepare={prepareSamples}
+            busy={busy}
+          />
+        )}
         <details className="processing-advanced">
           <summary>Output and resource settings (optional)</summary>
           <OutputDirectory

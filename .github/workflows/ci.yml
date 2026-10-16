@@ -100,7 +100,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        browser: [chromium]
+        browser: [chromium, firefox]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -130,9 +130,15 @@ jobs:
           QUALIDOCK_REQUIRE_PROCESSING_TESTS: '1'
         run: pytest -q tests/browser/test_processing_browser.py --junitxml=validation/processing-browser.xml
       - name: Real reports, opaque-origin isolation, proxy paths and restart
+        if: matrix.browser == 'chromium'
         env:
           QUALIDOCK_BROWSER: ${{ matrix.browser }}
         run: pytest -q tests/browser --ignore=tests/browser/test_processing_browser.py --junitxml=validation/report-browser.xml
+      - name: Firefox critical report isolation and interaction
+        if: matrix.browser == 'firefox'
+        env:
+          QUALIDOCK_BROWSER: firefox
+        run: pytest -q tests/browser/test_report_viewer.py --junitxml=validation/report-browser.xml
       - uses: actions/upload-artifact@v4
         if: always()
         with:

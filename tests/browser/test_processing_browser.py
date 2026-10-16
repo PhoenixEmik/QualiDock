@@ -115,9 +115,13 @@ def test_seqkit_statistics_and_subsampling_from_shared_selection(workspace,brows
     playwright.expect(page.get_by_label('Operation',exact=True)).to_have_value('seqkit-stats')
     page.get_by_label('Operation',exact=True).select_option('seqkit-sample')
     page.get_by_label('Sampling fraction',exact=True).fill('0.25')
+    page.get_by_text('Review read relationships (optional)',exact=True).click()
+    playwright.expect(page.get_by_role('region',name='Sample and pairing editor')).to_be_visible()
+    page.get_by_role('button',name='Confirm pair',exact=True).click()
     with page.expect_response(lambda response:response.request.method=='POST' and response.url.endswith('/api/runs')) as created:
         page.get_by_role('button',name='Run processing',exact=True).click()
     with workspace.api() as api:sampled=workspace.finish(api,created.value.json())
+    assert all(row['source']=='confirmed' for row in sampled['input_pairing'])
     assert len(sampled['derived_datasets'])==2 and all(entry['paired'] for entry in sampled['derived_datasets'])
     assert sampled['processing']['units'][0]['output_validation']['pairs'][0]['state']=='passed'
     page.close()

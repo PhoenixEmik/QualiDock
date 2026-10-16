@@ -10,7 +10,7 @@ import {
 import { api, date, modeLabel } from "./api";
 import { Empty, State } from "./Feedback";
 import { processingModes } from "./processing";
-import type { Run, RunSummary, HistoryPage } from "./types";
+import type { Run, HistoryPage } from "./types";
 
 const active = (run: Pick<Run, "state">) =>
   ["queued", "running"].includes(run.state);
@@ -32,41 +32,47 @@ export default function ResultsList({
   browse,
   fail,
 }: Props) {
-  const [runs, setRuns] = useState<RunSummary[]>([]);
-  const [historyOffset, setHistoryOffset] = useState(0);
-  const [historyTotal, setHistoryTotal] = useState(0);
-  const [historyAll, setHistoryAll] = useState(0);
+  const [page, setPage] = useState<HistoryPage | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [analysisMode, setAnalysisMode] = useState("all");
-  const [analysisSort, setAnalysisSort] = useState("created-desc");
+  const [query, setQuery] = useState({
+    offset: 0,
+    search: "",
+    state: "all",
+    mode: "all",
+    order: "created-desc",
+  });
+  const {
+    search: analysisSearch,
+    state: jobFilter,
+    mode: analysisMode,
+    order: analysisSort,
+  } = query;
+  const runs = page?.items || [];
+  const historyOffset = page?.offset ?? query.offset;
+  const historyTotal = page?.total || 0;
+  const historyAll = page?.overall_total || 0;
+  const filter = (changes: Partial<typeof query>) =>
+    setQuery((current) => ({ ...current, ...changes, offset: 0 }));
   const [renameId, setRenameId] = useState("");
   const [renameName, setRenameName] = useState("");
-  const [jobFilter, setJobFilter] = useState("all");
-  const [analysisSearch, setAnalysisSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [renamed, setRenamed] = useState(0);
   useEffect(() => {
-    setHistoryOffset(0);
-  }, [analysisSearch, jobFilter, analysisMode, analysisSort]);
-  useEffect(() => {
     let cancelled = false;
     setHistoryLoading(true);
-    const query = new URLSearchParams({
-      offset: String(historyOffset),
+    const params = new URLSearchParams({
+      ...query,
+      offset: String(query.offset),
       limit: "25",
-      search: analysisSearch,
-      state: jobFilter,
-      mode: analysisMode,
-      order: analysisSort,
     });
-    void api<HistoryPage>(`api/history?${query}`)
-      .then((page) => {
-        if (cancelled) return;
-        setRuns(page.items);
-        setHistoryTotal(page.total);
-        setHistoryAll(page.overall_total);
-        setHistoryOffset(page.offset);
+    void api<HistoryPage>(`api/history?${params}`)
+      .then((result) => {
+        if (!cancelled) {
+          setPage(result);
+          if (result.offset !== query.offset)
+            setQuery({ ...query, offset: result.offset });
+        }
       })
       .catch((err) => {
         if (!cancelled) fail(err);
@@ -77,32 +83,15 @@ export default function ResultsList({
     return () => {
       cancelled = true;
     };
-  }, [
-    revision,
-    renamed,
-    historyOffset,
-    analysisSearch,
-    jobFilter,
-    analysisMode,
-    analysisSort,
-    fail,
-  ]);
-  const filteredRuns = runs;
+  }, [revision, renamed, query, fail]);
   const rename = async () => {
     setBusy(true);
     setMessage("");
     try {
-      const updated = await api<Run>(`api/runs/${renameId}`, {
+      await api<Run>(`api/runs/${renameId}`, {
         method: "PATCH",
         body: JSON.stringify({ name: renameName }),
       });
-      setRuns((old) =>
-        old.map((run) =>
-          run.id === updated.id
-            ? { ...run, name: updated.name, updated_at: updated.updated_at }
-            : run,
-        ),
-      );
       setRenamed((value) => value + 1);
       setRenameId("");
       setMessage("Analysis renamed.");
@@ -156,7 +145,7 @@ export default function ResultsList({
             <select
               aria-label="Filter analysis workflow"
               value={analysisMode}
-              onChange={(e) => setAnalysisMode(e.target.value)}
+              onChange={(e) => filter({ mode: e.target.value })}
             >
               <option value="all">All workflows</option>
               <option value="fastqc">FastQC only</option>
@@ -174,7 +163,7 @@ export default function ResultsList({
             <select
               aria-label="Sort analyses"
               value={analysisSort}
-              onChange={(e) => setAnalysisSort(e.target.value)}
+              onChange={(e) => filter({ order: e.target.value })}
             >
               <option value="created-desc">Newest created</option>
               <option value="created-asc">Oldest created</option>
@@ -187,7 +176,7 @@ export default function ResultsList({
             <select
               aria-label="Filter exact analysis state"
               value={jobFilter}
-              onChange={(e) => setJobFilter(e.target.value)}
+              onChange={(e) => filter({ state: e.target.value })}
             >
               {[
                 "all",
@@ -214,12 +203,12 @@ export default function ResultsList({
               maxLength={120}
               placeholder="Search analyses…"
               value={analysisSearch}
-              onChange={(event) => setAnalysisSearch(event.target.value)}
+              onChange={(event) => filter({ search: event.target.value })}
             />
           </label>
         </div>
       )}
-      {filteredRuns.length > 0 ? (
+      {runs.length > 0 ? (
         <div
           className="table-scroll"
           tabIndex={0}
@@ -241,7 +230,7 @@ export default function ResultsList({
               </tr>
             </thead>
             <tbody>
-              {filteredRuns.map((run) => (
+              {runs.map((run) => (
                 <tr key={run.id}>
                   <td>
                     <button className="job-name" onClick={() => showRun(run)}>
@@ -322,9 +311,7 @@ export default function ResultsList({
               <button
                 className="button"
                 onClick={() => {
-                  setJobFilter("all");
-                  setAnalysisSearch("");
-                  setAnalysisMode("all");
+                  filter({ state: "all", search: "", mode: "all" });
                 }}
               >
                 Clear filters
@@ -351,14 +338,24 @@ export default function ResultsList({
           <button
             className="button small"
             disabled={historyLoading || !historyOffset}
-            onClick={() => setHistoryOffset((value) => Math.max(0, value - 25))}
+            onClick={() =>
+              setQuery((current) => ({
+                ...current,
+                offset: Math.max(0, historyOffset - 25),
+              }))
+            }
           >
             Previous analyses
           </button>
           <button
             className="button small"
             disabled={historyLoading || historyOffset + 25 >= historyTotal}
-            onClick={() => setHistoryOffset((value) => value + 25)}
+            onClick={() =>
+              setQuery((current) => ({
+                ...current,
+                offset: historyOffset + 25,
+              }))
+            }
           >
             Next analyses
           </button>
