@@ -119,7 +119,7 @@ def test_project_sample_run_assignment_review_report_navigation_and_restart(work
         expect(page.get_by_label('Select FASTQ sample', exact=True)).to_have_value(inventory['files'][0]['report_id'])
         page.get_by_role('tab', name='Reports', exact=True).click()
         page.locator('.report-preview[aria-busy=false] iframe').wait_for()
-        expect(page.get_by_label('Official HTML report', exact=True)).to_contain_text('MultiQC')
+        expect(page.get_by_label('Select HTML report', exact=True)).to_contain_text('MultiQC')
         workspace.stop(); workspace.start()
         login(page, workspace)
         page.get_by_role('table', name='project records', exact=True).locator('tbody tr').filter(has_text='Browser project').get_by_role('button', name='Open project', exact=True).click()

@@ -132,6 +132,9 @@ class ProjectManagement:
             row = db.execute('SELECT * FROM associations WHERE id=? AND project_id=?', (association_id, project_id)).fetchone()
             if row['revision'] != revision:
                 raise CatalogConflict('Association changed; reload before correcting it')
+            # The audit before-image must be read under this write transaction,
+            # not from the earlier filesystem-validation preflight.
+            previous = dict(row)
             if catalog.entity(db, project_id, 'project')['declared']['status'] != 'active':
                 raise ValueError('Restore the archived project before correcting associations')
             for key, kind in [('sample_id', 'sample'), ('sequencing_run_id', 'sequencing_run')]:

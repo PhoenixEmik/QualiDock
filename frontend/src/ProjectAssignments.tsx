@@ -62,6 +62,7 @@ function IdentityPicker({
       <label className="field-label">
         Confirmed {title.toLowerCase()} identity
         <select
+          aria-label={`Confirmed ${title.toLowerCase()} identity`}
           className="wide-input"
           value={value}
           onChange={(e) => change(e.target.value)}
@@ -416,6 +417,7 @@ export default function ProjectAssignments({
                   <label className="field-label">
                     Declared read role
                     <select
+                      aria-label="Declared read role"
                       className="wide-input"
                       value={role}
                       onChange={(e) => setRole(e.target.value)}

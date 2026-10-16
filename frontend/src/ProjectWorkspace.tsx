@@ -142,6 +142,7 @@ function EntityList({
         <label className="field-label">
           {title[0].toUpperCase() + title.slice(1)} status
           <select
+            aria-label={`${title[0].toUpperCase() + title.slice(1)} status`}
             value={status}
             onChange={(e) => {
               setStatus(e.target.value);
@@ -464,6 +465,7 @@ function LinkedAnalyses({
           <label className="field-label">
             Unassigned analysis
             <select
+              aria-label="Unassigned analysis"
               className="wide-input"
               value={selectedAnalysis}
               onChange={(e) => setSelectedAnalysis(e.target.value)}
@@ -610,6 +612,7 @@ function LinkedAnalyses({
           <label className="field-label">
             Project evidence scope
             <select
+              aria-label="Project evidence scope"
               className="wide-input"
               value={selectedScope}
               onChange={(e) => setSelectedScope(e.target.value)}

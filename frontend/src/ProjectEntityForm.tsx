@@ -91,6 +91,7 @@ export default function ProjectEntityForm({
             <label className="field-label">
               Expected yield units
               <select
+                aria-label="Expected yield units"
                 className="wide-input"
                 value={metric}
                 onChange={(e) => setMetric(e.target.value as typeof metric)}
@@ -122,6 +123,7 @@ export default function ProjectEntityForm({
             <label className="field-label">
               Input stage (declared)
               <select
+                aria-label="Input stage (declared)"
                 className="wide-input"
                 value={fields.input_stage ?? "unknown"}
                 onChange={(e) =>
@@ -143,6 +145,7 @@ export default function ProjectEntityForm({
           <label className="field-label">
             Record status
             <select
+              aria-label="Record status"
               className="wide-input"
               value={fields.status}
               onChange={(e) =>

@@ -165,6 +165,37 @@ def test_schema_v1_to_v2_preserves_ids_snapshots_and_official_reports(setup):
     assert all(path.read_bytes() == data for path, data in manifests.items())
 
 
+def test_interleaved_corrections_record_actual_previous_revision(client, setup, monkeypatch):
+    from qualidock.project_management import ProjectManagement
+    _, root = setup
+    _, base, sample, sequencing = domain(client)
+    second = create(client, base + '/samples', 'Second declaration')
+    third = create(client, base + '/samples', 'Third declaration')
+    run = wait(client, start(client, root, mode='fastqc')['id'])
+    _, assignments = attach(client, base, run, sample, sequencing)
+    catalog = client.app.state.manager.catalog
+    association = client.get(base + '/associations').json()['items'][0]
+    assignment = next(row for row in assignments if row['file_id'] == association['file_id'])
+    original = catalog.prepare_assignments
+    injected = False
+    def interleave(analysis_id, rows):
+        nonlocal injected
+        prepared = original(analysis_id, rows)
+        if not injected:
+            injected = True
+            ProjectManagement(catalog).revise_assignment(sample['project_id'], association['id'], 1, {**assignment, 'sample_id': second['id']}, 'First interleaved update')
+        return prepared
+    monkeypatch.setattr(catalog, 'prepare_assignments', interleave)
+    response = client.patch(base + '/associations/' + association['id'], json={'revision': 2, 'assignment': {**assignment, 'sample_id': third['id']}, 'reason': 'Second interleaved update'})
+    assert response.status_code == 200, response.text
+    assert response.json()['revision'] == 3
+    with catalog.transaction() as db:
+        history = [json.loads(row[0]) for row in db.execute("SELECT data FROM events WHERE action='association_corrected' ORDER BY sequence")]
+    assert history[0]['previous']['revision'] == 1 and history[0]['current']['sample_id'] == second['id']
+    assert history[1]['previous']['revision'] == 2 and history[1]['previous']['sample_id'] == second['id']
+    assert history[1]['current']['sample_id'] == third['id']
+
+
 def test_corrections_and_filtered_inventory_reject_cross_project_or_arbitrary_files(client, setup):
     _, root = setup
     _, base, sample, sequencing = domain(client)
