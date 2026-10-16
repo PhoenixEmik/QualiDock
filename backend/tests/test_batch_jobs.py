@@ -151,7 +151,7 @@ def test_cancel_queued_owned_child_and_explicit_retry_preserves_previous_results
             time.sleep(.01)
         generated = record['units'][0]['analysis_id']
         assert generated
-        duplicate = preview(client, base, options={'reuse': False})
+        duplicate = preview(client, base, sample_ids=[sample['id']], sequencing_run_ids=[sequencing['id']], options={'reuse': False})
         assert client.post(base + '/batches', json={'plan_id': duplicate['id'], 'idempotency_key': 'duplicate-plan-1'}).status_code == 409
         stopped = client.post(base + '/batches/' + record['id'] + '/cancel')
         assert stopped.status_code == 200, stopped.text
@@ -365,3 +365,33 @@ def test_shell_characters_in_selected_fastq_are_literal_and_sources_remain_reado
     assert result['units'][0]['input_outcomes'][0]['name'] == path.name
     assert path.read_bytes() == original
     assert not list(settings_path for settings_path in root.parent.rglob('PWNED'))
+
+
+def test_selection_order_does_not_bypass_duplicate_fingerprint_and_target_changes_are_stale(client, setup):
+    _, root = setup
+    base, sample, sequencing, run = cohort(client, root)
+    second = create(client, base + '/samples', 'Additional explicit sample')
+    first = preview(client, base, sample_ids=[sample['id'], second['id']])
+    second_plan = preview(client, base, sample_ids=[second['id'], sample['id']])
+    assert first['fingerprint'] == second_plan['fingerprint']
+    assert first['skipped'] == [{'entity_id': second['id'], 'reason': 'Selected sample has no confirmed FASTQ references in this cohort'}]
+    file = client.get('/api/runs/' + run['id'] + '/delivery').json()['files'][0]
+    response = client.post('/api/runs/' + run['id'] + '/yield-targets', json={'targets': [{'sample_id': file['sample_id'], 'metric': 'reads', 'minimum': 9999}]})
+    assert response.status_code == 200, response.text
+    assert client.post(base + '/batches', json={'plan_id': first['id'], 'idempotency_key': 'changed-targets-1'}).status_code == 409
+    assert not client.get(base + '/batches').json()['total']
+
+
+def test_matching_confirmed_bindings_deduplicate_without_conflating_provenance(client, setup):
+    _, root = setup
+    base, sample, sequencing, original = cohort(client, root)
+    again = wait(client, start(client, root)['id'])
+    files = client.get('/api/runs/' + again['id'] + '/delivery').json()['files']
+    assignments = [{'file_id': file['file_id'], 'sample_id': sample['id'], 'sequencing_run_id': sequencing['id'],
+                    'read': file['read'], 'lane': 'L001', 'chunk': '001', 'source': 'user_assigned'} for file in files]
+    assert client.post(base + '/analyses', json={'analysis_id': again['id'], 'assignments': assignments}).status_code == 201
+    plan = preview(client, base)
+    assert plan['file_count'] == 2 and not plan['skipped']
+    assert all(len(file['association_revisions']) == 2 for file in plan['units'][0]['files'])
+    associations = client.get(base + '/associations').json()['items']
+    assert {row['declared']['source'] for row in associations} == {'user_confirmed', 'user_assigned'}

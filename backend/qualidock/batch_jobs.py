@@ -97,6 +97,8 @@ class BatchJobs:
         for values in (sample_ids, sequencing_run_ids):
             if values is not None and (not isinstance(values, list) or not 1 <= len(values) <= 100 or len(set(values)) != len(values) or any(not isinstance(value, str) for value in values)):
                 raise ValueError('Select 1–100 distinct stable cohort IDs, or the entire project')
+        sample_ids = sorted(sample_ids) if sample_ids is not None else None
+        sequencing_run_ids = sorted(sequencing_run_ids) if sequencing_run_ids is not None else None
         with self.catalog.transaction() as db:
             project = self.catalog.entity(db, project_id, 'project')
             if project['declared']['status'] != 'active':
@@ -119,6 +121,7 @@ class BatchJobs:
                     raise ValueError('Select a narrower cohort: at most 5000 source associations per plan')
             entities = {value: self.catalog.entity(db, value) for row in rows for value in (row['sample_id'], row['sequencing_run_id'])}
         inventories = {}
+        delivery_revisions = {}
         files = defaultdict(list)
         skipped = []
         for row in rows:
@@ -126,7 +129,9 @@ class BatchJobs:
                 skipped.append({'file_id': row['file_id'], 'reason': 'Archived sample/run'}); continue
             try:
                 if row['analysis_id'] not in inventories:
-                    inventories[row['analysis_id']] = {f['file_id']: f for f in self.manager.delivery.inspect(row['analysis_id'])['files']}
+                    inventory = self.manager.delivery.inspect(row['analysis_id'])
+                    delivery_revisions[row['analysis_id']] = inventory.get('delivery_revision', 0)
+                    inventories[row['analysis_id']] = {f['file_id']: f for f in inventory['files']}
                 source = inventories[row['analysis_id']][row['file_id']]
                 if not source['input_available']:
                     raise ValueError('Source FASTQ is unavailable')
@@ -140,9 +145,18 @@ class BatchJobs:
                     'association_id': row['id'], 'association_revision': row['revision']})
             except (KeyError, OSError, ValueError):
                 skipped.append({'file_id': row['file_id'], 'reason': 'Source FASTQ/reference unavailable or incompatible; inspect its analysis'})
+        for ids, column, kind in [(sample_ids, 'sample_id', 'sample'), (sequencing_run_ids, 'sequencing_run_id', 'sequencing run')]:
+            referenced = {row[column] for row in rows}
+            for entity_id in ids or []:
+                if entity_id not in referenced:
+                    skipped.append({'entity_id': entity_id, 'reason': 'Selected ' + kind + ' has no confirmed FASTQ references in this cohort'})
         selected = []
         for members in files.values():
-            signatures = {digest({k: file[k] for k in ('sample_id', 'sequencing_run_id', 'declared', 'source_snapshot')}) for file in members}
+            signatures = {digest({'sample_id': file['sample_id'], 'sequencing_run_id': file['sequencing_run_id'],
+                                  'binding': {key: file['declared'].get(key) for key in ('lane', 'chunk', 'library_identifier', 'read')},
+                                  'source_snapshot': file['source_snapshot']}) for file in members}
+            # Confirmation provenance is retained in the audit trail; differing
+            # user_confirmed/user_assigned labels are not conflicting identities.
             if len(signatures) != 1:
                 skipped.append({'file_id': members[0]['file_id'], 'reason': 'Conflicting confirmed identities for the same source; explicitly resolve associations'}); continue
             selected.append({**members[0], 'source_analysis_ids': sorted({file['source_analysis_id'] for file in members}),
@@ -153,6 +167,7 @@ class BatchJobs:
         context = {'project_id': project_id, 'project_revision': project['revision'], 'sample_ids': sample_ids,
                    'sequencing_run_ids': sequencing_run_ids, 'options': config, 'tools': tools,
                    'entities': entities, 'files': selected, 'skipped': skipped,
+                   'delivery_revisions': delivery_revisions,
                    'tool_executables': self.manager.tool_signature, 'resources': {'memory_mb': self.manager.settings.memory_mb, 'max_threads': self.manager.settings.max_threads}}
         return context
 
@@ -261,7 +276,9 @@ class BatchJobs:
                 # Integrity progress contains private canonical paths internally.
                 current = unit['integrity_progress'].get('current_file')
                 if isinstance(current, dict):
-                    unit['integrity_progress']['current_file'] = {k: current.get(k) for k in ('name', 'state', 'records_scanned', 'compressed_bytes_read')}
+                    name = next((file['name'] for file in run.get('input_outcomes', []) if file['id'] == current.get('id')), None)
+                    unit['integrity_progress']['current_file'] = {k: current.get(k) for k in ('state', 'records_scanned', 'compressed_bytes_read')}
+                    unit['integrity_progress']['current_file']['name'] = name
         return result
 
     def listing(self, project_id, offset=0, limit=25):
@@ -294,6 +311,17 @@ class BatchJobs:
         if digest(current) != plan['fingerprint']:
             raise CatalogConflict('Cohort, inputs, tools or metadata changed after preview; create a new plan')
 
+    @staticmethod
+    def work_fingerprint(plan):
+        # Equivalent all/explicit cohort filters must not enqueue the same work.
+        units = []
+        for unit in plan['units']:
+            units.append({'sequencing_run_id': unit['sequencing_run_id'],
+                          'files': sorted((file['file_id'], file['source_snapshot']) for file in unit['files']),
+                          'pairs': pair_signature(unit['input_pairing']),
+                          'groups': sorted((group['id'], sorted(group['files'])) for group in unit['sample_groups'])})
+        return digest({'project_id': plan['project_id'], 'options': plan['options'], 'tools': plan['tools'], 'units': units})
+
     async def start(self, project_id, plan_id, key, retry_of=None):
         if not isinstance(key, str) or not 8 <= len(key) <= 128 or any(ord(c) < 33 for c in key):
             raise ValueError('Provide a stable 8–128 character idempotency key')
@@ -310,7 +338,7 @@ class BatchJobs:
             for attempt in active:
                 if attempt['project_id'] == project_id and attempt['state'] in ACTIVE:
                     existing = self.read_plan(project_id, attempt['plan_id'])
-                    if existing['fingerprint'] == plan['fingerprint']:
+                    if self.work_fingerprint(existing) == self.work_fingerprint(plan):
                         raise CatalogConflict('This plan is already active; inspect its existing attempt')
             if not plan['units']:
                 raise ValueError('No eligible FASTQs; resolve skipped/unassigned files first')
