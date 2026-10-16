@@ -256,9 +256,12 @@ def export_data(data, include_paths=False):
             'input_stage':data['input_stage'],'processing_notes':data['processing_notes'],'tool_versions':data['tool_versions']}
 
 
-def csv_export(data, mode='spreadsheet', include_paths=False):
-    fields = CSV_FIELDS + (['path'] if include_paths else [])
-    stream = io.StringIO(newline='');writer = csv.writer(stream,lineterminator='\r\n',quoting=csv.QUOTE_ALL if mode == 'spreadsheet' else csv.QUOTE_MINIMAL)
+def table_export(fields, rows, mode='spreadsheet', delimiter=','):
+    """Shared exact/safe tabular formatting for existing manifests and cohorts."""
+    if mode not in {'spreadsheet', 'verbatim'} or delimiter not in {',', '\t'}:
+        raise ValueError('Choose a supported tabular export format')
+    stream = io.StringIO(newline='')
+    writer = csv.writer(stream, delimiter=delimiter, lineterminator='\r\n', quoting=csv.QUOTE_ALL if mode == 'spreadsheet' else csv.QUOTE_MINIMAL)
     def cell(value):
         value = '' if value is None else str(value)
         first = value.lstrip()
@@ -267,9 +270,15 @@ def csv_export(data, mode='spreadsheet', include_paths=False):
         risky = value and (unicodedata.category(value[0]) in {'Cc','Cf'} or first.startswith(tuple('=+-@＝＋－＠')))
         return '\t'+value if mode == 'spreadsheet' and risky and not numeric else value
     writer.writerow(fields)
-    for row in export_data(data,include_paths)['files']:
-        writer.writerow([cell(row.get(field)) for field in fields])
+    for row in rows:
+        writer.writerow([cell(value) for value in row])
     return stream.getvalue()
+
+
+def csv_export(data, mode='spreadsheet', include_paths=False):
+    fields = CSV_FIELDS + (['path'] if include_paths else [])
+    rows = ([row.get(field) for field in fields] for row in export_data(data,include_paths)['files'])
+    return table_export(fields, rows, mode)
 
 
 def expected_template(data):

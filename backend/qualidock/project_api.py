@@ -58,6 +58,42 @@ class ProjectAnalysis(BaseModel):
     sample_groups: list[dict] = Field(max_length=500)
 
 
+class CohortQuery(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    project_ids: list[str] | None = Field(default=None, min_length=1, max_length=5)
+    sample_ids: list[str] | None = Field(default=None, min_length=1, max_length=100)
+    sequencing_run_ids: list[str] | None = Field(default=None, min_length=1, max_length=100)
+    metric: str = Field(default='q30_percent', max_length=80)
+    filters: dict = Field(default_factory=dict, max_length=8)
+    rule: dict | None = Field(default=None, max_length=1)
+    group_by: str = Field(default='file', pattern=r'^(file|run)$')
+    adapter: str | None = Field(default=None, max_length=200)
+    position: str | None = Field(default=None, max_length=200)
+    offset: int = Field(default=0, strict=True, ge=0)
+    limit: int = Field(default=100, strict=True, ge=1, le=100)
+    definition_id: str | None = Field(default=None, pattern=r'^definition-[a-f0-9]{24}$')
+
+
+class CohortExport(CohortQuery):
+    fingerprint: str = Field(pattern=r'^[a-f0-9]{64}$')
+    format: str = Field(default='csv', pattern=r'^(csv|tsv)$')
+    mode: str = Field(default='spreadsheet', pattern=r'^(spreadsheet|verbatim)$')
+    exclusions: bool = False
+
+
+class ContextRecord(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    id: str = Field(pattern=r'^seq_[a-f0-9]{32}$')
+    revision: int = Field(strict=True, ge=1)
+
+
+class BulkRunContext(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    project_ids: list[str] = Field(min_length=1, max_length=5)
+    records: list[ContextRecord] = Field(min_length=1, max_length=100)
+    fields: dict = Field(min_length=1, max_length=3)
+
+
 class BatchPreview(BaseModel):
     model_config = ConfigDict(extra='forbid')
     sample_ids: list[str] | None = Field(default=None, min_length=1, max_length=100)
@@ -79,6 +115,8 @@ def project_router(manager):
     management = ProjectManagement(catalog)
     from .project_intake import ProjectIntake
     intake = ProjectIntake(manager)
+    from .cohort import CohortComparisons
+    comparisons = CohortComparisons(manager)
 
     async def call(method, *args, **kwargs):
         try:
@@ -162,6 +200,32 @@ def project_router(manager):
         configuration = body.model_dump(exclude={'request_key', 'paths'})
         configuration['raw_paths'] = body.paths
         return await call(intake.start, project_id, body.request_key, **configuration)
+
+    def comparison_arguments(project_id, body):
+        arguments = body.model_dump()
+        arguments['project_ids'] = arguments['project_ids'] or [project_id]
+        if project_id not in arguments['project_ids']:
+            raise ValueError('The current project must remain in the selected comparison scope')
+        return arguments
+
+    @router.post('/projects/{project_id}/comparisons/query')
+    async def compare(project_id: str, body: CohortQuery):
+        return await call(comparisons.query, **comparison_arguments(project_id, body))
+
+    @router.post('/projects/{project_id}/comparisons/export')
+    async def export_comparison(project_id: str, body: CohortExport):
+        from fastapi.responses import Response
+        arguments = comparison_arguments(project_id, body)
+        arguments.pop('offset'); arguments.pop('limit')
+        content = await call(comparisons.export, **arguments)
+        return Response(content, media_type='text/tab-separated-values' if body.format == 'tsv' else 'text/csv',
+                        headers={'Content-Disposition': f'attachment; filename="qualidock-cohort.{body.format}"', 'Content-Security-Policy': "sandbox; default-src 'none'"})
+
+    @router.patch('/projects/{project_id}/comparisons/run-context')
+    async def update_context(project_id: str, body: BulkRunContext):
+        if project_id not in body.project_ids:
+            raise ValueError('Current project must be included')
+        return await call(comparisons.update_run_context, body.project_ids, [record.model_dump() for record in body.records], body.fields)
 
     @router.post('/projects/{project_id}/batches/preview')
     async def batch_preview(project_id: str, body: BatchPreview):

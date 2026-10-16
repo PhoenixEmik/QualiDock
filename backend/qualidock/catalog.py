@@ -214,18 +214,21 @@ class ProjectCatalog:
         with self.transaction(True) as db:
             return self.create_record(db, kind, fields, project_id)
 
+    def edit_record(self, db, entity_id, revision, fields, project_id=None):
+        entity = self.entity(db, entity_id)
+        if project_id is not None and entity['project_id'] != project_id:
+            raise ValueError('Cross-project modification is not permitted')
+        if type(revision) is not int or revision != entity['revision']:
+            raise CatalogConflict('Project metadata changed; reload before editing')
+        changes = validate_fields(entity['kind'], fields)
+        merged = {**entity['declared'], **changes}
+        db.execute('UPDATE entities SET fields=?,updated_at=?,revision=revision+1 WHERE id=?', (encoded(merged), now(), entity_id))
+        self.event(db, entity['project_id'] or entity_id, entity_id, 'updated', {'previous_revision': revision, 'changes': changes})
+        return self.entity(db, entity_id)
+
     def edit(self, entity_id, revision, fields, project_id=None):
         with self.transaction(True) as db:
-            entity = self.entity(db, entity_id)
-            if project_id is not None and entity['project_id'] != project_id:
-                raise ValueError('Cross-project modification is not permitted')
-            if type(revision) is not int or revision != entity['revision']:
-                raise CatalogConflict('Project metadata changed; reload before editing')
-            changes = validate_fields(entity['kind'], fields)
-            merged = {**entity['declared'], **changes}
-            db.execute('UPDATE entities SET fields=?,updated_at=?,revision=revision+1 WHERE id=?', (encoded(merged), now(), entity_id))
-            self.event(db, entity['project_id'] or entity_id, entity_id, 'updated', {'previous_revision': revision, 'changes': changes})
-            return self.entity(db, entity_id)
+            return self.edit_record(db, entity_id, revision, fields, project_id)
 
     def listing(self, kind='project', project_id=None, search='', offset=0, limit=25, status='active'):
         if kind not in KINDS or not 1 <= limit <= 100 or offset < 0 or len(search) > 200 or status not in {'all', 'active', 'archived'}:
