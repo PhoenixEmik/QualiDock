@@ -430,6 +430,7 @@ main {
   white-space: nowrap;
 }
 .table-scroll {
+  position: relative;
   overflow: auto;
 }
 table {
