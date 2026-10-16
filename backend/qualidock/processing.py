@@ -10,9 +10,10 @@ import sys
 from pydantic import BaseModel, ConfigDict, Field
 from .integrity import snapshot
 from .files import PathViolation
-from .metrics import bounded_text, parse_multiqc
-from .import_formats import fastp_metadata, source_mappings
+from .metrics import bounded_text
+from .import_formats import fastp_metadata
 from .outcomes import plan
+from . import multiqc
 
 MODES = {'fastp', 'seqkit-stats', 'seqkit-sample', 'seqkit-filter', 'seqkit-extract'}
 
@@ -274,31 +275,27 @@ async def execute(manager, run, metrics, errors):
     completed = {unit['id'] for unit in run['processing']['units'] if unit['state'] == 'completed'}
     manager.update(run, derived_datasets=[entry for entry in pending if entry['unit_id'] in completed], sample_count=len(metrics['samples']))
     if run['mode'] == 'fastp' and value['multiqc'] and completed:
-        manager.stores.subdirectory(run['id'], 'multiqc', exist_ok=True)
         manager.update(run, stage='MultiQC · raw / processed / fastp')
         reports = [directory / record['report'] for unit in run['processing']['units'] if unit['id'] in completed for stage in ('raw_qc','processed_qc') for record in unit.get(stage,[]) if record['state'] == 'completed']
         reports += [directory / 'processing' / identity / 'fastp.json' for identity in sorted(completed)]
-        file_list, config = directory / 'multiqc-inputs.txt', directory / 'multiqc-processing-config.json'
-        if any('\n' in str(path) or '\r' in str(path) for path in reports): raise ValueError('MultiQC report paths cannot contain newlines')
-        file_list.write_text(''.join(str(path)+'\n' for path in reports))
-        save_json(config, {'use_filename_as_sample_name': ['fastp']})
-        code = await manager.command(run, 'multiqc', [run['tools']['multiqc']['executable'], '--file-list', str(file_list), '--outdir', str(directory/'multiqc'), '--force', '--data-format','json','--no-version-check','--dirs','--dirs-depth','3','--fullnames','--config',str(config)], directory)
+        problem = await multiqc.execute(manager, run, reports, options=['--dirs','--dirs-depth','3','--fullnames'], config={'use_filename_as_sample_name':['fastp']})
         if run['id'] in manager.cancelled: return
-        if code or not (directory/'multiqc/multiqc_report.html').is_file(): errors.append(f'MultiQC failed (exit {code}); successful processing is preserved')
+        if problem:
+            errors.append(problem + ' Successful processing is preserved.')
         else:
-            try:
-                structured = directory/'multiqc/multiqc_data/multiqc_data.json'
-                metrics['multiqc'] = await asyncio.to_thread(parse_multiqc, structured)
-                mapping = await asyncio.to_thread(source_mappings, structured)
-                actual = {row['sample'] for row in metrics['multiqc']['rows']}
-                for path in reports:
-                    names = mapping.get(str(path), set()) & actual
-                    report_id = str(path.relative_to(directory))
-                    if len(names) == 1:
-                        row = run['report_input_map'].setdefault(report_id, {'id': report_id, 'source_report': str(path)})
-                        row['multiqc_name'] = next(iter(names))
-                    else:
-                        run['warnings'].append(f'No unique MultiQC source mapping for {report_id}; inspect the original report')
-            except (ValueError,OSError): errors.append('MultiQC structured output unavailable; original report is preserved')
+            metrics['multiqc'] = await multiqc.summary(directory)
+            # Missing/invalid structured data is a report error; an officially
+            # empty/unsupported General Statistics table stays an unavailable view.
+            if metrics['multiqc']['status'] == 'invalid' or not (directory/'multiqc/multiqc_data/multiqc_data.json').exists():
+                errors.append('MultiQC structured output unavailable; original report is preserved')
+            else:
+                try:
+                    for report_id, name in (await multiqc.report_names(directory, reports, metrics['multiqc'])).items():
+                        if name is not None:
+                            row = run['report_input_map'].setdefault(report_id, {'id': report_id, 'source_report': str(directory/report_id)})
+                            row['multiqc_name'] = name
+                        else:
+                            run['warnings'].append(f'No unique MultiQC source mapping for {report_id}; inspect the original report')
+                except (ValueError,OSError): errors.append('MultiQC structured output unavailable; original report is preserved')
     metrics['processing'] = deepcopy(run['processing'])
     await asyncio.to_thread(save_json, directory/'metrics.json', metrics)

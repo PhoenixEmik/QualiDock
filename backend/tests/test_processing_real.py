@@ -329,3 +329,27 @@ def test_measured_streaming_validation_io(tmp_path):
         'observer_note':'Linux uses the actual process-group RSS sampler; managed macOS harness substitutes the denied ps sampler, so its readings are omitted'}
     destination=Path('validation');destination.mkdir(exist_ok=True)
     (destination/'core-processing-io.json').write_text(json.dumps(evidence,indent=2))
+
+
+@pytest.mark.skipif(not all((FASTP,FASTQC,MULTIQC)),reason='Actual fastp, FastQC and MultiQC required')
+@pytest.mark.parametrize('mode',['both','fastp'])
+def test_actual_multiqc_cli_failure_preserves_successful_results(tmp_path,mode):
+    """Inject an invalid flag into the real CLI; never substitute scientific output."""
+    config=settings(tmp_path);paths=sorted(FIXTURE.glob('*.fastq.gz'))
+    original={p:hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+    with TestClient(create_app(config)) as client:
+        auth(client,config)
+        manager=client.app.state.manager;command=manager.command
+        async def invalid_cli(run,tool,argv,directory):
+            if tool=='multiqc':argv=[*argv,'--qualidock-test-invalid-option']
+            return await command(run,tool,argv,directory)
+        manager.command=invalid_cli
+        result=submit(client,mode,paths,{'multiqc':True} if mode=='fastp' else {})
+        assert result['state']=='partial' and 'MultiQC exited with code' in result['error']
+        data=client.get(f"/api/runs/{result['id']}/metrics").json()
+        assert len(data['samples'])==(4 if mode=='fastp' else 2)
+        assert all(client.get(f"/api/runs/{result['id']}/download",params={'path':sample['id']}).status_code==200 for sample in data['samples'])
+        if mode=='fastp':
+            assert len(result['derived_datasets'])==2 and all(d['paired'] for d in result['derived_datasets'])
+            assert result['processing']['units'][0]['output_validation']['pairs'][0]['state']=='passed'
+    assert original=={p:hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}

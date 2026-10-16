@@ -15,11 +15,11 @@ import zipfile
 from .config import Settings
 from .executor import Executor, LocalExecutor
 from .files import FileAccess, FASTQ, PathViolation
-from .metrics import parse_report, parse_multiqc
-from .import_formats import fastp_metadata, source_mappings
+from .metrics import parse_report
+from .import_formats import fastp_metadata
 from .reports import discover, metadata
 from .tools import detect_tool
-from . import processing, datasets
+from . import processing, datasets, multiqc
 from .store import ResultStores, now, save_json
 from .sample_metadata import validate_configuration
 from .outcomes import plan, batches, stop, counts
@@ -464,53 +464,33 @@ class RunManager:
                     if not successful:
                         errors.append("No supported QC reports were produced for MultiQC.")
                     else:
-                        self.stores.subdirectory(run_id, "multiqc", exist_ok=True)
                         self.update(run, stage="MultiQC")
-                        # An explicit list includes only successfully parsed, run-local QC reports.
-                        file_list = directory / "multiqc-inputs.txt"
-                        if any("\n" in str(path) or "\r" in str(path) for path in successful):
-                            raise ValueError("MultiQC report paths cannot contain newlines")
-                        file_list.write_text("".join(str(path) + "\n" for path in successful))
-                        extra_options = []
+                        extra_options, configuration = [], None
                         if imported_fastp:
-                            # fastp defaults to names parsed from upstream commands.
-                            # Use physical report filenames and per-snapshot directories
-                            # to prevent unrelated reports being silently overwritten.
-                            config = directory / 'multiqc-import-config.json'
-                            save_json(config, {'use_filename_as_sample_name':['fastp']})
-                            extra_options = ['--config',str(config),'--dirs','--dirs-depth','1','--fullnames']
-                        if namespaced and not imported_fastp:
+                            # Keep physical report names and snapshot namespaces;
+                            # upstream fastp commands are not source identities.
+                            configuration = {'use_filename_as_sample_name':['fastp']}
+                            extra_options = ['--dirs','--dirs-depth','1','--fullnames']
+                        elif namespaced:
                             multiqc_names = {str(path.relative_to(directory)): path.parent.name + " | " + multiqc_names[str(path.relative_to(directory))] for path in successful}
                             if len(set(multiqc_names.values())) != len(successful):
                                 raise ValueError("MultiQC sample namespaces are ambiguous; individual FastQC results are preserved")
-                        code = await self.command(run, "multiqc", [run["tools"]["multiqc"]["executable"], "--file-list", str(file_list), "--outdir", str(directory / "multiqc"), "--force", "--data-format", "json", "--no-version-check", *extra_options, *(["--dirs", "--dirs-depth", "1"] if namespaced and not imported_fastp else [])], directory)
-                        if code:
-                            errors.append(f"MultiQC exited with code {code}. See analysis log.")
-                        elif not (directory / "multiqc/multiqc_report.html").is_file():
-                            errors.append("MultiQC did not produce an HTML report.")
+                            extra_options = ['--dirs','--dirs-depth','1']
+                        problem = await multiqc.execute(self, run, successful, options=extra_options, config=configuration)
+                        if problem: errors.append(problem)
                 if run_id in self.cancelled:
                     return
-                structured = directory / "multiqc/multiqc_data/multiqc_data.json"
                 if run["mode"] != "fastqc":
-                    if not structured.exists():
-                        metrics["multiqc"] = {"status": "missing", "message": "MultiQC structured JSON was not generated; inspect the log and official report.", "columns": [], "rows": []}
-                    else:
-                        try:
-                            metrics["multiqc"] = await asyncio.to_thread(parse_multiqc, structured)
-                        except (ValueError, OSError, UnicodeError, TypeError) as exc:
-                            metrics["multiqc"] = {"status": "invalid", "message": f"Cannot parse MultiQC General Statistics: {exc}", "columns": [], "rows": []}
+                    metrics['multiqc'] = await multiqc.summary(directory)
                     if metrics["multiqc"]["status"] != "available":
                         run["warnings"].append(metrics["multiqc"]["message"])
                 if run['mode'] != 'fastqc' and metrics.get('multiqc', {}).get('status') == 'available':
                     actual_names = {row['sample'] for row in metrics['multiqc']['rows']}
                     if imported_fastp:
-                        source_names = await asyncio.to_thread(source_mappings,structured)
                         multiqc_names = {}
-                        for path in successful:
-                            report = str(path.relative_to(directory))
-                            names = source_names.get(str(path), set()) & actual_names
-                            if len(names) == 1:
-                                multiqc_names[report] = next(iter(names))
+                        for report, name in (await multiqc.report_names(directory, successful, metrics['multiqc'])).items():
+                            if name is not None:
+                                multiqc_names[report] = name
                             else:
                                 errors.append(f'MultiQC did not provide an unambiguous data-source mapping for {report}')
                     for report, name in multiqc_names.items():
