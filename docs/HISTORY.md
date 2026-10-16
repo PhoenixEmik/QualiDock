@@ -1,6 +1,6 @@
 # Bounded history and live updates (#11)
 
-The application now reads `GET /api/history` for a visible Analyses page only,
+The application now reads `GET /api/history` for a visible Results page only,
 using server-side name/ID search, state/workflow filters and creation/completion
 sorting. A page contains 25 summaries (API maximum 100), actual input counts,
 states and timestamps; it excludes input paths, grouping, tool arguments, artifacts
@@ -16,8 +16,13 @@ existing five-second polling fallback, and successful reconnection stops polling
 The frontend no longer retrieves all full manifests for browsing or live updates.
 
 Compatibility is additive: `GET /api/runs` still returns full histories, and the
-default `/api/events` retains legacy `runs` events for older clients. Those legacy
-paths remain expensive by design during migration. Authentication, origin/CSRF
+default `/api/events` retains legacy `runs` events for older clients. They remain an explicit compatibility contract documented here and exercised by
+`benchmark-history.py`, its browser payload measurement and API regressions. No
+supported-client inventory establishes that external callers have migrated.
+They do not run on the current frontend path and are only expensive when requested;
+breaking that contract would save little runtime code. This cleanup retains them
+rather than deleting tests or guessing that no external clients exist. New clients
+should use bounded history and revision events. Authentication, origin/CSRF
 checks, URL prefixes and persistence/ownership locks apply unchanged. No database
 or manifest migration was introduced. An optional `revision` query on `/api/history`
 rejects changed snapshots with HTTP 409; the UI fetches a current window on refresh

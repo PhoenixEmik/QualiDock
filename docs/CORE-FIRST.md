@@ -156,3 +156,36 @@ were not implemented; the subsequent enhancement is documented in PROCESSING.md.
 Immutable-evidence scan caching and cross-analysis trend dashboards remain outside
 the implemented scope. Report sandbox limitations and safe download fallbacks
 remain. No OOD/PBS changes or deployment work were performed.
+
+## Focused cleanup audit — 2026-10-16
+
+Baseline: `9d7aa49`, after the paired-processing enhancement. This is a bounded
+cleanup, separate from the earlier 40.5% reduction above.
+
+| Decision | Evidence and action |
+| --- | --- |
+| Remove | Release notes still advertised delivery/release review and Kraken2; corrected. The unused client-side `analysisManagement.ts` had only test callers; deleted with that dedicated test. Its filter/sort assertions now exercise the actual backend history contract. One unused Python import was removed. |
+| Consolidate | General QC and fastp duplicated MultiQC file lists, argv, configuration, JSON reads and unique source-name matching. `multiqc.py` shares only those operations; input collection, naming depth/fullnames, expected samples, mapping severity and partial-result policy remain explicit in each caller. |
+| Consolidate | QC/processing share optional relationship review in the existing SampleEditor module. App stores a single metrics response and uses one session reset, including derived authorities; reconciliation is calculated once. Results stores one history response/query, without a filter-reset effect or client-side duplicate filtering. |
+| Retain | LocalExecutor, manifest versions, output locks, validators, report sandbox, scientific fixtures and all supported core workflows. No replacement job manager, database, form framework or dependency. |
+| Retain | Documented full-list API and default legacy SSE, still used by repository benchmarks/tests and potentially external clients; the frontend exclusively uses paginated/revision paths. See HISTORY.md. |
+| Defer | Artifact registry caching or direct-output rewrites: no measured evidence justifies their additional security/lifecycle complexity. Large-input/shared-filesystem work remains issue #5. |
+
+The local artifact observation used isolated synthetic directory layouts containing
+copies of genuine FastQC report text, never FASTQ copies or invented metrics. Three
+instrumented scans per layout measured a median **2.72 ms for 10 report files** and
+**155.33 ms for 1,000 report files**, including manifest registration/write. Path.stat
+calls were 58–61 and 4,018–4,021 respectively. Twenty repeated history/list/directory
+reads triggered **zero** artifact scans. Scans occur at FastQC batch completion,
+analysis finalization and explicit integrity-validation completion/cancellation.
+These are local macOS metadata observations, with instrumentation overhead, not
+NFS/Lustre or large-FASTQ acceptance. The existing publication/containment rules
+remain unchanged. The observation and one-shot reproduction script are retained
+locally under ignored `validation/cleanup/`; this is not a new benchmark framework.
+
+Issues #24/#25 were closed as intentionally not planned, with their original
+proposals retained. Issue #7 now separates standalone release acceptance from
+optional site integration and measured-performance claims. No tag or release was
+created. Historical scientific analyses, archived catalogs and validation evidence
+were not deleted. RELEASING.md and VALIDATION.md now describe the current scope;
+PHASE2.md is clearly a historical record with its meaningful original evidence.

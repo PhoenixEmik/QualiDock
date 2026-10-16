@@ -64,3 +64,20 @@ def test_invalidation_event_is_small_and_reconnect_always_refreshes(setup):
   assert 'event: revision' in body and '"revision": 105' in body and len(body)<100
  legacy=asyncio.run(first('legacy'))
  assert 'event: runs' in legacy and '/synthetic/' in legacy
+
+
+def test_visible_history_sorting_and_filters_use_server_contract():
+ # Synthetic metadata replaces the deleted unused client-side filter's cases.
+ rows={r['id']:r for r in [
+  {'id':'b','name':'Pilot 2','state':'completed','mode':'both','created_at':'2026-01-02','finished_at':'2026-01-04'},
+  {'id':'a','name':'Pilot 1','state':'failed','mode':'fastqc','created_at':'2026-01-01','finished_at':'2026-01-03'},
+  {'id':'c','name':'Other','state':'queued','mode':'fastqc','created_at':'2026-01-03','finished_at':None},
+ ]}
+ for filters,expected in [
+  ({'search':'pilot'},['b','a']),
+  ({'state':'failed','mode':'fastqc','order':'created-asc'},['a']),
+  ({'mode':'both','order':'finished-asc'},['b']),
+  ({'order':'finished-desc'},['b','a','c']),
+  ({'order':'created-asc'},['a','b','c']),
+ ]:
+  assert [r['id'] for r in page(rows,0,**filters)['items']]==expected

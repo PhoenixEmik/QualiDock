@@ -91,6 +91,23 @@ def test_select_fastqs_process_compare_download_and_restart(workspace,browser):
     assert {r['sha256'] for r in downstream['input_provenance']}=={d['sha256'] for d in run['derived_datasets']}
     assert not list((workspace.settings.output/downstream['id']/'inputs').glob('*.fastq*'))
     playwright.expect(page.locator('.analysis-detail-heading .state')).to_have_text('completed',timeout=20000)
+    # Logout must clear derived authorities as well as visible file selection.
+    page.get_by_role('button',name='Sign out',exact=True).click()
+    page.get_by_label('Session token',exact=True).fill(workspace.settings.token)
+    page.get_by_role('button',name='Open workspace',exact=True).click()
+    page.get_by_role('button',name='Read Processing',exact=True).click()
+    playwright.expect(page.get_by_text('0 FASTQ files selected',exact=True)).to_be_visible()
+    page.get_by_role('button',name='Browse & select FASTQs',exact=True).click()
+    page.get_by_role('button',name='Files',exact=True).click()
+    page.get_by_label('Select all visible input files').check()
+    page.get_by_role('button',name='Read Processing',exact=True).click()
+    page.get_by_label('Operation',exact=True).select_option('seqkit-stats')
+    with page.expect_response(lambda r:r.request.method=='POST' and r.url.endswith('/api/runs')) as created:
+        page.get_by_role('button',name='Run processing',exact=True).click()
+    assert created.value.status==201,created.value.text()
+    assert not created.value.request.post_data_json.get('input_datasets')
+    with workspace.api() as api: statistics=workspace.finish(api,created.value.json())
+    assert all(unit['statistics'][0]['num_seqs']=='400' for unit in statistics['processing']['units'])
     page.close()
 
 

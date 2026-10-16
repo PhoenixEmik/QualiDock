@@ -93,7 +93,7 @@ See [the simplification and safe legacy export guide](docs/CORE-FIRST.md).
 | `QUALIDOCK_FRONTEND` | `<checkout>/frontend/dist` | Built frontend directory |
 | `QUALIDOCK_TOKEN` | Random per session | Shared session secret; supply through a protected environment |
 | `QUALIDOCK_CPUS` | Detected capacity | CPU upper bound, also bounded by affinity, cgroup and scheduler variables |
-| `QUALIDOCK_MEMORY_MB` | 4096, bounded by host/cgroup memory | Total session memory budget; set explicitly to the PBS allocation |
+| `QUALIDOCK_MEMORY_MB` | 4096, bounded by host/cgroup memory | Total session memory budget; set explicitly to the host/allocation budget |
 | `QUALIDOCK_PREFIX` | Empty | External URL prefix, e.g. `/node/compute.example/8765` |
 | `QUALIDOCK_SECURE_COOKIE` | `0` | Set to `1` when the external connection uses HTTPS |
 | `QUALIDOCK_FASTQC` | `fastqc` | Executable name or absolute path |
