@@ -88,3 +88,11 @@ def test_benchmark_rejects_misplaced_parameters(tmp_path):
     args=benchmark.parser().parse_args(['--input','/not/read','--output',str(tmp_path/'evidence'),'--mode','fastqc','--count','5'])
     with pytest.raises(ValueError,match='count'): benchmark.processing_options(args)
     assert not args.output.exists()
+
+
+def test_latency_retention_is_bounded_without_losing_aggregates():
+    import time
+    evidence={'api_requests':[]}
+    for index in range(2100): benchmark.latency(evidence,'run',time.monotonic(),500 if index==0 else 200)
+    assert len(evidence['api_requests'])==2000
+    assert evidence['api_summary']['run']['count']==2100 and evidence['api_summary']['run']['errors']==1

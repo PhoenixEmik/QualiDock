@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import math
 import os
 import resource
 import subprocess
@@ -51,6 +52,16 @@ def filesystem(path):
     return {'type': result.stdout.strip() if result.returncode == 0 else None}
 
 
+def latency(evidence, endpoint, started, status):
+    seconds=time.monotonic()-started
+    summary=evidence.setdefault('api_summary',{}).setdefault(endpoint,{'count':0,'total_seconds':0,'max_seconds':0,'errors':0})
+    summary.update(count=summary['count']+1,total_seconds=summary['total_seconds']+seconds,
+                   max_seconds=max(summary['max_seconds'],seconds),errors=summary['errors']+int(status>=400))
+    evidence['api_requests'].append({'endpoint':endpoint,'seconds':seconds,'status':status})
+    # Long private benchmarks retain bounded recent detail and complete aggregates.
+    if len(evidence['api_requests'])>2000: evidence['api_requests'].pop(0)
+
+
 def parser():
     result=argparse.ArgumentParser(description=__doc__)
     result.add_argument('--input',type=Path,nargs='+',required=True)
@@ -97,7 +108,7 @@ def main(args):
     if os.geteuid()==0:
         raise SystemExit('Run under an ordinary Unix account inside the intended allocation.')
     args.output=args.output.expanduser().absolute()
-    if args.timeout<=0 or args.cancel_after is not None and args.cancel_after<0:
+    if not math.isfinite(args.timeout) or args.timeout<=0 or args.cancel_after is not None and (not math.isfinite(args.cancel_after) or args.cancel_after<0):
         raise SystemExit('Timeout must be positive and cancel-after must be nonnegative.')
     files=[path.expanduser().resolve(strict=True) for path in args.input]
     capacity, memory=available_cpus(), available_memory_mb()
@@ -128,7 +139,7 @@ def main(args):
             while True:
                 tick=time.monotonic()
                 response=client.get(f'/api/runs/{run_id}')
-                evidence['api_requests'].append({'endpoint':'run','seconds':time.monotonic()-tick,'status':response.status_code})
+                latency(evidence,'run',tick,response.status_code)
                 response.raise_for_status(); run=response.json()
                 if not evidence['stages'] or evidence['stages'][-1]['stage']!=run['stage']:
                     evidence['stages'].append({'stage':run['stage'],'elapsed_seconds':time.monotonic()-started})
@@ -140,7 +151,7 @@ def main(args):
                 if run['state'] not in {'queued','running'}: break
                 for name,endpoint,params in [('logs',f'/api/runs/{run_id}/logs',{'offset':log_offset}),('files','/api/files',{'path':str(files[0].parent),'limit':10,**({'snapshot':snapshot} if snapshot else {})})]:
                     tick=time.monotonic(); response=client.get(endpoint,params=params)
-                    evidence['api_requests'].append({'endpoint':name,'seconds':time.monotonic()-tick,'status':response.status_code})
+                    latency(evidence,name,tick,response.status_code)
                     if response.status_code==200:
                         value=response.json()
                         if name=='logs': log_offset=value['offset']

@@ -38,6 +38,9 @@ logs and browsing while tools run. CPU/I/O observations can miss final counters
 from short-lived processes; RSS is a sampled high-water mark, not an exact peak.
 Linux process I/O counters do not measure NFS/Lustre network throughput. Pair
 those records with site-approved filesystem monitoring when available.
+API timings retain the most recent 2,000 requests plus complete count, error,
+total-time and maximum-time aggregates per endpoint, bounding long-run monitoring
+memory. Timeout/cancellation delays must be finite.
 
 Input size, mtime, inode and device are checked before/after. `--hash-inputs` adds
 streamed SHA-256 validation and two complete source reads; use it only when that
