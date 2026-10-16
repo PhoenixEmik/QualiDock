@@ -8,8 +8,8 @@ remain authoritative and compatible. No deployment/scheduler work is included.
 | Issue | Status | Acceptance / evidence |
 |---|---|---|
 | [#20](https://github.com/PhoenixEmik/QualiDock/issues/20) | Complete; issue closed | [Project model, API, storage decision, backup and rollback](PROJECTS.md). Fully green [CI 38855524020](https://github.com/PhoenixEmik/QualiDock/actions/runs/38855524020), commit `2117168`: backend/frontend/build, genuine QC/tools, Linux resources and 42 browser cases per browser. |
-| [#21](https://github.com/PhoenixEmik/QualiDock/issues/21) | Implemented; validation in progress | Project Workspace, metadata CRUD/imports, audited file-association corrections and source QC/report drill-down. Browser acceptance is required before closure. |
-| [#22](https://github.com/PhoenixEmik/QualiDock/issues/22) | Pending #20/#21 | Explicit batch planning, fingerprint-based reuse and bounded existing executors. |
+| [#21](https://github.com/PhoenixEmik/QualiDock/issues/21) | Complete; issue closed | Project Workspace, metadata CRUD/imports, audited file-association corrections and source QC/report drill-down. Fully green [CI 38861150941](https://github.com/PhoenixEmik/QualiDock/actions/runs/38861150941), `291d6ef`; 48 browser cases per target. |
+| [#22](https://github.com/PhoenixEmik/QualiDock/issues/22) | In progress | Explicit batch planning, fingerprint-based reuse and bounded existing executors. |
 | [#23](https://github.com/PhoenixEmik/QualiDock/issues/23) | Pending project/metric provenance | Comparable cohorts only; exact source metrics and declared outlier rules. |
 | [#24](https://github.com/PhoenixEmik/QualiDock/issues/24) | Pending project/release foundations | Allowlisted, approved, verified destination copies; no source writes or unsafe overwrites. Actual shared-filesystem benchmarking remains dependent on authorized storage/data. |
 | [#25](https://github.com/PhoenixEmik/QualiDock/issues/25) | Pending controlled delivery | Append-only lifecycle reporting and advisory retention; no automatic deletion. |
@@ -43,3 +43,11 @@ TypeScript/production build passed. New real-browser cases cover project CRUD,
 confirmed/corrected associations, original QC/reports, captured release evidence,
 server restart, 120-row import/pagination, same-named project samples, keyboard and
 390px layout. Those cases must pass in CI before #21 is marked complete.
+
+Accepted #21 CI at `291d6ef`: **283 backend tests passed**, with 11
+missing-tool cases covered by provisioned actual-tool jobs; **141 frontend tests**
+and production build passed. Actual FastQC/MultiQC compatibility, optional Kraken2
+and Linux resource checks passed. **48 browser cases passed per matrix target**,
+including project relationship persistence and original manifest/source preservation.
+The initial failed select-label regression was fixed without skipping tests.
+The association audit race regression passed in the 36-test focused project suite.
