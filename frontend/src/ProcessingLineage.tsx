@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from "react";
-import { api, modeLabel } from "./api";
+import { api, modeLabel, url } from "./api";
 import type { DetailTab } from "./types";
 interface Source {
   path: string;
@@ -198,6 +198,13 @@ export default function ProcessingLineage({
                     {output.read || "independent read"} · unit {output.unit_id}{" "}
                     · {output.records} reads / {output.bases} bases
                     <small className="mono">Source: {output.source}</small>
+                    <a
+                      href={url(
+                        `api/runs/${node.id}/download?path=${encodeURIComponent(output.path)}`,
+                      )}
+                    >
+                      Download recorded FASTQ {output.id}
+                    </a>
                   </li>
                 ))}
               </ul>

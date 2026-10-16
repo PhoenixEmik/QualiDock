@@ -37,6 +37,9 @@ def test_genuine_chain_navigation_restart_and_missing_parent(workspace,browser):
     assert '"count": 7' in panel.locator('pre').nth(1).inner_text()
     assert len(data['nodes'][2]['parents'])==2
     assert {r['read'] for r in data['nodes'][2]['inputs']}=={'R1','R2'}
+    with page.expect_download() as downloaded:
+        panel.get_by_role('link',name='Download recorded FASTQ u0001:1',exact=True).first.click()
+    assert hashlib.sha256(Path(downloaded.value.path()).read_bytes()).hexdigest()==first['derived_datasets'][0]['sha256']
     page.set_viewport_size({'width':390,'height':844})
     page.wait_for_function('() => document.documentElement.scrollWidth<=innerWidth+1')
     Path('validation').mkdir(exist_ok=True)
