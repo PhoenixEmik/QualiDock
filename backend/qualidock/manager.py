@@ -359,10 +359,7 @@ class RunManager:
         for batch in batches(records):
             if run_id in self.cancelled:
                 break
-            destination = directory / batch[0]['output_directory']
-            destination.mkdir(parents=True, exist_ok=True)
-            if destination.is_symlink() or destination.resolve() != destination or not destination.is_relative_to(directory):
-                raise PathViolation('FastQC output namespace is unavailable or escaped its run directory')
+            destination = self.stores.subdirectory(run_id, batch[0]['output_directory'], exist_ok=True)
             for record in batch:
                 record.update(state='unknown', error='Submitted to FastQC; individual start is not reported by the tool')
             completed = counts(records)['completed']
@@ -487,6 +484,7 @@ class RunManager:
                     if not successful:
                         errors.append("No supported QC reports were produced for MultiQC.")
                     else:
+                        self.stores.subdirectory(run_id, "multiqc", exist_ok=True)
                         self.update(run, stage="MultiQC")
                         # An explicit list includes only successfully parsed, run-local QC reports.
                         file_list = directory / "multiqc-inputs.txt"

@@ -125,7 +125,7 @@ export default function ProcessingForm({
                   update({ quality_filtering: e.target.checked })
                 }
               />{" "}
-              Quality filtering
+              Quality and N-base filtering
             </label>
             <label>
               <input
@@ -239,7 +239,8 @@ export default function ProcessingForm({
                 Generate combined MultiQC report
               </label>
               <p className="inline-note">
-                Phred+33 input. Poly-G trimming and duplication estimation are
+                Phred+33 input. Quality filtering includes a maximum of 5 N
+                bases per read. Poly-G trimming and duplication estimation are
                 disabled; no deduplication, merging, or base correction is
                 performed.
               </p>

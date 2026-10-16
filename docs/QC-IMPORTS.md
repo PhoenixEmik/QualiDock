@@ -5,7 +5,7 @@
 - FastQC `*_fastqc.zip` or extracted `fastqc_data.txt`, with existing summary/HTML companions.
 - **fastp JSON** with `summary.before_filtering`, `summary.after_filtering`, integer `total_reads`/`total_bases`, `command` and `read1_before_filtering`. Reported `summary.fastp_version` is retained; old reports without that field explicitly have an unknown version. Other JSON schemas, including unsupported fasterp variants, are not treated as fastp.
 
-This imports reports produced elsewhere. QualiDock does **not** run fastp, trim reads or execute a report's command string. A fastp JSON describes an upstream processing operation, possibly multiple reads; it is not a new FASTQ result or evidence of biological sample identity. Before/after-filtering definitions remain distinct.
+This imports reports produced elsewhere. **Import mode** does not run fastp, trim reads or execute a report's command string. Native fastp execution is a separate, explicitly selected [Read Processing operation](PROCESSING.md). A fastp JSON describes an upstream processing operation, possibly multiple reads; it is not a new FASTQ result or evidence of biological sample identity. Before/after-filtering definitions remain distinct.
 
 Select `fastp.json` / `*.fastp.json` in Files view, or enter a results directory in New Analysis. Directory discovery accepts valid fastp JSON with other filenames too. Unknown inputs are excluded with a bounded summary (first 20 reasons); explicitly selecting an unsupported report fails clearly. Only recognized reports are snapshotted and passed to MultiQC. Limits remain 500 reports, 20,000 scanned entries, 64 directory levels and 512 MiB total imports; per-report limits and symlink/containment checks remain enforced.
 

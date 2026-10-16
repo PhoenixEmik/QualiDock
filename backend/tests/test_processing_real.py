@@ -40,12 +40,17 @@ def submit(client,mode,paths,options=None):
 def test_actual_fastp_sources_provenance_and_restart(tmp_path,paired):
     config=settings(tmp_path)
     paths=sorted(FIXTURE.glob('*.fastq.gz'))[:2 if paired else 1]
+    if not paired:
+        # Genuine fixture bytes, adversarial filename; never a fabricated tool result.
+        odd=tmp_path/'sample $(touch INJECTED) ;.fastq.gz'
+        shutil.copyfile(paths[0],odd);paths=[odd]
     original={p:hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
     with TestClient(create_app(config)) as client:
         auth(client,config)
         run=submit(client,'fastp',paths,{'compare_qc':False,'gzip':paired})
         assert run['state']=='completed',client.get(f"/api/runs/{run['id']}/logs").json()
         assert len(run['processing']['units'])==1
+        assert not (config.output/run['id']/'INJECTED').exists()
         unit=run['processing']['units'][0]
         official=json.loads((config.output/run['id']/f"processing/{unit['id']}/fastp.json").read_text())
         assert unit['fastp']['summary']==official['summary']
@@ -163,3 +168,18 @@ def test_seqkit_exact_extraction_and_length_boundaries(tmp_path):
         assert filtered['state']=='completed'
         with gzip.open(source,'rt') as stream: expected=sum(len(line.strip())==151 for index,line in enumerate(stream) if index%4==1)
         assert filtered['derived_datasets'][0]['records']==expected
+
+
+@pytest.mark.skipif(not FASTP,reason='Actual fastp unavailable')
+def test_fastp_quality_toggle_controls_n_filter(tmp_path):
+    # Explicit synthetic edge case, actual fastp reports and FASTQ outputs.
+    source=tmp_path/'n_filter.fastq';source.write_text('@n_filter\n'+'N'*20+'\n+\n'+'I'*20+'\n')
+    config=settings(tmp_path)
+    with TestClient(create_app(config)) as client:
+        auth(client,config)
+        filtered=submit(client,'fastp',[source],{'compare_qc':False,'adapter_trimming':False})
+        retained=submit(client,'fastp',[source],{'compare_qc':False,'adapter_trimming':False,'quality_filtering':False})
+        assert filtered['state']==retained['state']=='completed'
+        assert filtered['derived_datasets'][0]['records']==0
+        assert retained['derived_datasets'][0]['records']==1
+        assert source.read_text()=='@n_filter\n'+'N'*20+'\n+\n'+'I'*20+'\n'

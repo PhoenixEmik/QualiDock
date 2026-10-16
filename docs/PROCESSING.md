@@ -24,7 +24,8 @@ FASTQs are separate registered datasets, not files discovered indiscriminately.
 Incomplete/cancelled outputs are not published as successful datasets.
 
 Existing QC modes, manifests, report IDs and secure HTML previews are preserved.
-Administrative catalog services are not dependencies of read processing setup.
+Processing setup requires no project or release records. Startup retains the
+existing catalog compatibility guard and result-store ownership locks.
 
 ## Running operations
 
@@ -34,7 +35,9 @@ minimum length 15 bp, gzip output and FastQC before/after. The optional advanced
 section controls these thresholds, threads, output root and combined MultiQC.
 Only Phred+33 input is supported for native fastp in this phase. QualiDock disables
 poly-G trimming, duplication estimation, deduplication, merging and base correction;
-these are not hidden processing steps. fastp's ordinary N filtering remains active.
+these are not hidden processing steps. Quality filtering also applies fastp's
+5-N-base limit per read. Disabling quality filtering disables the N-base filter
+as well; length filtering remains active.
 
 Each confirmed pair is processed together. Single/unassigned reads are processed
 individually. Pair ID/order verification uses the existing full FASTQ scanner,
@@ -108,3 +111,27 @@ tools locally; `QUALIDOCK_REQUIRE_PROCESSING_TESTS=1` makes missing tools fatal 
 acceptance jobs. CI also runs the existing QC, report/security, project/release,
 resource and browser regressions. Synthetic malformed data is clearly test-only;
 production code never fabricates metrics.
+
+
+## Known limits and follow-up
+
+- Processing is scoped to files in one analysis. Existing project, release and
+  cross-run features remain available; this phase adds no delivery/approval work.
+- Full source/output validation adds sequential disk reads and checksum work.
+  It stays outside the web process and is cancellable, but is not a throughput
+  benchmark for very large sequencing runs or remote filesystems.
+- fastp supports explicit Phred+33 input only. This phase does not add UMI handling,
+  deduplication, correction, mate repair or lane concatenation.
+- SeqKit outputs remain independent file datasets. Pair-preserving filtering and
+  exact-count paired subsampling would require a separate, tested feature.
+- Existing asset bundle size warning remains. No new chart library or component
+  framework is introduced; bundle splitting can be addressed independently.
+
+Future work should prioritize measured throughput and a browse-first action for
+starting a new operation from a registered derived dataset. Current before/after
+FastQC runs already consume registered processing outputs internally without
+copying inputs or granting general filesystem access to output roots.
+
+Tool behavior references: [fastp options](https://github.com/OpenGene/fastp),
+[fastp filtering implementation](https://github.com/OpenGene/fastp/blob/v1.4.0/src/filter.cpp),
+and [SeqKit usage](https://bioinf.shenwei.me/seqkit/usage/).

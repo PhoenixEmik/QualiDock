@@ -71,3 +71,32 @@ def test_processing_cancel_and_restart(setup):
         restored=client.get('/api/runs/'+identity).json()
         assert restored['state']=='interrupted' and not restored['derived_datasets']
         assert restored['processing']['units'][0]['state']=='interrupted'
+
+
+@pytest.mark.parametrize('namespace',['processing/private','processing/u0001','fastqc/raw'])
+def test_tool_namespace_rejects_symlinks_before_creating_directories(tmp_path,namespace):
+    from qualidock.store import ResultStores
+    from qualidock.files import PathViolation
+    stores=ResultStores(tmp_path/'results',[]);stores.start()
+    try:
+        run_id='f'*32;root=stores.allocate(run_id)
+        outside=tmp_path/'outside';outside.mkdir()
+        (root/namespace.split('/')[0]).symlink_to(outside,target_is_directory=True)
+        with pytest.raises(PathViolation):stores.subdirectory(run_id,namespace,exist_ok=True)
+        assert list(outside.iterdir())==[]
+    finally:stores.close()
+
+
+def test_tool_namespace_rejects_traversal_and_preserves_collisions(tmp_path):
+    from qualidock.store import ResultStores
+    from qualidock.files import PathViolation
+    stores=ResultStores(tmp_path/'results',[]);stores.start()
+    try:
+        run_id='e'*32;stores.allocate(run_id)
+        for namespace in ('../outside',str(tmp_path/'outside'),'.'):
+            with pytest.raises(PathViolation):stores.subdirectory(run_id,namespace)
+        unit=stores.subdirectory(run_id,'processing/u0001')
+        marker=unit/'existing.txt';marker.write_text('preserve')
+        with pytest.raises(FileExistsError):stores.subdirectory(run_id,'processing/u0001')
+        assert marker.read_text()=='preserve'
+    finally:stores.close()

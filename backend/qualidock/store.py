@@ -103,3 +103,15 @@ class ResultStores:
         if not re.fullmatch('[a-f0-9]{32}', run_id) or directory.is_symlink() or not directory.is_dir() or directory.resolve(strict=True) != directory or directory.stat().st_uid != os.getuid():
             raise PathViolation('Result directory is unavailable')
         return directory
+
+    def subdirectory(self, run_id, relative, *, exist_ok=False):
+        """Validate a tool namespace before creating anything beneath its owned run."""
+        root = self.directory(run_id)
+        relative = Path(relative)
+        path = root / relative
+        if relative.is_absolute() or '..' in relative.parts or path == root or path.resolve() != path or not path.is_relative_to(root):
+            raise PathViolation('Tool output namespace contains a symlink or escapes its run directory')
+        path.mkdir(mode=0o700, parents=True, exist_ok=exist_ok)
+        if path.resolve(strict=True) != path or not path.is_dir():
+            raise PathViolation('Tool output namespace changed during creation')
+        return path

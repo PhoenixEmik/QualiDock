@@ -92,8 +92,7 @@ async def validate(manager, run, files, pairs, name):
     """Reuse the bounded scanner in a cancellable, resource-governed subprocess."""
     from .manager import save_json
     directory = manager.directory(run['id'])
-    private = directory / 'processing/private'
-    private.mkdir(parents=True, exist_ok=True)
+    private = manager.stores.subdirectory(run['id'], 'processing/private', exist_ok=True)
     config, output = private / f'{name}-config.json', private / f'{name}-validation.json'
     entries = [{'id': f'f{index}', 'path': str(path), 'snapshot': snapshot(path.stat())} for index, path in enumerate(files)]
     await asyncio.to_thread(save_json, config, {'mode': 'full', 'quick_reads': 10000, 'files': entries, 'pairs': pairs})
@@ -107,7 +106,7 @@ def fastp_command(executable, inputs, outputs, destination, threads, value):
     argv = [executable, '--in1', str(inputs[0]), '--out1', str(outputs[0]), '--thread', str(threads),
             '--json', str(destination / 'fastp.json'), '--html', str(destination / 'fastp.html'),
             '--length_required', str(value['min_length']), '--qualified_quality_phred', str(value['qualified_quality']),
-            '--unqualified_percent_limit', str(value['unqualified_percent']), '--dont_eval_duplication', '--disable_trim_poly_g', '--dont_overwrite']
+            '--unqualified_percent_limit', str(value['unqualified_percent']), '--n_base_limit', '5', '--dont_eval_duplication', '--disable_trim_poly_g', '--dont_overwrite']
     if len(inputs) == 2:
         argv += ['--in2', str(inputs[1]), '--out2', str(outputs[1])]
         if value['adapter_trimming']: argv += ['--detect_adapter_for_pe']
@@ -150,8 +149,7 @@ async def execute(manager, run, metrics, errors):
             await asyncio.to_thread(manager.checked_inputs, run)
             unit.update(state='running')
             manager.update(run, stage=f"{run['mode']} · {unit['id']}")
-            destination = directory / 'processing' / unit['id']
-            destination.mkdir(mode=0o700)
+            destination = manager.stores.subdirectory(run['id'], 'processing/' + unit['id'])
             source = [Path(path) for path in unit['inputs']]
             raw_records = []
             if run['mode'] == 'fastp' and value['compare_qc']:
@@ -166,7 +164,7 @@ async def execute(manager, run, metrics, errors):
             suffix = '.fastq.gz' if value['gzip'] else '.fastq'
             outputs = [destination / ((f'processed_R{index+1}' if len(source) == 2 else 'processed') + suffix) for index in range(len(source))]
             if run['mode'] == 'seqkit-stats': outputs = [destination / 'stats.tsv']
-            ids = directory / 'processing/private/identifiers.txt'
+            ids = manager.stores.subdirectory(run['id'], 'processing/private', exist_ok=True) / 'identifiers.txt'
             if run['mode'] == 'seqkit-extract': ids.write_text('\n'.join(value['identifiers']) + '\n')
             tool = 'fastp' if run['mode'] == 'fastp' else 'seqkit'
             argv = fastp_command(run['tools'][tool]['executable'], source, outputs, destination, run['threads'], value) if tool == 'fastp' else seqkit_command(run['tools'][tool]['executable'], run['mode'], source[0], outputs[0], run['threads'], value, ids)
@@ -219,6 +217,7 @@ async def execute(manager, run, metrics, errors):
     completed = {unit['id'] for unit in run['processing']['units'] if unit['state'] == 'completed'}
     manager.update(run, derived_datasets=[entry for entry in pending if entry['unit_id'] in completed], sample_count=len(metrics['samples']))
     if run['mode'] == 'fastp' and value['multiqc'] and completed:
+        manager.stores.subdirectory(run['id'], 'multiqc', exist_ok=True)
         manager.update(run, stage='MultiQC · raw / processed / fastp')
         reports = [directory / record['report'] for unit in run['processing']['units'] if unit['id'] in completed for stage in ('raw_qc','processed_qc') for record in unit.get(stage,[]) if record['state'] == 'completed']
         reports += [directory / 'processing' / identity / 'fastp.json' for identity in sorted(completed)]

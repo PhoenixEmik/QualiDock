@@ -1,12 +1,12 @@
 # QualiDock
 
-A single-user sequencing QC workspace for Linux workstations and HPC compute nodes. Browse existing FASTQ files, run FastQC and MultiQC, inspect native interactive charts, preview official HTML reports, and download persistent results.
+A single-user sequencing QC workspace for Linux workstations and HPC compute nodes. Browse existing FASTQ files, run FastQC and MultiQC, process reads with fastp or focused SeqKit utilities, inspect native charts and before/after QC, and download persistent reports and derived datasets.
 
 **Status: v0.1 development, not an accepted release.** Standalone Linux and an HPC deployment through Open OnDemand must pass end-to-end acceptance before tagging v0.1.0. See [validation](docs/VALIDATION.md).
 
 ## Run locally
 
-Requirements: Linux, Python 3.11+, Node.js 22+, Java, FastQC **0.13.0** (also compatible with 0.12.1), and MultiQC 1.25+ (below 2). Install QC tools through your site's modules or a dedicated Bioconda environment. Keep that environment on `PATH` when starting QualiDock.
+Requirements: Linux, Python 3.11+, Node.js 22+, Java, FastQC **0.13.0** (also compatible with 0.12.1), and MultiQC 1.25+ (below 2). Install QC tools through your site's modules or a dedicated Bioconda environment. Keep that environment on `PATH` when starting QualiDock. Optional read processing uses fastp 0.23–1.x and SeqKit 2.6–2.x; see [native processing, defaults and provenance](docs/PROCESSING.md). Missing optional tools do not prevent existing QC workflows.
 
 ```bash
 python3 -m venv .venv
@@ -37,7 +37,9 @@ synthetic multi-lane, manual-pairing, QC-profile and 24-read cohort scenarios un
 ## Workspace
 
 - **Workspace:** browse connected storage, navigate directories, and select inputs. Switch between **Samples** (grouped detected read pairs) and **Files** (individual files). Incomplete pairs and unrecognized names remain available. Search covers currently loaded sample names and filenames; load more to include additional entries.
-- **Analyses:** find running, queued, completed, failed, partial, interrupted, or cancelled runs. Open an analysis for **Overview & logs**, **QC metrics**, and **Reports**. The UI displays the actual job state and stage, without estimated progress percentages.
+- **QC & Analysis:** configure FastQC-only, combined FastQC/MultiQC, or existing-report MultiQC runs.
+- **Read Processing:** execute fastp, SeqKit statistics, seeded fraction sampling, length filtering or exact read-ID extraction. Select FASTQs using the existing browser; advanced settings remain optional.
+- **Results:** find running, queued, completed, failed, partial, interrupted, or cancelled runs. Open an analysis for **Overview & logs**, **QC metrics**, and **Reports**. The UI displays the actual job state and stage, without estimated progress percentages.
 
 Use **New analysis** in the Workspace, or configure the current selection, to choose FastQC + MultiQC, FastQC only, or MultiQC only and set a bounded thread count. Selecting a confirmed pair in Samples includes both mates, even if directory pagination splits them. Files mode supports individual-read selection; partial selections remain visible when switching views.
 
@@ -47,7 +49,7 @@ Each analysis retains native per-base quality boxplots, mean quality, GC distrib
 
 QC Metrics includes clickable module statuses, optional explanatory notes, paged Raw Data tables and exact CSV/TSV exports. New analyses with confirmed, persisted R1/R2 relationships can compare reported quality and compatible QC profiles. Incompatible bins stay on separate original axes, and old/unpaired results remain individually accessible. See [native FastQC behavior and comparison rules](docs/NATIVE-FASTQC.md).
 
-New analysis supports manual pair review/correction, single-end assignments and sample/lane grouping. Choose a persistent output location from configured roots, then rename or reopen a saved configuration from Analyses. Grouping never merges FASTQ files or QC distributions. See [sample and analysis management](docs/SAMPLE-MANAGEMENT.md) for output-root configuration, locking, API additions and compatibility.
+New analysis supports manual pair review/correction, single-end assignments and sample/lane grouping. Choose a persistent output location from configured roots, then rename or reopen a saved configuration from Results. Grouping never merges FASTQ files or QC distributions. See [sample and analysis management](docs/SAMPLE-MANAGEMENT.md) for output-root configuration, locking, API additions and compatibility.
 
 QC Metrics includes a native **Overview** with sortable/exportable MultiQC General Statistics and a clickable QC status heatmap, existing **Sample Details**, and **Compare Samples** with shared read-file selection, six supported comparison modules, and source/chart exports. See [native analytics, scientific constraints and compatibility](docs/NATIVE-ANALYTICS.md).
 
@@ -70,6 +72,13 @@ Analysis Overview also provides optional [read-only FASTQ integrity validation](
 full gzip/record checks, source SHA-256 and configured mate identifier/order checks.
 Quick or interrupted scans retain explicit incomplete coverage.
 
+Projects and cross-run analytics are available through **Advanced**; existing
+validation/release controls remain in QC analysis details. They are not required
+to run QC or processing. Each processing operation writes to a new analysis
+directory, never to the original FASTQ file. See [processing architecture and
+limitations](docs/PROCESSING.md) for Phred+33, validation overhead and per-file
+SeqKit output semantics.
+
 ## Configuration
 
 | Variable | Default | Purpose |
@@ -84,8 +93,10 @@ Quick or interrupted scans retain explicit incomplete coverage.
 | `QUALIDOCK_SECURE_COOKIE` | `0` | Set to `1` when the external connection uses HTTPS |
 | `QUALIDOCK_FASTQC` | `fastqc` | Executable name or absolute path |
 | `QUALIDOCK_MULTIQC` | `multiqc` | Executable name or absolute path |
+| `QUALIDOCK_FASTP` | `fastp` | Optional native processing executable |
+| `QUALIDOCK_SEQKIT` | `seqkit` | Optional FASTQ utility executable |
 
-The session footer shows detected tool versions; setup explains missing or incompatible tools. Detection uses bounded asynchronous `--version` probes and never installs software. Explicit executable paths are supported through the variables above.
+The session footer shows detected tool versions; setup explains missing or incompatible tools. Detection uses bounded asynchronous version probes (`seqkit version`, otherwise `--version`) and never installs software. Explicit executable paths are supported through the variables above.
 
 The application runs one analysis at a time; other runs queue. FastQC threads are bounded by CPU capacity and a conservative 768 MB per thread with a 512 MB session reserve. Tool process groups inherit a Linux CPU affinity limit. A process-group RSS monitor samples every 500 ms and terminates a run that exceeds the tool memory budget; this is not a replacement for a scheduler/cgroup hard memory limit. MultiQC executes in the same allocation with numerical library thread limits. The runtime does not submit scheduler jobs.
 
@@ -117,7 +128,7 @@ See [Phase 2 implementation, changed files, and validation](docs/PHASE2.md) for 
 
 ## Architecture and security
 
-`React → FastAPI REST/SSE → RunManager → Executor → FastQC / MultiQC`
+`React → FastAPI REST/SSE → RunManager → Executor → FastQC / MultiQC / fastp / SeqKit`
 
 The core package has no OOD or PBS API dependency. `Executor` defines execution and cancellation; `LocalExecutor` uses subprocess argument arrays and independent process groups. Each run has `manifest.json`, `analysis.log`, `fastqc/`, `multiqc/`, and `metrics.json`. Queued/running runs from a prior session are restored as interrupted; completed results are read from disk. See [security assumptions](docs/SECURITY.md).
 
