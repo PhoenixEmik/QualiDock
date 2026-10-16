@@ -78,6 +78,8 @@ class RunManager:
         self.screening = ScreeningJobs(self)
         from .catalog import ProjectCatalog
         self.catalog = ProjectCatalog(self)
+        from .batch_jobs import BatchJobs
+        self.batches = BatchJobs(self)
 
     def start(self):
         self.stores.start()
@@ -115,6 +117,7 @@ class RunManager:
                         self.runs[run["id"]] = run
                     except (OSError, ValueError, KeyError):
                         continue
+            self.batches.recover()
         except Exception:
             self.stores.close()
             raise
@@ -573,6 +576,7 @@ class RunManager:
 
     async def close(self):
         self.closing = True
+        await self.batches.close()
         unfinished = [(run_id, run) for run_id, run in self.runs.items() if run["state"] in ACTIVE]
         self.cancelled.update(run_id for run_id, _ in unfinished)
         for run_id, run in unfinished:

@@ -154,6 +154,7 @@ def test_schema_v1_to_v2_preserves_ids_snapshots_and_official_reports(setup):
     with sqlite3.connect(settings.output / 'projects.sqlite3') as db:
         db.execute('ALTER TABLE associations DROP COLUMN revision')
         db.execute('DROP INDEX events_project'); db.execute('DROP INDEX events_entity')
+        db.execute('DROP TABLE batch_attempts'); db.execute('DROP TABLE batch_plans')
         db.execute('PRAGMA user_version=1')
     manifests = {path: path.read_bytes() for path in (settings.output / run['id']).rglob('*') if path.is_file()}
     with TestClient(create_app(settings), headers=headers(settings)) as client:

@@ -18,7 +18,7 @@ from .files import PathViolation
 from .manager import now
 from .release_policy import digest
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 KINDS = {'project': 'prj', 'sample': 'smp', 'sequencing_run': 'seq'}
 COMMON = {'display_name', 'declared_identifier', 'notes', 'status'}
 FIELDS = {
@@ -161,6 +161,24 @@ class ProjectCatalog:
                 PRAGMA user_version=2;
                 COMMIT;
                 ''')
+                version = 2
+            if version == 2:
+                db.executescript("""
+                BEGIN IMMEDIATE;
+                CREATE TABLE batch_plans (
+                    id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES entities(id),
+                    created_at TEXT NOT NULL, fingerprint TEXT NOT NULL, plan TEXT NOT NULL);
+                CREATE INDEX batch_plan_project ON batch_plans(project_id,created_at);
+                CREATE TABLE batch_attempts (
+                    id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES entities(id),
+                    plan_id TEXT NOT NULL REFERENCES batch_plans(id), request_key TEXT NOT NULL,
+                    created_at TEXT NOT NULL, record TEXT NOT NULL, UNIQUE(plan_id,request_key));
+                CREATE INDEX batch_attempt_project ON batch_attempts(project_id,created_at);
+                CREATE TRIGGER batch_plan_no_update BEFORE UPDATE ON batch_plans BEGIN SELECT RAISE(ABORT,'Batch plans are immutable'); END;
+                CREATE TRIGGER batch_plan_no_delete BEFORE DELETE ON batch_plans BEGIN SELECT RAISE(ABORT,'Batch plans are immutable'); END;
+                PRAGMA user_version=3;
+                COMMIT;
+                """)
         info = self.path.stat()
         self.identity = (info.st_dev, info.st_ino)
 
@@ -177,21 +195,24 @@ class ProjectCatalog:
         db.execute('INSERT INTO events(id,project_id,entity_id,action,created_at,actor,data) VALUES(?,?,?,?,?,?,?)',
                    (uuid.uuid4().hex, project_id, entity_id, action, now(), encoded(self.manager.delivery.actor()), encoded(data)))
 
-    def create(self, kind, fields, project_id=None):
+    def create_record(self, db, kind, fields, project_id=None):
         fields = validate_fields(kind, fields, True)
         fields.setdefault('status', 'active')
         entity_id = KINDS[kind] + '_' + uuid.uuid4().hex
         stamp = now()
+        if kind != 'project':
+            project = self.entity(db, project_id, 'project')
+            if project['declared']['status'] == 'archived':
+                raise ValueError('Restore the archived project before adding records')
+        elif project_id is not None:
+            raise ValueError('A project cannot belong to another project')
+        db.execute('INSERT INTO entities VALUES(?,?,?,?,?,?,?)', (entity_id, kind, project_id, stamp, stamp, 1, encoded(fields)))
+        self.event(db, project_id or entity_id, entity_id, 'created', {'kind': kind, 'declared': fields})
+        return self.entity(db, entity_id)
+
+    def create(self, kind, fields, project_id=None):
         with self.transaction(True) as db:
-            if kind != 'project':
-                project = self.entity(db, project_id, 'project')
-                if project['declared']['status'] == 'archived':
-                    raise ValueError('Restore the archived project before adding records')
-            elif project_id is not None:
-                raise ValueError('A project cannot belong to another project')
-            db.execute('INSERT INTO entities VALUES(?,?,?,?,?,?,?)', (entity_id, kind, project_id, stamp, stamp, 1, encoded(fields)))
-            self.event(db, project_id or entity_id, entity_id, 'created', {'kind': kind, 'declared': fields})
-            return self.entity(db, entity_id)
+            return self.create_record(db, kind, fields, project_id)
 
     def edit(self, entity_id, revision, fields, project_id=None):
         with self.transaction(True) as db:
@@ -249,7 +270,18 @@ class ProjectCatalog:
                     args.append(value)
             total = db.execute('SELECT COUNT(*) FROM associations a WHERE ' + where, args).fetchone()[0]
             rows = db.execute('SELECT a.*,l.analysis_id FROM associations a JOIN analysis_links l ON l.id=a.analysis_link_id WHERE ' + where + ' ORDER BY a.created_at,a.id LIMIT ? OFFSET ?', [*args, limit, offset]).fetchall()
-            return {'items': [{**dict(row), **{key: json.loads(row[key]) for key in ('declared', 'observed', 'actor')}} for row in rows], 'total': total, 'offset': offset, 'limit': limit}
+            items = [{**dict(row), **{key: json.loads(row[key]) for key in ('declared', 'observed', 'actor')}} for row in rows]
+        current_reports = {}
+        for item in items:
+            analysis_id = item['analysis_id']
+            if analysis_id not in current_reports:
+                try:
+                    current_reports[analysis_id] = {file['file_id']: file['report_id'] for file in self.manager.delivery.inspect(analysis_id)['files']}
+                except (OSError, ValueError, KeyError):
+                    current_reports[analysis_id] = {}
+            # Current lookup is separate from the immutable original observation.
+            item['current_report_id'] = current_reports[analysis_id].get(item['file_id'])
+        return {'items': items, 'total': total, 'offset': offset, 'limit': limit}
 
     def links(self, project_id, offset=0, limit=25):
         if offset < 0 or not 1 <= limit <= 100:
@@ -316,23 +348,23 @@ class ProjectCatalog:
                        (association_id, project_id, assignment['sample_id'], assignment['sequencing_run_id'], link_id, assignment['file_id'], encoded(declared), encoded(observed), stamp, actor))
             self.event(db, project_id, association_id, 'association_created', {'analysis_link_id': link_id, 'file_id': assignment['file_id'], 'sample_id': assignment['sample_id'], 'sequencing_run_id': assignment['sequencing_run_id'], 'declared': declared, 'revision': 1})
 
+    def link_record(self, db, project_id, analysis_id, normalized):
+        project = self.entity(db, project_id, 'project')
+        if project['declared']['status'] == 'archived':
+            raise ValueError('Restore the archived project before linking analyses')
+        if db.execute('SELECT id FROM analysis_links WHERE analysis_id=?', (analysis_id,)).fetchone():
+            raise CatalogConflict('Analysis is already linked; historical relationships cannot be silently reassigned')
+        link_id, stamp = 'lnk_' + uuid.uuid4().hex, now()
+        db.execute('INSERT INTO analysis_links VALUES(?,?,?,?,?)', (link_id, project_id, analysis_id, stamp, encoded(self.manager.delivery.actor())))
+        self.write_assignments(db, project_id, link_id, normalized)
+        self.event(db, project_id, link_id, 'analysis_linked', {'analysis_id': analysis_id, 'associations': len(normalized)})
+        return {'id': link_id, 'project_id': project_id, 'analysis_id': analysis_id, 'created_at': stamp, 'association_count': len(normalized)}
+
     def attach(self, project_id, analysis_id, assignments):
-        run = self.manager.runs[analysis_id]
+        self.manager.directory(analysis_id)
         normalized = self.prepare_assignments(analysis_id, assignments)
         with self.transaction(True) as db:
-            project = self.entity(db, project_id, 'project')
-            if project['declared']['status'] == 'archived':
-                raise ValueError('Restore the archived project before linking analyses')
-            old = db.execute('SELECT * FROM analysis_links WHERE analysis_id=?', (analysis_id,)).fetchone()
-            if old:
-                raise CatalogConflict('Analysis is already linked; historical relationships cannot be silently reassigned')
-            link_id = 'lnk_' + uuid.uuid4().hex
-            stamp = now()
-            actor = encoded(self.manager.delivery.actor())
-            db.execute('INSERT INTO analysis_links VALUES(?,?,?,?,?)', (link_id, project_id, analysis_id, stamp, actor))
-            self.write_assignments(db, project_id, link_id, normalized)
-            self.event(db, project_id, link_id, 'analysis_linked', {'analysis_id': analysis_id, 'associations': len(normalized)})
-            return {'id': link_id, 'project_id': project_id, 'analysis_id': run['id'], 'created_at': stamp, 'association_count': len(normalized)}
+            return self.link_record(db, project_id, analysis_id, normalized)
 
     def capture(self, project_id, link_id, sample_ids=None):
         revision = self.manager.revision

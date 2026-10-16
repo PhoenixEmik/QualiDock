@@ -46,14 +46,44 @@ class CorrectAssignment(BaseModel):
     reason: str = Field(min_length=1, max_length=2000)
 
 
+class ProjectAnalysis(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    request_key: str = Field(min_length=8, max_length=128)
+    name: str = Field(default='', max_length=120)
+    mode: str = Field(default='both', pattern=r'^(both|fastqc)$')
+    paths: list[str] = Field(min_length=1, max_length=500)
+    threads: int = Field(default=1, strict=True, ge=1)
+    output_root: str | None = None
+    input_pairing: list[dict] = Field(max_length=500)
+    sample_groups: list[dict] = Field(max_length=500)
+
+
+class BatchPreview(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    sample_ids: list[str] | None = Field(default=None, min_length=1, max_length=100)
+    sequencing_run_ids: list[str] | None = Field(default=None, min_length=1, max_length=100)
+    options: dict = Field(default_factory=dict, max_length=8)
+
+
+class BatchStart(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    plan_id: str = Field(pattern=r'^bpl_[a-f0-9]{32}$')
+    idempotency_key: str = Field(min_length=8, max_length=128)
+    retry_of: str | None = Field(default=None, pattern=r'^bat_[a-f0-9]{32}$')
+
+
 def project_router(manager):
     router = APIRouter(prefix='/api')
     catalog = manager.catalog
     from .project_management import ProjectManagement
     management = ProjectManagement(catalog)
+    from .project_intake import ProjectIntake
+    intake = ProjectIntake(manager)
 
     async def call(method, *args, **kwargs):
         try:
+            if asyncio.iscoroutinefunction(method):
+                return await method(*args, **kwargs)
             return await asyncio.to_thread(method, *args, **kwargs)
         except CatalogConflict as exc:
             raise HTTPException(409, str(exc)) from exc
@@ -126,6 +156,36 @@ def project_router(manager):
     @router.patch('/projects/{project_id}/associations/{association_id}')
     async def correct(project_id: str, association_id: str, body: CorrectAssignment):
         return await call(management.revise_assignment, project_id, association_id, body.revision, body.assignment, body.reason)
+
+    @router.post('/projects/{project_id}/start-analysis', status_code=201)
+    async def start_project_analysis(project_id: str, body: ProjectAnalysis):
+        configuration = body.model_dump(exclude={'request_key', 'paths'})
+        configuration['raw_paths'] = body.paths
+        return await call(intake.start, project_id, body.request_key, **configuration)
+
+    @router.post('/projects/{project_id}/batches/preview')
+    async def batch_preview(project_id: str, body: BatchPreview):
+        return await call(manager.batches.preview, project_id, body.sample_ids, body.sequencing_run_ids, body.options)
+
+    @router.post('/projects/{project_id}/batches', status_code=202)
+    async def batch_start(project_id: str, body: BatchStart):
+        return await call(manager.batches.start, project_id, body.plan_id, body.idempotency_key, body.retry_of)
+
+    @router.get('/projects/{project_id}/batches')
+    async def batch_list(project_id: str, offset: int = 0, limit: int = 25):
+        return await call(manager.batches.listing, project_id, offset, limit)
+
+    @router.get('/projects/{project_id}/batches/{attempt_id}')
+    async def batch_detail(project_id: str, attempt_id: str):
+        return await call(manager.batches.read, project_id, attempt_id)
+
+    @router.get('/projects/{project_id}/batch-plans/{plan_id}')
+    async def batch_plan(project_id: str, plan_id: str):
+        return manager.batches.public(await call(manager.batches.read_plan, project_id, plan_id))
+
+    @router.post('/projects/{project_id}/batches/{attempt_id}/cancel')
+    async def batch_cancel(project_id: str, attempt_id: str):
+        return await call(manager.batches.cancel, project_id, attempt_id)
 
     @router.get('/projects/{project_id}/{collection}')
     async def entities(project_id: str, collection: str, search: str = '', offset: int = 0, limit: int = 25, status: str = 'active'):
