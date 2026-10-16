@@ -55,7 +55,41 @@ def test_full_integrity_readonly_evidence_and_download(workspace,browser):
   expect(upstream).to_contain_text('210615_A00302_0309_AHY3CLDSXY')
   upstream.get_by_text('Reported index-hopping metrics · 4 rows',exact=True).click()
   expect(upstream).to_contain_text('Not reported')
+  delivery.get_by_text('Release review & reference bundle',exact=True).click()
+  release=delivery.get_by_role('region',name='Release review and export',exact=True)
+  release.get_by_text('Versioned assay / project policy',exact=True).click()
+  release.get_by_label('Release policy version',exact=True).fill('browser-contract-1')
+  release.get_by_label('Release policy assay',exact=True).fill('Genuine fixture browser acceptance')
+  release.get_by_role('button',name='Save release policy',exact=True).click()
+  expect(release.get_by_text('Readiness: blocked · review: pending',exact=True)).to_be_visible()
+  release.get_by_text('Record reviewer decision / exception',exact=True).click()
+  release.get_by_label('Release review action',exact=True).select_option('waive')
+  for rule,reason in [('expected_delivery','Missing synthetic expectation reviewed for this fixture-only acceptance'),('quantity','Explicit pilot yield exception accepted for this genuine fixture')]:
+   release.get_by_label('Release waiver rule',exact=True).select_option(rule)
+   release.get_by_label('Release review reason',exact=True).fill(reason)
+   release.get_by_role('button',name='Record release review',exact=True).click()
+   expect(release.get_by_text('Waived: '+reason,exact=True)).to_be_visible()
+  expect(release.get_by_text('Readiness: ready · review: pending',exact=True)).to_be_visible()
+  release.get_by_label('Release review action',exact=True).select_option('approve')
+  release.get_by_label('Release review reason',exact=True).fill('Full source validation and documented exceptions reviewed')
+  release.get_by_role('button',name='Record release review',exact=True).click()
+  expect(release.get_by_text('Readiness: ready · review: approved',exact=True)).to_be_visible()
+  release.get_by_text('Export selected reference bundle',exact=True).click()
+  release.get_by_role('button',name='Export reference bundle (approved)',exact=True).click()
+  download_link=release.get_by_role('link',name='Download approved reference bundle',exact=True)
+  expect(download_link).to_be_visible(timeout=30000)
+  with page.expect_download() as bundle:
+   download_link.click()
+  import zipfile
+  with zipfile.ZipFile(bundle.value.path()) as archive:
+   packaged=json.loads(archive.read('manifest.json'))
+   assert packaged['release_status']=='approved'
+   assert packaged['yields'][0]['target_state']=='below_target'
+   assert packaged['yields'][0]['totals']['read_pairs']==400
+   review=json.loads(archive.read('release-review.json'))
+   assert len(review['active_waivers'])==2 and review['review_state']=='approved'
   Path('validation').mkdir(exist_ok=True)
+  page.screenshot(path='validation/native-release'+workspace.settings.prefix.replace('/','-')+'.png',full_page=True)
   page.screenshot(path='validation/native-delivery'+workspace.settings.prefix.replace('/','-')+'.png',full_page=True)
   page.set_viewport_size({'width':390,'height':844})
   page.wait_for_function('() => document.documentElement.scrollWidth <= innerWidth',timeout=3000)

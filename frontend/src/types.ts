@@ -1,3 +1,4 @@
+import type { ReleaseExport } from "./release";
 export type View = "workspace" | "new" | "analyses" | "analysis";
 export type DetailTab = "overview" | "metrics" | "reports";
 export type RunState =
@@ -65,6 +66,7 @@ export interface Run {
     snapshot_artifact?: string;
   }[];
   integrity?: IntegrityResult;
+  release_export?: ReleaseExport;
   report_input_map?: Record<
     string,
     { path?: string; source_report?: string; id: string; multiqc_name?: string }

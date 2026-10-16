@@ -87,6 +87,38 @@ class DemultiplexRequest(BaseModel):
     declared_run_id: str = Field(default='',max_length=200)
 
 
+class FastQCReleaseRule(BaseModel):
+    module: str = Field(min_length=1,max_length=120)
+    allowed_statuses: list[Literal['pass','warn','fail']] = Field(min_length=1,max_length=3)
+
+
+class ReleasePolicyRequest(BaseModel):
+    version: str = Field(min_length=1,max_length=120)
+    assay: str = Field(min_length=1,max_length=120)
+    required_checks: list[Literal['integrity','expected_delivery','quantity','demultiplex']] = Field(max_length=4)
+    fastqc_rules: list[FastQCReleaseRule] = Field(default_factory=list,max_length=20)
+
+
+class ReleaseEvaluationRequest(BaseModel):
+    sample_ids: list[str] = Field(min_length=1,max_length=500)
+
+
+class ReleaseActionRequest(ReleaseEvaluationRequest):
+    fingerprint: str = Field(pattern=r'^[a-f0-9]{64}$')
+    action: Literal['approve','needs_review','block','waive']
+    reason: str = Field(min_length=1,max_length=2000)
+    rule_id: str | None = Field(default=None,max_length=200)
+    reviewer_label: str = Field(default='',max_length=120)
+
+
+class ReleaseExportRequest(ReleaseEvaluationRequest):
+    fingerprint: str = Field(pattern=r'^[a-f0-9]{64}$')
+    include_reports: bool = False
+    acknowledge_report_paths: bool = False
+    include_paths: bool = False
+    mode: Literal['spreadsheet','verbatim'] = 'spreadsheet'
+
+
 class AnalysisRequest(BaseModel):
     name: str = Field(default="", max_length=120)
     mode: Literal["both", "fastqc", "multiqc"] = "both"
@@ -284,6 +316,31 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise ValueError('Duplicate evidence document names')
         documents = {item.name:base64.b64decode(item.content_base64,validate=True) for item in body.documents}
         return manager.delivery.import_demultiplex(run_id,documents,body.declared_tool_version,body.declared_run_id)
+
+    @app.post('/api/runs/{run_id}/release-policy')
+    async def release_policy(run_id: str,body: ReleasePolicyRequest):
+        return manager.release.policy(run_id,body.model_dump())
+
+    @app.post('/api/runs/{run_id}/release-review/evaluate')
+    async def release_evaluate(run_id: str,body: ReleaseEvaluationRequest):
+        result = await asyncio.to_thread(manager.release.inspect,run_id,body.sample_ids,deepcopy(manager.runs[run_id]))
+        return {key:value for key,value in result.items() if key not in {'delivery','files'}}
+
+    @app.post('/api/runs/{run_id}/release-review')
+    async def release_action(run_id: str,body: ReleaseActionRequest):
+        snapshot = deepcopy(manager.runs[run_id])
+        evaluation = await asyncio.to_thread(manager.release.inspect,run_id,body.sample_ids,snapshot)
+        if snapshot['updated_at'] != manager.runs[run_id]['updated_at'] or evaluation['fingerprint'] != body.fingerprint:
+            raise HTTPException(409,'Release evidence changed; refresh the evaluation before recording a review')
+        return manager.release.action(run_id,evaluation,body.action,body.reason,body.rule_id,body.reviewer_label)
+
+    @app.post('/api/runs/{run_id}/release-exports',status_code=202)
+    async def release_export(run_id: str,body: ReleaseExportRequest):
+        return await manager.exports.start(run_id,**body.model_dump())
+
+    @app.post('/api/runs/{run_id}/release-exports/cancel')
+    async def cancel_release_export(run_id: str):
+        return await manager.exports.cancel(run_id)
 
     @app.get('/api/runs/{run_id}/delivery-manifest')
     async def delivery_manifest(run_id: str, format: Literal['json','csv']='json', mode: Literal['spreadsheet','verbatim']='spreadsheet', include_paths: bool=False):

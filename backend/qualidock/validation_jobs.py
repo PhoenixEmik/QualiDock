@@ -55,13 +55,13 @@ class ValidationJobs:
                 entry['snapshot'] = snapshot(path.stat())
                 if original and any(entry['snapshot'].get(key) != original.get(key, entry['snapshot'].get(key)) for key in entry['snapshot']):
                     raise ValueError('Input changed since QC execution; rerun QC before release review')
-                entry['qc_input_snapshot_verified'] = bool(original)
+                entry['qc_input_snapshot_verified'] = bool(original and all(key in original for key in ('size','mtime_ns')))
             except (ValueError, OSError) as exc:
                 entry['preflight_error'] = str(exc)
             matched = [sample for sample in samples if run.get('report_input_map', {}).get(sample['id'], {}).get('path') == entry['path']]
             if not matched and len([p for p in paths if Path(p).name == entry['name']]) == 1:
                 matched = [sample for sample in samples if sample['name'] == entry['name']]
-            encoding = matched[0].get('encoding', '') if len(matched) == 1 else ''
+            encoding = matched[0].get('encoding', '') if len(matched) == 1 and entry.get('qc_input_snapshot_verified') else ''
             if encoding == 'Sanger / Illumina 1.9' or encoding in {'Illumina 1.8', 'Sanger'}:
                 entry.update(phred_offset=33, encoding_source=encoding)
             elif encoding in {'Illumina 1.3', 'Illumina 1.5'}:
@@ -79,6 +79,8 @@ class ValidationJobs:
     async def start(self, run_id, mode):
         manager = self.manager
         run = manager.runs[run_id]
+        if run.get('release_export',{}).get('state') in ACTIVE:
+            raise ValueError('Wait until the active reference export finishes before replacing integrity evidence')
         if manager.closing or run['state'] in ACTIVE:
             raise ValueError('Wait until QC finishes before starting an integrity scan')
         if run_id in self.tasks or len(self.tasks) >= 20:
@@ -86,7 +88,7 @@ class ValidationJobs:
         if mode not in {'full', 'quick'}:
             raise ValueError('Select full or quick validation')
         config = await asyncio.to_thread(self.prepare, run, mode)
-        if manager.closing or run_id in self.tasks:
+        if manager.closing or run_id in self.tasks or run.get('release_export',{}).get('state') in ACTIVE:
             raise ValueError('Session is stopping or validation already started')
         task_id = 'integrity-' + uuid.uuid4().hex
         parent = manager.directory(run_id) / 'integrity'

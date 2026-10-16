@@ -98,3 +98,12 @@ def test_unprovenanced_import_has_no_source_integrity_and_restart_interrupts_sca
   assert restored['state']=='completed'
   assert restored['integrity']['state']=='interrupted'
   assert restored['integrity']['current_file']['state']=='not_evaluated'
+
+
+def test_historical_missing_qc_input_snapshot_does_not_assume_current_quality_encoding(client,setup):
+ _,root=setup;run=wait(client,start(client,root,mode='fastqc')['id']);manager=client.app.state.manager
+ manager.update(manager.runs[run['id']],input_metadata=[])
+ assert client.post(f"/api/runs/{run['id']}/integrity",json={'mode':'full'}).status_code==202
+ result=finish(client,run['id'])
+ assert result['result']=='passed'
+ assert all(file['q30_bases'] is None and file['encoding_source'] is None for file in result['files'])

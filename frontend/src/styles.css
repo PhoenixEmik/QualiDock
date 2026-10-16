@@ -2651,3 +2651,40 @@ section[aria-label="Analysis jobs"] > .table-scroll {
     flex-wrap: wrap;
   }
 }
+
+.delivery-review .analytics-actions label {
+  flex-wrap: wrap;
+}
+.release-review fieldset {
+  border: 1px solid var(--border);
+  margin: 12px 0;
+  padding: 12px;
+}
+.release-review fieldset label {
+  display: block;
+  margin: 8px 0;
+  white-space: normal;
+}
+.release-review small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.release-review .release-verdict {
+  padding: 12px;
+  background: var(--surface-muted);
+  border-left: 3px solid var(--accent);
+}
+.release-evidence {
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.release-export-status {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+}
+.release-review .analytics-selection-list label {
+  overflow-wrap: anywhere;
+}

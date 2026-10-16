@@ -235,3 +235,39 @@ def test_real_fastp_only_and_mixed_import_preserve_provenance_and_native_fastqc(
   client.headers.update({'Authorization':f'Bearer {settings.token}'})
   assert all(client.get(base+'/metrics').json()==metrics for base,metrics in saved)
  assert before=={path:hashlib.sha256(path.read_bytes()).hexdigest() for path in before}
+
+
+@pytest.mark.skipif(not FASTQC,reason='Real FastQC is required')
+def test_real_fastqc_full_integrity_review_and_original_report_bundle(tmp_path):
+ import io,json,zipfile
+ from test_validation_jobs import finish
+ from test_release_exports import exported
+ settings=real_settings(tmp_path);sources=sorted(INPUTS.resolve().glob('*.fastq.gz'))
+ original={path:hashlib.sha256(path.read_bytes()).hexdigest() for path in sources}
+ with TestClient(create_app(settings)) as client:
+  client.headers.update({'Authorization':f'Bearer {settings.token}','X-QualiDock-Request':'1'})
+  response=client.post('/api/runs',json={'name':'Genuine fixture release','mode':'fastqc','paths':list(map(str,sources))})
+  assert response.status_code==201,response.text
+  run=wait(client,response.json()['id']);assert run['state']=='completed'
+  base=f"/api/runs/{run['id']}"
+  assert client.post(base+'/integrity',json={'mode':'full'}).status_code==202
+  assert finish(client,run['id'])['result']=='passed'
+  delivery=client.get(base+'/delivery').json();group=delivery['files'][0]['sample_id']
+  expected=[{'filename':path.name,'expected_reads':400,'sha256':sha} for path,sha in original.items()]
+  assert client.post(base+'/expected-delivery',json={'format':'json','content':json.dumps(expected)}).status_code==200
+  assert client.post(base+'/yield-targets',json={'assay':'Genuine paired-read fixture','input_stage':'unknown','targets':[{'sample_id':group,'metric':'read_pairs','minimum':300}]}).status_code==200
+  assert client.post(base+'/release-policy',json={'version':'fixture-1','assay':'Genuine paired-read fixture','required_checks':['integrity','expected_delivery','quantity']}).status_code==200
+  value=client.post(base+'/release-review/evaluate',json={'sample_ids':[group]}).json()
+  assert value['readiness']=='ready'
+  assert client.post(base+'/release-review',json={'sample_ids':[group],'fingerprint':value['fingerprint'],'action':'approve','reason':'Independent fixture counts and hashes verified'}).status_code==200
+  response=client.post(base+'/release-exports',json={'sample_ids':[group],'fingerprint':value['fingerprint'],'include_reports':True,'acknowledge_report_paths':True})
+  assert response.status_code==202,response.text
+  record=exported(client,base);assert record['state']=='completed',record
+  archive=zipfile.ZipFile(io.BytesIO(client.get(base+'/download',params={'path':record['artifact']}).content))
+  manifest=json.loads(archive.read('manifest.json'));assert manifest['release_status']=='approved'
+  assert manifest['yields'][0]['totals']['reads']==800 and manifest['yields'][0]['totals']['read_pairs']==400
+  selected=json.loads(archive.read('qc-metrics.json'))['samples'];saved=client.get(base+'/metrics').json()['samples']
+  assert selected==saved
+  for report in manifest['report_artifacts']:
+   assert archive.read(report['path'])==client.get(base+'/download',params={'path':report['source_artifact']}).content
+ assert original=={path:hashlib.sha256(path.read_bytes()).hexdigest() for path in sources}

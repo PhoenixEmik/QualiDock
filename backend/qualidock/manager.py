@@ -70,6 +70,10 @@ class RunManager:
         self.validation = ValidationJobs(self)
         from .delivery_service import DeliveryService
         self.delivery = DeliveryService(self)
+        from .release_service import ReleaseService
+        self.release = ReleaseService(self)
+        from .release_exports import ReleaseExports
+        self.exports = ReleaseExports(self)
 
     def start(self):
         self.stores.start()
@@ -91,11 +95,13 @@ class RunManager:
                         self.stores.directory(run['id'])
                         from .validation_jobs import interrupted
                         recovered_validation = interrupted(run)
+                        from .release_exports import interrupted as export_interrupted
+                        recovered_export = export_interrupted(run)
                         if run["state"] in ACTIVE:
                             run.update(state="interrupted", finished_at=now(), stage="Session ended", error="The previous web session ended before this analysis finished.")
                             stop(run.get('input_outcomes', []), 'interrupted', 'Previous session ended before a complete outcome was recorded')
                             save_json(path, run)
-                        elif recovered_validation:
+                        elif recovered_validation or recovered_export:
                             save_json(path, run)
                         self.runs[run["id"]] = run
                     except (OSError, ValueError, KeyError):
@@ -537,9 +543,13 @@ class RunManager:
         directory = self.directory(run["id"])
         allowed = {".html", ".zip", ".json", ".log", ".txt", ".tsv", ".csv", ".yaml", ".parquet", ".png", ".svg"}
         reports = []
+        export_artifacts = {record.get('artifact') for record in [*run.get('release_export_history',[]),run.get('release_export',{})] if record.get('state') == 'completed'}
         for path in sorted(directory.rglob("*")):
             if path.is_file() and not path.is_symlink() and path.resolve().is_relative_to(directory.resolve()) and path.suffix in allowed:
-                reports.append({"path": str(path.relative_to(directory)), "size": path.stat().st_size})
+                relative = str(path.relative_to(directory))
+                if relative.startswith('release-exports/') and path.suffix == '.zip' and relative not in export_artifacts:
+                    continue  # Incomplete/orphan ZIPs never become registered downloads.
+                reports.append({"path": relative, "size": path.stat().st_size})
         self.update(run, reports=reports)
 
     async def cancel(self, run_id: str):
@@ -564,7 +574,7 @@ class RunManager:
                 self.update(run, **changes)
             except (OSError, ValueError):
                 run.update(**changes, updated_at=now())
-        await self.validation.close()
+        await asyncio.gather(self.validation.close(),self.exports.close())
         if self.tasks:
             await asyncio.gather(*list(self.tasks.values()), return_exceptions=True)
         self.stores.close()

@@ -130,3 +130,5 @@ Delivery inventories, independent expected-file reconciliation and explicit per-
 MultiQC-only imports additionally support existing fastp JSON reports, without running fastp or processing FASTQs. See [QC report imports](docs/QC-IMPORTS.md) for the explicit allowlist, provenance and limitations.
 
 Existing Illumina sample sheets and verified BCL Convert CSV schemas can be imported as read-only upstream evidence. See [Demultiplexing evidence](docs/DEMULTIPLEXING.md) for supported versions, exact denominators and unavailable measurements.
+
+Versioned per-analysis release contracts, reasoned review/waivers and cancellable reference-only handoff bundles are available alongside delivery evidence. See [Release review and reference bundles](docs/RELEASE-REVIEW.md) for readiness rules, source-versus-transfer checksums, privacy defaults and limitations.
