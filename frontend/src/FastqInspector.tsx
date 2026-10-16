@@ -148,7 +148,11 @@ export default function FastqInspector({
           )}
           <div className="inspector-files">
             {data?.files.map((file, i) => (
-              <section key={file.path} aria-label={`Preview file ${i + 1}`}>
+              <section
+                key={file.path}
+                aria-label={`Preview file ${i + 1}`}
+                tabIndex={0}
+              >
                 <h3>
                   {paired ? `R${i + 1} · ` : ""}
                   {file.path.split("/").pop()}

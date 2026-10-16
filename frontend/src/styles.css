@@ -2641,7 +2641,7 @@ section[aria-label="Analysis jobs"] > .table-scroll {
 .inspector-panel ol { padding-left: 24px; overflow-wrap: anywhere; }
 .inspector-panel input[type="number"] { width: 72px; }
 .inspector-files { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px; min-width: 0; }
-.inspector-files > section { min-width: 0; }
+.inspector-files > section { min-width: 0; max-height: min(65vh, 640px); overflow: auto; padding-right: 8px; }
 .inspector-files h3 { overflow-wrap: anywhere; }
 .inspector-record { border-top: 1px solid var(--border); padding: 8px 0; }
 .inspector-record h4 { margin: 8px 0; }
