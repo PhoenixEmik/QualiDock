@@ -589,6 +589,8 @@ export default function App() {
       const draft = await api<RerunConfiguration>(
         `api/runs/${run.id}/configuration`,
       );
+      setProjectIntake(null);
+      intakeRequest.current = null;
       setSelected(
         new Map(
           draft.entries

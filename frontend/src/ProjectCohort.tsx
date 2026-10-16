@@ -40,8 +40,17 @@ export default function ProjectCohort({
     };
   }, [projectId, kind, search, offset]);
   const ids = selected ?? [];
-  const add = (values: string[]) =>
-    change([...new Set([...ids, ...values])].slice(0, 100));
+  const add = (values: string[]) => {
+    const next = [...new Set([...ids, ...values])];
+    if (next.length > 100) {
+      setError(
+        "This page would exceed 100 selected records. Select fewer rows, or use All project scope.",
+      );
+      return;
+    }
+    setError("");
+    change(next);
+  };
   const visible = page?.items.map((row) => row.id) ?? [];
   return (
     <section aria-label={`Choose batch ${title}`}>

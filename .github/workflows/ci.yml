@@ -117,15 +117,20 @@ jobs:
         working-directory: frontend
       - name: Build the explicit offline screening test fixture
         run: bash scripts/setup-screening-ci.sh
+      - name: Project browse, batch selection and restart
+        env:
+          QUALIDOCK_BROWSER: ${{ matrix.browser }}
+        run: pytest -q tests/browser/test_projects.py --junitxml=validation/project-browser.xml
       - name: Real reports, opaque-origin isolation, proxy paths and restart
         env:
           QUALIDOCK_BROWSER: ${{ matrix.browser }}
-        run: pytest -q tests/browser --junitxml=validation/report-browser.xml
+        run: pytest -q tests/browser --ignore=tests/browser/test_projects.py --junitxml=validation/report-browser.xml
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: report-browser-${{ matrix.browser }}
           path: |
             validation/report-browser.xml
+            validation/project-browser.xml
             validation/native-*.png
             validation/history-browser*.json
