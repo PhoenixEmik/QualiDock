@@ -101,7 +101,7 @@ def local_file(directory, relative):
 
 async def validate(manager, run, files, pairs, name):
     """Reuse the bounded scanner in a cancellable, resource-governed subprocess."""
-    from .manager import save_json
+    from .store import save_json
     directory = manager.directory(run['id'])
     private = manager.stores.subdirectory(run['id'], 'processing/private', exist_ok=True)
     config, output = private / f'{name}-config.json', private / f'{name}-validation.json'
@@ -139,7 +139,7 @@ def seqkit_command(executable, mode, source, output, threads, value, ids):
 
 async def execute(manager, run, metrics, errors):
     """Called only while RunManager holds its existing shared resource slot."""
-    from .manager import save_json
+    from .store import save_json
     directory = manager.directory(run['id'])
     value = run['processing']['options']
     paths = await asyncio.to_thread(manager.checked_inputs, run)

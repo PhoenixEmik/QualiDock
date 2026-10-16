@@ -17,7 +17,6 @@ import type { SampleConfiguration } from "./types";
 import type { Config, Entry, Run } from "./types";
 
 interface Props {
-  projectName?: string;
   config: Config | null;
   sampleConfiguration: SampleConfiguration | null;
   setSampleConfiguration: (value: SampleConfiguration) => void;
@@ -39,7 +38,6 @@ interface Props {
   submit: () => Promise<void>;
 }
 export default function NewAnalysisForm({
-  projectName,
   config,
   sampleConfiguration,
   setSampleConfiguration,
@@ -88,7 +86,6 @@ export default function NewAnalysisForm({
           <div className="field-label">QC workflow</div>
           <div className="mode-options" role="group" aria-label="QC workflow">
             {(["both", "fastqc", "multiqc"] as const)
-              .filter((value) => !projectName || value !== "multiqc")
               .map((value) => (
                 <button
                   key={value}

@@ -12,7 +12,6 @@ PROBE_TIMEOUT = 10
 TOOL_SPECS = {
     'fastqc': ('--version', (0, 12, 1), (0, 14, 0), '0.12.1–0.13.x'),
     'multiqc': ('--version', (1, 25, 0), (2, 0, 0), '1.25 or newer, below 2'),
-    'kraken2': ('--version', (2, 1, 0), (3, 0, 0), '2.1 or newer, below 3'),
     'fastp': ('--version', (0, 23, 0), (2, 0, 0), '0.23 or newer, below 2'),
     'seqkit': ('version', (2, 6, 0), (3, 0, 0), '2.6 or newer, below 3'),
 }
@@ -45,7 +44,7 @@ async def detect_tool(name: str, executable: str) -> dict:
             await process.wait()
             return b"".join(chunks).decode("utf-8", errors="replace").strip()
         response = await asyncio.wait_for(output(), timeout=PROBE_TIMEOUT)
-        match = re.search(r"(?i)\b" + (r"kraken(?:2)?" if name == "kraken2" else re.escape(name)) + r"(?:,?\s+(?:version|v))?\s*([0-9]+(?:\.[0-9]+){1,2})\b", response)
+        match = re.search(r"(?i)\b" + re.escape(name) + r"(?:,?\s+(?:version|v))?\s*([0-9]+(?:\.[0-9]+){1,2})\b", response)
         if process.returncode or not match:
             raise ValueError(f"Cannot detect {name} version (exit {process.returncode}): {response[:300]}")
         result["version"] = match[1]

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 from .integrity import VERSION, scan_file, compare_pairs
-from .manager import save_json
+from .store import save_json
 
 
 def execute(config, output):

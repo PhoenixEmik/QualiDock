@@ -4,7 +4,7 @@ This repository is an MVP development implementation, not a validated v0.1.0 rel
 
 ## Issue follow-up verification — 2026-10-15
 
-[Issue-by-issue status and CI evidence](ISSUES.md) supersede the earlier missing-MultiQC/Linux-validation limitations below. Real MultiQC 1.25.1, 1.35 and latest-supported 1.x now pass combined and existing-result workflows. Native Linux cgroup/process checks pass under 1 CPU / 1 GiB. Directory browsing is covered by regression tests and a local 100,000-name benchmark. Actual site, large-input and browser acceptance remain pending.
+[Current core scope and preservation](CORE-FIRST.md) supersede the earlier missing-MultiQC/Linux-validation limitations below. Real MultiQC 1.25.1, 1.35 and latest-supported 1.x now pass combined and existing-result workflows. Native Linux cgroup/process checks pass under 1 CPU / 1 GiB. Directory browsing is covered by regression tests and a local 100,000-name benchmark. Actual site, large-input and browser acceptance remain pending.
 
 ## Phase 2 verification — 2026-10-15
 

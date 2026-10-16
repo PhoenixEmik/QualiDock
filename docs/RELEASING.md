@@ -17,7 +17,7 @@ gates have actual evidence. A green CI run does not establish an actual HPC depl
    changed-directory refresh, Analyses, all module charts/tables, sample switching,
    collapsed details, logs, cancellation, live SSE, attachment downloads, and
    narrow/mobile layouts. Record browser/version, proxy prefix and any limitations.
-6. Review `docs/VALIDATION.md`, `docs/ISSUES.md`, README and the compatibility matrix
+6. Review `docs/VALIDATION.md`, `docs/CORE-FIRST.md`, README and the compatibility matrix
    against evidence, plus repository/dependency license notices. Keep protected
    input data, private paths, credentials and downloaded tool binaries out of the
    release source. Test fixtures must retain their public source, license and exact synthetic/experimental derivation provenance.

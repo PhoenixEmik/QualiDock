@@ -1,5 +1,3 @@
-import type { ScreeningRecord } from "./screening";
-import type { ReleaseExport, ReviewEvent } from "./release";
 export type View = "workspace" | "new" | "processing" | "analyses" | "analysis";
 export type DetailTab = "overview" | "metrics" | "reports";
 export type RunState =
@@ -77,9 +75,6 @@ export interface Run {
   processing?: ProcessingResult;
   derived_datasets?: DerivedDataset[];
   integrity?: IntegrityResult;
-  screening?: ScreeningRecord;
-  release_export?: ReleaseExport;
-  release_reviews?: ReviewEvent[];
   report_input_map?: Record<
     string,
     {

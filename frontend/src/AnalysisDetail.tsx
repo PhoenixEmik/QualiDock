@@ -35,7 +35,6 @@ import StatusMatrix from "./StatusMatrix";
 import CompareSamples from "./CompareSamples";
 import FileOutcomes from "./FileOutcomes";
 import IntegrityReview from "./IntegrityReview";
-import DeliveryReview from "./DeliveryReview";
 import { sampleLabel } from "./sampleIdentity";
 
 const active = (run: Run) => ["running", "queued"].includes(run.state);
@@ -304,19 +303,6 @@ export default function AnalysisDetail({
         <FileOutcomes run={currentRun} />
         {!currentRun.processing && (
           <IntegrityReview run={currentRun} refresh={refresh} />
-        )}
-        {!currentRun.processing && (
-          <DeliveryReview
-            key={currentRun.id}
-            run={currentRun}
-            refresh={refresh}
-            inspect={(reportId) => {
-              setSampleId(reportId);
-              setQcMode("single");
-              setAnalyticsView("Sample Details");
-              setTab("metrics");
-            }}
-          />
         )}
         {!!currentRun.report_inputs?.length && (
           <details className="analysis-inputs">

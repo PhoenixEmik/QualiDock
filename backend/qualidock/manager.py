@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
-import fcntl
 import hashlib
 import json
 import os
 from pathlib import Path
 import shutil
 import time
-import tempfile
 import re
 from copy import deepcopy
 import uuid
@@ -23,30 +20,13 @@ from .import_formats import fastp_metadata, source_mappings
 from .reports import discover, metadata
 from .tools import detect_tool
 from . import processing
-from .store import ResultStores
+from .store import ResultStores, now, save_json
 from .sample_metadata import validate_configuration
 from .outcomes import plan, batches, stop, counts
 
 ACTIVE = {"queued", "running"}
 TERMINAL = {"completed", "failed", "partial", "cancelled", "interrupted"}
 
-
-def now():
-    return datetime.now(timezone.utc).isoformat()
-
-
-def save_json(path: Path, value):
-    temporary = None
-    try:
-        with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, prefix="." + path.name, suffix=".tmp", delete=False) as stream:
-            temporary = Path(stream.name)
-            json.dump(value, stream, indent=2, allow_nan=False)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, path)
-    finally:
-        if temporary is not None:
-            temporary.unlink(missing_ok=True)
 
 
 
@@ -69,26 +49,11 @@ class RunManager:
         self.tool_checked_at = 0.0
         from .validation_jobs import ValidationJobs
         self.validation = ValidationJobs(self)
-        from .delivery_service import DeliveryService
-        self.delivery = DeliveryService(self)
-        from .release_service import ReleaseService
-        self.release = ReleaseService(self)
-        from .release_exports import ReleaseExports
-        self.exports = ReleaseExports(self)
-        from .screening_jobs import ScreeningJobs
-        self.screening = ScreeningJobs(self)
-        from .catalog import ProjectCatalog
-        self.catalog = ProjectCatalog(self)
-        from .batch_jobs import BatchJobs
-        self.batches = BatchJobs(self)
 
     def start(self):
         self.stores.start()
         self.lock = self.stores.locks[self.stores.default]
         try:
-            # Validate catalog compatibility before restart recovery can rewrite
-            # active analysis manifests. A refused downgrade is read-only.
-            self.catalog.start()
             for root in self.stores.roots:
                 for path in root.glob("*/manifest.json"):
                     if path.is_symlink() or path.parent.is_symlink():
@@ -105,10 +70,6 @@ class RunManager:
                         self.stores.directory(run['id'])
                         from .validation_jobs import interrupted
                         recovered_validation = interrupted(run)
-                        from .release_exports import interrupted as export_interrupted
-                        recovered_export = export_interrupted(run)
-                        from .screening_jobs import interrupted as screening_interrupted
-                        recovered_screening = screening_interrupted(run)
                         if run["state"] in ACTIVE:
                             if run.get('processing'):
                                 run['derived_datasets'] = []
@@ -117,12 +78,11 @@ class RunManager:
                             run.update(state="interrupted", finished_at=now(), stage="Session ended", error="The previous web session ended before this analysis finished.")
                             stop(run.get('input_outcomes', []), 'interrupted', 'Previous session ended before a complete outcome was recorded')
                             save_json(path, run)
-                        elif recovered_validation or recovered_export or recovered_screening:
+                        elif recovered_validation:
                             save_json(path, run)
                         self.runs[run["id"]] = run
                     except (OSError, ValueError, KeyError):
                         continue
-            self.batches.recover()
         except Exception:
             self.stores.close()
             raise
@@ -587,7 +547,7 @@ class RunManager:
         directory = self.directory(run["id"])
         allowed = {".html", ".zip", ".json", ".log", ".txt", ".tsv", ".csv", ".yaml", ".parquet", ".png", ".svg"}
         reports = []
-        export_artifacts = {record.get('artifact') for record in [*run.get('release_export_history',[]),run.get('release_export',{})] if record.get('state') == 'completed'}
+        registered = {record['path'] for record in run.get('reports', [])}
         for path in sorted(directory.rglob("*")):
             if path.is_file() and not path.is_symlink() and path.resolve().is_relative_to(directory.resolve()) and path.suffix in allowed:
                 relative = str(path.relative_to(directory))
@@ -597,7 +557,7 @@ class RunManager:
                     unit_id = Path(relative).parts[1]
                     if not any(unit['id'] == unit_id and unit['state'] == 'completed' for unit in run.get('processing', {}).get('units', [])):
                         continue
-                if relative.startswith('release-exports/') and path.suffix == '.zip' and relative not in export_artifacts:
+                if relative.startswith('release-exports/') and relative not in registered:
                     continue  # Incomplete/orphan ZIPs never become registered downloads.
                 reports.append({"path": relative, "size": path.stat().st_size})
         self.update(run, reports=reports)
@@ -615,7 +575,6 @@ class RunManager:
 
     async def close(self):
         self.closing = True
-        await self.batches.close()
         unfinished = [(run_id, run) for run_id, run in self.runs.items() if run["state"] in ACTIVE]
         self.cancelled.update(run_id for run_id, _ in unfinished)
         for run_id, run in unfinished:
@@ -626,7 +585,7 @@ class RunManager:
                 self.update(run, **changes)
             except (OSError, ValueError):
                 run.update(**changes, updated_at=now())
-        await asyncio.gather(self.validation.close(),self.exports.close(),self.screening.close())
+        await self.validation.close()
         if self.tasks:
             await asyncio.gather(*list(self.tasks.values()), return_exceptions=True)
         self.stores.close()

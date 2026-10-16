@@ -38,7 +38,6 @@ import AnalysisDetail from "./AnalysisDetail";
 import NewAnalysisForm from "./NewAnalysisForm";
 import ProcessingForm from "./ProcessingForm";
 import { defaults, isProcessing, processingModes } from "./processing";
-import ProjectWorkspace from "./ProjectWorkspace";
 import { reconcileConfig } from "./sampleConfig";
 import { resolveEntries, listingUrl, type ExplorerMode } from "./explorer";
 
@@ -46,7 +45,7 @@ const active = (run: Pick<Run, "state">) =>
   ["queued", "running"].includes(run.state);
 const nav = [
   { id: "workspace" as const, label: "Workspace", icon: Files },
-  { id: "new" as const, label: "QC & Analysis", icon: FileBarChart2 },
+  { id: "new" as const, label: "Quality Control", icon: FileBarChart2 },
   { id: "processing" as const, label: "Read Processing", icon: Dna },
   { id: "analyses" as const, label: "Results", icon: Activity },
 ];
@@ -64,15 +63,6 @@ export default function App() {
   const [token, setToken] = useState("");
   const [config, setConfig] = useState<Config | null>(null);
   const [view, setView] = useState<View>("workspace");
-  const [workspacePanel, setWorkspacePanel] = useState<"files" | "projects">(
-    "files",
-  );
-  const [projectId, setProjectId] = useState("");
-  const [projectIntake, setProjectIntake] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
-  const intakeRequest = useRef<{ scope: string; key: string } | null>(null);
   const [initialReportId, setInitialReportId] = useState("");
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [currentRun, setCurrentRun] = useState<Run | null>(null);
@@ -137,8 +127,6 @@ export default function App() {
       listingRef.current = null;
       setRunId("");
       setView("workspace");
-      setProjectId("");
-      setWorkspacePanel("files");
     }
     setError(
       err instanceof Error ? err.message : "The request failed. Try again.",
@@ -535,36 +523,13 @@ export default function App() {
             }
           : {}),
       };
-      let endpoint = "api/runs";
-      let body: object = payload;
-      if (projectIntake) {
-        if (
-          mode === "multiqc" ||
-          !payload.input_pairing ||
-          !payload.sample_groups
-        )
-          throw new Error(
-            "Review the selected FASTQ groups before starting a project analysis.",
-          );
-        const { rerun_of: _rerun, ...configuration } = payload;
-        const scope = projectIntake.id + JSON.stringify(configuration);
-        if (intakeRequest.current?.scope !== scope)
-          intakeRequest.current = { scope, key: crypto.randomUUID() };
-        endpoint = `api/projects/${projectIntake.id}/start-analysis`;
-        body = { ...configuration, request_key: intakeRequest.current.key };
-      }
-      const run = await api<Run>(endpoint, {
+      const run = await api<Run>("api/runs", {
         method: "POST",
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload),
       });
-      setProjectIntake(null);
       setRevision((value) => value + 1);
       showRun(run);
-      setNotice(
-        projectIntake
-          ? `Files added to ${projectIntake.name}. QC analysis queued.`
-          : "Analysis queued. You can continue browsing files.",
-      );
+      setNotice("Analysis queued. You can continue browsing files.");
     } catch (err) {
       fail(err);
     } finally {
@@ -606,8 +571,6 @@ export default function App() {
       const draft = await api<RerunConfiguration>(
         `api/runs/${run.id}/configuration`,
       );
-      setProjectIntake(null);
-      intakeRequest.current = null;
       setSelected(
         new Map(
           draft.entries
@@ -776,8 +739,7 @@ export default function App() {
               className={`nav-item ${primaryView === item.id ? "selected" : ""}`}
               onClick={() => {
                 if (item.id === "processing") {
-                  setProjectIntake(null);
-                  setRerunOf(null);
+                              setRerunOf(null);
                   if (!isProcessing(mode)) {
                     setMode("fastp");
                     setProcessingOptions(defaults("fastp"));
@@ -794,21 +756,6 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <details className="secondary-navigation">
-          <summary>Advanced</summary>
-          <button
-            className="nav-item"
-            onClick={() => {
-              setWorkspacePanel("projects");
-              open("workspace");
-            }}
-          >
-            Projects & cross-run analytics
-          </button>
-          <p>
-            Validation and release review are available within analysis details.
-          </p>
-        </details>
         <footer className="sidebar-bottom">
           <section className="session-info" aria-label="Session resources">
             <strong>Session resources</strong>
@@ -900,9 +847,7 @@ export default function App() {
               </h1>
               <p>
                 {view === "workspace"
-                  ? workspacePanel === "projects"
-                    ? "Browse datasets, organize samples, and inspect project QC results."
-                    : "Browse FASTQ files, check sample pairs, and start a QC analysis."
+                  ? "Browse FASTQ files, check sample pairs, and choose an operation."
                   : view === "analyses"
                     ? "Manage QC runs and open their logs, metrics, and reports."
                     : view === "processing"
@@ -914,20 +859,14 @@ export default function App() {
                           : "Choose an analysis to inspect its results."}
               </p>
             </div>
-            {view === "workspace" && workspacePanel === "files" && (
+            {view === "workspace" && (
               <button
                 className="button primary"
                 onClick={newAnalysis}
-                disabled={
-                  busy ||
-                  (!!projectIntake &&
-                    ![...selected.values()].some(
-                      (entry) => entry.kind === "fastq",
-                    ))
-                }
+                disabled={busy}
               >
                 <Plus size={16} />
-                {projectIntake ? "Review selected FASTQs" : "New analysis"}
+                New analysis
               </button>
             )}
           </header>
@@ -939,110 +878,9 @@ export default function App() {
               </button>
             </div>
           )}
-          {projectIntake && (view === "workspace" || view === "new") && (
-            <section
-              className="form-section"
-              aria-label="Add FASTQs to project"
-            >
-              <strong>Adding FASTQs to {projectIntake.name}</strong>
-              <p className="inline-note">
-                Browse and select files or entire samples. Review the detected
-                groups before starting QC; new sample and sequencing-run records
-                will be created together. Identical names never auto-match
-                existing samples. You can correct or link identities later.
-              </p>
-              <button
-                className="button small"
-                onClick={() => {
-                  setProjectIntake(null);
-                  intakeRequest.current = null;
-                }}
-              >
-                Cancel adding to project
-              </button>
-            </section>
-          )}
           {view === "workspace" && (
             <div
-              className="detail-tabs"
-              role="tablist"
-              aria-label="Workspace sections"
-            >
-              {(["files", "projects"] as const).map((panel, index) => (
-                <button
-                  key={panel}
-                  id={`workspace-${panel}-tab`}
-                  role="tab"
-                  className={workspacePanel === panel ? "active" : ""}
-                  aria-selected={workspacePanel === panel}
-                  tabIndex={workspacePanel === panel ? 0 : -1}
-                  aria-controls={`workspace-${panel}-panel`}
-                  onClick={() => setWorkspacePanel(panel)}
-                  onKeyDown={(event) => {
-                    if (
-                      !["ArrowLeft", "ArrowRight", "Home", "End"].includes(
-                        event.key,
-                      )
-                    )
-                      return;
-                    event.preventDefault();
-                    const next =
-                      event.key === "Home"
-                        ? "files"
-                        : event.key === "End"
-                          ? "projects"
-                          : index === 0
-                            ? "projects"
-                            : "files";
-                    setWorkspacePanel(next);
-                    document.getElementById(`workspace-${next}-tab`)?.focus();
-                  }}
-                >
-                  {panel === "files" ? "Files" : "Projects"}
-                </button>
-              ))}
-            </div>
-          )}
-          {view === "workspace" && workspacePanel === "projects" && (
-            <div
-              role="tabpanel"
-              id="workspace-projects-panel"
-              aria-labelledby="workspace-projects-tab"
-            >
-              <ProjectWorkspace
-                projectId={projectId}
-                selectProject={setProjectId}
-                browseFiles={(project) => {
-                  setProjectIntake({
-                    id: project.id,
-                    name: project.declared.display_name,
-                  });
-                  setSelected(new Map());
-                  setSampleConfiguration(null);
-                  setRerunOf(null);
-                  setName(
-                    `${project.declared.display_name} · ${new Date().toISOString().slice(0, 10)}`.slice(
-                      0,
-                      120,
-                    ),
-                  );
-                  setMode("both");
-                  setWorkspacePanel("files");
-                  open("workspace");
-                }}
-                openAnalysis={(id, tab, reportId) => {
-                  showRun({ id });
-                  setDetailTab(tab);
-                  setInitialReportId(reportId ?? "");
-                }}
-              />
-            </div>
-          )}
-          {view === "workspace" && workspacePanel === "files" && (
-            <div
-              role="tabpanel"
-              id="workspace-files-panel"
-              aria-labelledby="workspace-files-tab"
+              className="workspace-files"
             >
               <FileExplorer
                 listing={listing}
@@ -1111,15 +949,13 @@ export default function App() {
               setSamples={setSampleConfiguration}
               prepare={prepareSamples}
               browse={() => {
-                setWorkspacePanel("files");
-                open("workspace");
+                          open("workspace");
               }}
               submit={submit}
             />
           )}
           {view === "new" && (
             <NewAnalysisForm
-              projectName={projectIntake?.name}
               config={config}
               sampleConfiguration={
                 sampleConfiguration

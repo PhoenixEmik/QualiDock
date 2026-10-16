@@ -1,7 +1,5 @@
 import asyncio
-import base64
 from contextlib import asynccontextmanager
-from copy import deepcopy
 import hashlib
 import json
 import os
@@ -20,7 +18,6 @@ from .files import PathViolation, DirectoryChanged
 from .manager import RunManager
 from .preview import PREVIEW_PATH, application_csp, report_preview, UnsupportedPreview
 from .history import page as history_page, invalidation
-from .delivery import export_data, csv_export, expected_template
 
 
 class SessionRequest(BaseModel):
@@ -58,75 +55,6 @@ class IntegrityRequest(BaseModel):
     mode: Literal['full', 'quick'] = 'full'
 
 
-class ExpectedDeliveryRequest(BaseModel):
-    format: Literal['csv','json']
-    content: str = Field(max_length=1024 * 1024)
-
-
-class QuantityTarget(BaseModel):
-    sample_id: str = Field(max_length=128)
-    metric: Literal['reads','read_pairs','bases']
-    minimum: int = Field(strict=True,ge=0,le=2**53-1)
-
-
-class YieldConfigRequest(BaseModel):
-    assay: str = Field(default='Unspecified',max_length=120)
-    input_stage: Literal['unknown','raw_fastq','upstream_processed'] = 'unknown'
-    processing_notes: str = Field(default='',max_length=2000)
-    targets: list[QuantityTarget] = Field(default_factory=list,max_length=500)
-
-
-class EvidenceDocument(BaseModel):
-    name: Literal['SampleSheet.csv','Demultiplex_Stats.csv','Quality_Metrics.csv','Index_Hopping_Counts.csv','fastq_list.csv']
-    content_base64: str = Field(max_length=2800000)
-
-
-class DemultiplexRequest(BaseModel):
-    documents: list[EvidenceDocument] = Field(min_length=1,max_length=5)
-    declared_tool_version: str = Field(default='',max_length=120)
-    declared_run_id: str = Field(default='',max_length=200)
-
-
-class FastQCReleaseRule(BaseModel):
-    module: str = Field(min_length=1,max_length=120)
-    allowed_statuses: list[Literal['pass','warn','fail']] = Field(min_length=1,max_length=3)
-
-
-class ReleasePolicyRequest(BaseModel):
-    version: str = Field(min_length=1,max_length=120)
-    assay: str = Field(min_length=1,max_length=120)
-    required_checks: list[Literal['integrity','expected_delivery','quantity','demultiplex','screening']] = Field(max_length=5)
-    fastqc_rules: list[FastQCReleaseRule] = Field(default_factory=list,max_length=20)
-
-
-class ReleaseEvaluationRequest(BaseModel):
-    sample_ids: list[str] = Field(min_length=1,max_length=500)
-
-
-class ReleaseActionRequest(ReleaseEvaluationRequest):
-    fingerprint: str = Field(pattern=r'^[a-f0-9]{64}$')
-    action: Literal['approve','needs_review','block','waive']
-    reason: str = Field(min_length=1,max_length=2000)
-    rule_id: str | None = Field(default=None,max_length=200)
-    reviewer_label: str = Field(default='',max_length=120)
-
-
-class ReleaseExportRequest(ReleaseEvaluationRequest):
-    fingerprint: str = Field(pattern=r'^[a-f0-9]{64}$')
-    include_reports: bool = False
-    acknowledge_report_paths: bool = False
-    include_paths: bool = False
-    mode: Literal['spreadsheet','verbatim'] = 'spreadsheet'
-
-
-class ScreeningRequest(BaseModel):
-    file_ids: list[str] = Field(min_length=1,max_length=500)
-    database_id: str = Field(min_length=1,max_length=80)
-    threads: int = Field(default=1,ge=1,le=32)
-    assay: str = Field(default='Unspecified',min_length=1,max_length=120)
-    expected_taxids: list[str] = Field(default_factory=list,max_length=20)
-
-
 class AnalysisRequest(BaseModel):
     name: str = Field(default="", max_length=120)
     mode: Literal["both", "fastqc", "multiqc", "fastp", "seqkit-stats", "seqkit-sample", "seqkit-filter", "seqkit-extract"] = "both"
@@ -158,8 +86,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="QualiDock", version="0.1.0.dev0", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.manager = manager
     app.state.settings = settings
-    from .project_api import project_router
-    app.include_router(project_router(manager))
 
     @app.middleware("http")
     async def protect(request: Request, call_next):
@@ -202,7 +128,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.exception_handler(KeyError)
     async def missing(request, exc):
-        return Response("Analysis or project record not found", status_code=404)
+        return Response("Analysis not found", status_code=404)
 
     @app.exception_handler(DirectoryChanged)
     async def stale_directory(request, exc):
@@ -300,87 +226,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post('/api/runs/{run_id}/integrity/cancel')
     async def cancel_integrity(run_id: str):
         return await manager.validation.cancel(run_id)
-
-    @app.get('/api/runs/{run_id}/delivery')
-    async def delivery(run_id: str):
-        return await asyncio.to_thread(manager.delivery.inspect, run_id, deepcopy(manager.runs[run_id]))
-
-    @app.get('/api/runs/{run_id}/expected-template')
-    async def delivery_template(run_id: str):
-        data = await asyncio.to_thread(manager.delivery.inspect, run_id, deepcopy(manager.runs[run_id]))
-        return Response(json.dumps(expected_template(data),indent=2)+'\n',media_type='application/octet-stream',headers={
-            'Content-Disposition':f'attachment; filename="qualidock-{run_id}-expected-template.json"',
-            'Content-Security-Policy':"sandbox; default-src 'none'"})
-
-    @app.post('/api/runs/{run_id}/expected-delivery')
-    async def expected_delivery(run_id: str, body: ExpectedDeliveryRequest):
-        return manager.delivery.expected(run_id, body.content, body.format)
-
-    @app.post('/api/runs/{run_id}/yield-targets')
-    async def yield_targets(run_id: str, body: YieldConfigRequest):
-        data = await asyncio.to_thread(manager.delivery.inspect, run_id, deepcopy(manager.runs[run_id]))
-        return manager.delivery.targets(run_id,body.model_dump(),{entry['sample_id'] for entry in data['files']})
-
-    @app.post('/api/runs/{run_id}/demultiplex')
-    async def demultiplex(run_id: str, body: DemultiplexRequest):
-        if len({item.name for item in body.documents}) != len(body.documents):
-            raise ValueError('Duplicate evidence document names')
-        documents = {item.name:base64.b64decode(item.content_base64,validate=True) for item in body.documents}
-        return manager.delivery.import_demultiplex(run_id,documents,body.declared_tool_version,body.declared_run_id)
-
-    @app.get('/api/screening')
-    async def screening_config():
-        return await manager.screening.config()
-
-    @app.post('/api/runs/{run_id}/screening',status_code=202)
-    async def screening(run_id: str,body: ScreeningRequest):
-        return await manager.screening.start(run_id,**body.model_dump())
-
-    @app.post('/api/runs/{run_id}/screening/cancel')
-    async def cancel_screening(run_id: str):
-        return await manager.screening.cancel(run_id)
-
-    @app.get('/api/runs/{run_id}/screening-metrics')
-    async def screening_metrics(run_id: str,file_id: str):
-        record = manager.runs[run_id].get('screening',{})
-        row = next((row for row in record.get('files',[]) if row['id']==file_id and row.get('metrics_artifact')),None)
-        if row is None:raise HTTPException(404,'Screening file evidence is unavailable')
-        path = manager.artifact(run_id,row['metrics_artifact'])
-        from .metrics import bounded_text
-        return json.loads(await asyncio.to_thread(bounded_text,path))
-
-    @app.post('/api/runs/{run_id}/release-policy')
-    async def release_policy(run_id: str,body: ReleasePolicyRequest):
-        return manager.release.policy(run_id,body.model_dump())
-
-    @app.post('/api/runs/{run_id}/release-review/evaluate')
-    async def release_evaluate(run_id: str,body: ReleaseEvaluationRequest):
-        result = await asyncio.to_thread(manager.release.inspect,run_id,body.sample_ids,deepcopy(manager.runs[run_id]))
-        return {key:value for key,value in result.items() if key not in {'delivery','files'}}
-
-    @app.post('/api/runs/{run_id}/release-review')
-    async def release_action(run_id: str,body: ReleaseActionRequest):
-        snapshot = deepcopy(manager.runs[run_id])
-        evaluation = await asyncio.to_thread(manager.release.inspect,run_id,body.sample_ids,snapshot)
-        if snapshot['updated_at'] != manager.runs[run_id]['updated_at'] or evaluation['fingerprint'] != body.fingerprint:
-            raise HTTPException(409,'Release evidence changed; refresh the evaluation before recording a review')
-        return manager.release.action(run_id,evaluation,body.action,body.reason,body.rule_id,body.reviewer_label)
-
-    @app.post('/api/runs/{run_id}/release-exports',status_code=202)
-    async def release_export(run_id: str,body: ReleaseExportRequest):
-        return await manager.exports.start(run_id,**body.model_dump())
-
-    @app.post('/api/runs/{run_id}/release-exports/cancel')
-    async def cancel_release_export(run_id: str):
-        return await manager.exports.cancel(run_id)
-
-    @app.get('/api/runs/{run_id}/delivery-manifest')
-    async def delivery_manifest(run_id: str, format: Literal['json','csv']='json', mode: Literal['spreadsheet','verbatim']='spreadsheet', include_paths: bool=False):
-        data = await asyncio.to_thread(manager.delivery.inspect, run_id, deepcopy(manager.runs[run_id]))
-        text = json.dumps(export_data(data,include_paths),indent=2,allow_nan=False)+'\n' if format == 'json' else csv_export(data,mode,include_paths)
-        return Response(text,media_type='application/octet-stream',headers={
-            'Content-Disposition':f'attachment; filename="qualidock-{run_id}-manifest-{mode}.{format}"',
-            'Content-Security-Policy':"sandbox; default-src 'none'"})
 
     @app.get("/api/runs/{run_id}/logs")
     async def logs(run_id: str, offset: int = 0):

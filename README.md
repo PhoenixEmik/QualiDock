@@ -37,7 +37,7 @@ synthetic multi-lane, manual-pairing, QC-profile and 24-read cohort scenarios un
 ## Workspace
 
 - **Workspace:** browse connected storage, navigate directories, and select inputs. Switch between **Samples** (grouped detected read pairs) and **Files** (individual files). Incomplete pairs and unrecognized names remain available. Search covers currently loaded sample names and filenames; load more to include additional entries.
-- **QC & Analysis:** configure FastQC-only, combined FastQC/MultiQC, or existing-report MultiQC runs.
+- **Quality Control:** configure FastQC-only, combined FastQC/MultiQC, or existing-report MultiQC runs.
 - **Read Processing:** execute fastp, SeqKit statistics, seeded fraction sampling, length filtering or exact read-ID extraction. Select FASTQs using the existing browser; advanced settings remain optional.
 - **Results:** find running, queued, completed, failed, partial, interrupted, or cancelled runs. Open an analysis for **Overview & logs**, **QC metrics**, and **Reports**. The UI displays the actual job state and stage, without estimated progress percentages.
 
@@ -72,12 +72,13 @@ Analysis Overview also provides optional [read-only FASTQ integrity validation](
 full gzip/record checks, source SHA-256 and configured mate identifier/order checks.
 Quick or interrupted scans retain explicit incomplete coverage.
 
-Projects and cross-run analytics are available through **Advanced**; existing
-validation/release controls remain in QC analysis details. They are not required
-to run QC or processing. Each processing operation writes to a new analysis
-directory, never to the original FASTQ file. See [processing architecture and
-limitations](docs/PROCESSING.md) for Phred+33, validation overhead and per-file
-SeqKit output semantics.
+Every processing operation writes to a new analysis directory, never to the
+original FASTQ file. Advanced parameters are optional. See [processing](docs/PROCESSING.md).
+
+Project catalogs, batch planning, cross-run cohorts, delivery policies, release
+review and optional Kraken2 screening have been removed from the application.
+Existing analysis manifests, reports and source/derived FASTQs are preserved.
+See [the simplification and safe legacy export guide](docs/CORE-FIRST.md).
 
 ## Configuration
 
@@ -124,7 +125,7 @@ The smoke test requires real executables and checks paired-end inputs, FastQC/Mu
 
 The [Batch Connect adapter](deploy/ood) launches this same standalone server on a PBS-allocated compute node. See [the OOD deployment guide](docs/OOD.md) for site configuration and acceptance checks. Configure your site's cluster ID, queue/account, module names, and shared installation paths.
 
-See [Phase 2 implementation, changed files, and validation](docs/PHASE2.md) for detailed engine and reporting behavior, and [issue status with passing Linux/MultiQC evidence](docs/ISSUES.md) for subsequent fixes and remaining site/release gates.
+See [Phase 2 implementation, changed files, and validation](docs/PHASE2.md) for detailed engine and reporting behavior.
 
 ## Architecture and security
 
@@ -136,27 +137,5 @@ Metrics are parsed from bounded `fastqc_data.txt` and `summary.txt` files in Fas
 
 Licensed under [GNU GPLv3](LICENSE). FastQC, MultiQC, Apache ECharts, and other dependencies retain their respective licenses.
 
-Delivery inventories, independent expected-file reconciliation and explicit per-sample quantity targets are available in analysis Overview & logs. See [Delivery manifests and yield](docs/DELIVERY.md) for exact count definitions, privacy defaults and CSV/JSON schemas.
-
-MultiQC-only imports additionally support existing fastp JSON reports, without running fastp or processing FASTQs. See [QC report imports](docs/QC-IMPORTS.md) for the explicit allowlist, provenance and limitations.
-
-Existing Illumina sample sheets and verified BCL Convert CSV schemas can be imported as read-only upstream evidence. See [Demultiplexing evidence](docs/DEMULTIPLEXING.md) for supported versions, exact denominators and unavailable measurements.
-
-Versioned per-analysis release contracts, reasoned review/waivers and cancellable reference-only handoff bundles are available alongside delivery evidence. See [Release review and reference bundles](docs/RELEASE-REVIEW.md) for readiness rules, source-versus-transfer checksums, privacy defaults and limitations.
-
-Optional offline Kraken2 screening can attach preliminary per-read-file taxonomic evidence using explicitly configured local references. It never installs/downloads tools or uploads reads at runtime. See [Offline screening](docs/OFFLINE-SCREENING.md) for setup, provenance, coverage definitions and scientific limitations.
-
-A private persistent [project/sample/sequencing-run registry](docs/PROJECTS.md)
-works alongside existing analysis manifests. Create a project with just a name,
-then browse and bulk-select FASTQs; review existing groups/pairs and start QC
-without filling separate sample/run metadata forms. Optional details can be added later. **Workspace → Projects** provides declared
-sample/run metadata, CSV/JSON import previews and explicit file associations with
-audited corrections. Legacy analyses remain unassigned until explicitly linked;
-existing QC and Reports open directly from a project.
-[Project batch QC and validation](docs/BATCH-QC.md) adds browsable checkbox cohorts,
-previewed scopes, safe reuse and queue/cancel/retry with source provenance.
-[Cross-run and project comparisons](docs/COHORT-COMPARISON.md) add compatible
-cohort charts, exact count fractions, optional declared review rules and
-source-linked CSV/TSV exports without rerunning QC.
-See [per-issue implementation status](docs/NEXT-PHASE.md)
-for project UI, batch workflows, cohort analytics and controlled delivery progress.
+MultiQC-only imports also accept existing fastp JSON reports without processing
+FASTQs. See [QC imports](docs/QC-IMPORTS.md).

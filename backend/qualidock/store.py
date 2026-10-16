@@ -1,5 +1,8 @@
 """A restricted set of owned result stores, each held under an exclusive lock."""
 import fcntl
+from datetime import datetime, timezone
+import json
+import tempfile
 import os
 from pathlib import Path
 import re
@@ -115,3 +118,21 @@ class ResultStores:
         if path.resolve(strict=True) != path or not path.is_dir():
             raise PathViolation('Tool output namespace changed during creation')
         return path
+
+
+def now():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def save_json(path: Path, value):
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, prefix="." + path.name, suffix=".tmp", delete=False) as stream:
+            temporary = Path(stream.name)
+            json.dump(value, stream, indent=2, allow_nan=False)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)

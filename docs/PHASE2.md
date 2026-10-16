@@ -72,7 +72,7 @@ configuration; QualiDock does not calculate or enable it automatically.
 
 ## Validation — 2026-10-15
 
-The following is the original Phase 2 verification record. Subsequent issue fixes and passing actual Linux/MultiQC CI are recorded in [ISSUES.md](ISSUES.md); those results supersede the original unvalidated tool/platform limitations below.
+The following is the original Phase 2 verification record. Subsequent issue fixes and passing actual Linux/MultiQC CI are recorded in [CORE-FIRST.md](CORE-FIRST.md); those results supersede the original unvalidated tool/platform limitations below.
 
 Final checks: **82 backend tests passed, 1 real-MultiQC test skipped; 36 frontend tests passed; TypeScript/Vite production build passed.** React module/report render checks and OOD template rendering/shell syntax checks also passed. The existing full ECharts bundle still produces Vite’s bundle-size warning.
 

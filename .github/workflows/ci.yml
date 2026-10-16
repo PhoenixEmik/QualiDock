@@ -70,13 +70,7 @@ jobs:
         env:
           QUALIDOCK_REQUIRE_PROCESSING_TESTS: '1'
         run: pytest -q backend/tests/test_processing_real.py
-      - run: pytest -q backend/tests/test_real_tools.py backend/tests/test_catalog_real.py backend/tests/test_batch_real.py backend/tests/test_cohort_real.py
-      - name: Prepare genuine offline screening validation
-        if: matrix.multiqc == '1.35'
-        run: bash scripts/setup-screening-ci.sh
-      - name: Actual optional Kraken2 and experimental reads
-        if: matrix.multiqc == '1.35'
-        run: pytest -q backend/tests/test_screening_real.py
+      - run: pytest -q backend/tests/test_real_tools.py
 
   linux-resources:
     runs-on: ubuntu-latest
@@ -123,8 +117,6 @@ jobs:
           echo /tmp/FastQC >> "$GITHUB_PATH"
       - run: npm ci && npm run build
         working-directory: frontend
-      - name: Build the explicit offline screening test fixture
-        run: bash scripts/setup-screening-ci.sh
       - name: Provision focused processing tools
         run: bash scripts/setup-processing-ci.sh
       - name: Native processing and before-after comparison
@@ -132,14 +124,10 @@ jobs:
           QUALIDOCK_BROWSER: ${{ matrix.browser }}
           QUALIDOCK_REQUIRE_PROCESSING_TESTS: '1'
         run: pytest -q tests/browser/test_processing_browser.py --junitxml=validation/processing-browser.xml
-      - name: Project browse, batch selection and restart
-        env:
-          QUALIDOCK_BROWSER: ${{ matrix.browser }}
-        run: pytest -q tests/browser/test_projects.py --junitxml=validation/project-browser.xml
       - name: Real reports, opaque-origin isolation, proxy paths and restart
         env:
           QUALIDOCK_BROWSER: ${{ matrix.browser }}
-        run: pytest -q tests/browser --ignore=tests/browser/test_projects.py --ignore=tests/browser/test_processing_browser.py --junitxml=validation/report-browser.xml
+        run: pytest -q tests/browser --ignore=tests/browser/test_processing_browser.py --junitxml=validation/report-browser.xml
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -147,6 +135,5 @@ jobs:
           path: |
             validation/processing-browser.xml
             validation/report-browser.xml
-            validation/project-browser.xml
             validation/native-*.png
             validation/history-browser*.json

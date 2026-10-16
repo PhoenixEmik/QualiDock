@@ -9,7 +9,9 @@ import sys
 import uuid
 
 from .integrity import VERSION, snapshot
-from .manager import now, save_json, ACTIVE
+from .store import now, save_json
+
+ACTIVE = {"queued", "running"}
 from .outcomes import plan
 from .files import PathViolation
 
@@ -54,7 +56,7 @@ class ValidationJobs:
                 manager.readable_fastq(path)
                 entry['snapshot'] = snapshot(path.stat())
                 if original and any(entry['snapshot'].get(key) != original.get(key, entry['snapshot'].get(key)) for key in entry['snapshot']):
-                    raise ValueError('Input changed since QC execution; rerun QC before release review')
+                    raise ValueError('Input changed since QC execution; rerun QC before validating this result')
                 entry['qc_input_snapshot_verified'] = bool(original and all(key in original for key in ('size','mtime_ns')))
             except (ValueError, OSError) as exc:
                 entry['preflight_error'] = str(exc)
@@ -79,8 +81,6 @@ class ValidationJobs:
     async def start(self, run_id, mode):
         manager = self.manager
         run = manager.runs[run_id]
-        if run.get('release_export',{}).get('state') in ACTIVE:
-            raise ValueError('Wait until the active reference export finishes before replacing integrity evidence')
         if manager.closing or run['state'] in ACTIVE:
             raise ValueError('Wait until QC finishes before starting an integrity scan')
         if run_id in self.tasks or len(self.tasks) >= 20:
@@ -88,7 +88,7 @@ class ValidationJobs:
         if mode not in {'full', 'quick'}:
             raise ValueError('Select full or quick validation')
         config = await asyncio.to_thread(self.prepare, run, mode)
-        if manager.closing or run_id in self.tasks or run.get('release_export',{}).get('state') in ACTIVE:
+        if manager.closing or run_id in self.tasks:
             raise ValueError('Session is stopping or validation already started')
         task_id = 'integrity-' + uuid.uuid4().hex
         parent = manager.directory(run_id) / 'integrity'

@@ -1606,83 +1606,6 @@ dd {
   color: var(--accent);
   font-weight: 600;
 }
-.project-workspace {
-  min-width: 0;
-  max-width: 100%;
-}
-.project-workspace section {
-  min-width: 0;
-}
-.project-workspace h2,
-.project-workspace h3 {
-  margin: 14px 0;
-}
-.project-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin: 12px 0;
-}
-.project-actions .field-label {
-  margin-bottom: 0;
-}
-.project-actions label {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-.project-fields {
-  border: 0;
-  padding: 14px 0;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  min-width: 0;
-}
-.project-fields .wide-input {
-  margin: 8px 0 0;
-}
-.project-wide {
-  grid-column: 1 / -1;
-}
-.project-workspace .table-scroll {
-  max-width: 100%;
-  margin: 14px 0;
-}
-.project-workspace table {
-  min-width: 660px;
-}
-.project-workspace td {
-  vertical-align: top;
-}
-.project-workspace td small {
-  display: block;
-  color: var(--text-secondary);
-  margin-top: 5px;
-  overflow-wrap: anywhere;
-}
-.project-label {
-  max-width: 320px;
-  overflow-wrap: anywhere;
-}
-.project-hash {
-  overflow-wrap: anywhere;
-}
-.project-workspace textarea {
-  min-height: 80px;
-}
-@media (max-width: 720px) {
-  .project-fields {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .project-actions input,
-  .project-actions select {
-    max-width: 100%;
-    min-width: 0;
-  }
-}
 .job-information {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2642,69 +2565,6 @@ tr.row-selected:hover {
   overflow-wrap: anywhere;
 }
 
-.delivery-review {
-  min-width: 0;
-}
-.delivery-review > summary {
-  cursor: pointer;
-  font-weight: 600;
-}
-.delivery-review > div {
-  padding-top: 12px;
-  min-width: 0;
-}
-.delivery-review details {
-  margin-top: 14px;
-}
-.delivery-review .table-scroll {
-  max-width: 100%;
-}
-.delivery-review table {
-  min-width: 950px;
-}
-.delivery-review td {
-  max-width: 320px;
-  overflow-wrap: anywhere;
-}
-.delivery-review td small {
-  display: block;
-  margin-top: 4px;
-  color: var(--text-secondary);
-}
-.delivery-review .analytics-actions {
-  flex-wrap: wrap;
-  align-items: end;
-}
-.delivery-review input[type="file"] {
-  max-width: 100%;
-}
-.delivery-review input:not([type="checkbox"]),
-.delivery-review select {
-  max-width: 100%;
-}
-.delivery-notes {
-  display: grid;
-  gap: 6px;
-  margin: 12px 0;
-}
-.delivery-notes textarea {
-  width: 100%;
-  min-height: 64px;
-  resize: vertical;
-}
-.delivery-review p {
-  overflow-wrap: anywhere;
-}
-
-.delivery-notes textarea {
-  font: inherit;
-  padding: 8px;
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
-  border-radius: 4px;
-}
-
 /* History controls and its wide table must shrink within narrow workspaces. */
 section[aria-label="Analysis jobs"] {
   min-width: 0;
@@ -2728,88 +2588,6 @@ section[aria-label="Analysis jobs"] > .table-scroll {
   .jobs-toolbar .filter-tabs {
     flex-wrap: wrap;
   }
-}
-
-.delivery-review .analytics-actions label {
-  flex-wrap: wrap;
-}
-.release-review fieldset {
-  border: 1px solid var(--border);
-  margin: 12px 0;
-  padding: 12px;
-}
-.release-review fieldset label {
-  display: block;
-  margin: 8px 0;
-  white-space: normal;
-}
-.release-review small {
-  display: block;
-  overflow-wrap: anywhere;
-}
-.release-review .release-verdict {
-  padding: 12px;
-  background: var(--surface-muted);
-  border-left: 3px solid var(--accent);
-}
-.release-evidence {
-  max-height: 220px;
-  overflow: auto;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.release-export-status {
-  margin: 12px 0;
-  padding: 12px;
-  border: 1px solid var(--border);
-}
-.release-review .analytics-selection-list label {
-  overflow-wrap: anywhere;
-}
-
-.delivery-review .analytics-selection-list label {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  white-space: normal;
-}
-
-.cohort-pickers {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-}
-.cohort-source {
-  margin: 0.5rem 0;
-  overflow-wrap: anywhere;
-}
-.cohort-review {
-  color: var(--warning, #92400e);
-}
-[aria-label="Project cohort comparison"] details {
-  margin: 0.75rem 0;
-}
-[aria-label="Project cohort comparison"] pre {
-  max-width: min(48rem, 70vw);
-  max-height: 18rem;
-  overflow: auto;
-  font-size: 0.75rem;
-}
-[aria-label="Project cohort comparison"] summary {
-  cursor: pointer;
-}
-@media (max-width: 700px) {
-  .cohort-pickers {
-    grid-template-columns: 1fr;
-  }
-}
-[aria-label="Project cohort comparison"] label,
-[aria-label="Project cohort comparison"] input,
-[aria-label="Project cohort comparison"] select {
-  min-width: 0;
-  max-width: 100%;
-}
-[aria-label="Project cohort comparison"] .quality-chart {
-  height: 390px;
 }
 
 /* Processing uses the existing neutral surfaces and compact controls. */
@@ -2872,14 +2650,6 @@ section[aria-label="Analysis jobs"] > .table-scroll {
 }
 .processing-table td {
   overflow-wrap: anywhere;
-}
-.secondary-navigation {
-  margin: 18px 14px;
-  font-size: 12px;
-}
-.secondary-navigation p {
-  color: var(--muted, #667085);
-  line-height: 1.5;
 }
 @media (max-width: 1100px) {
   .processing-charts {
