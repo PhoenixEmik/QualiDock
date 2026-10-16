@@ -69,12 +69,14 @@ jobs:
         if: matrix.multiqc == '1.35'
         env:
           QUALIDOCK_REQUIRE_PROCESSING_TESTS: '1'
-        run: pytest -q backend/tests/test_processing_real.py backend/tests/test_paired_processing.py
+        run: pytest -q backend/tests/test_processing_real.py backend/tests/test_paired_processing.py backend/tests/test_benchmark.py
       - uses: actions/upload-artifact@v4
         if: always() && matrix.multiqc == '1.35'
         with:
           name: core-processing-io
-          path: validation/core-processing-io.json
+          path: |
+            validation/core-processing-io.json
+            validation/benchmarks
       - run: pytest -q backend/tests/test_real_tools.py
 
   linux-resources:

@@ -70,3 +70,54 @@ Choose CPU/RAM/walltime defaults only after those observations. Explain tradeoff
 under concurrent filesystem load and retain headroom for JVM/Python startup,
 FastQC threads, the application, and report parsing. Do not infer site defaults
 from small fixtures or from another cluster's limits.
+
+## Native processing benchmarks (#5)
+
+The same script now accepts `fastp`, `seqkit-stats`, `seqkit-sample`,
+`seqkit-filter` and `seqkit-extract`. It uses the normal application queue,
+validation, resource limits, cancellation and registered artifacts. Set
+`QUALIDOCK_FASTP` / `QUALIDOCK_SEQKIT` if executables are not on PATH. Exact
+sampling requires SeqKit 2.14+. Paired length/ID selection uses the existing
+QualiDock synchronized selector; it does not pretend to execute SeqKit.
+
+Use the same `--input`, new `--output`, resource and optional `--hash-inputs`
+arguments as above, adding one of:
+
+| Operation | Arguments |
+| --- | --- |
+| fastp baseline | `--mode fastp` |
+| fastp + before/after QC + MultiQC | `--mode fastp --compare-qc --multiqc` |
+| Fraction sampling | `--mode seqkit-sample --fraction 0.25 --seed 73` |
+| Exact reads/pairs | `--mode seqkit-sample --count 100000 --seed 73` |
+| Independent length selection | `--mode seqkit-filter --min-length 100 --max-length 200` |
+| Both-mates length selection | Same plus `--preserve-pairs` |
+| Independent exact ID selection | `--mode seqkit-extract --identifiers /private/ids.txt` |
+| Both-mates normalized ID selection | Same plus `--preserve-pairs` |
+
+Sampling and fastp use normal persisted mutual pairing detection. Ambiguous names
+remain independent; review the evidence's `input_pairing` and processing units.
+Counts are per unit (reads or confirmed read pairs), not pooled across files.
+`--plain-output` disables output gzip. No source is overwritten or copied as a
+prerequisite. A processing run legitimately creates separately owned FASTQs:
+evidence verifies **registered** outputs against saved full-validation SHA-256,
+and lists incomplete/unpublished files separately. Completed runs with unknown
+FASTQs fail the benchmark check. Failed/partial states exit unsuccessfully;
+cancellation is recorded separately and never called completed processing.
+
+`validation_scans` records actual scanner bytes, coverage and checksum evidence.
+`execution_stages` records tool/validation wall time and sampled RSS from the
+executor; `process_counters` adds Linux sampled CPU and available rchar/wchar and
+read_bytes/write_bytes. Counters can miss short processes and are lower bounds.
+`waited_child_cpu_seconds` measures waited children (including probes/guardians),
+not API CPU; cumulative child high-water RSS is **not** a tree peak. Optional QC
+stages are explicit, not silently counted as baseline processing. Output audit
+hashing adds one full derived-output read; optional source hashing adds two
+separately timed full source reads. Neither is processing validation overhead.
+
+Portable small-fixture runs also work on macOS, with Linux-only counters/RSS and
+filesystem type marked unavailable. No physical disk/network throughput is
+inferred from file sizes or logical scan bytes. The genuine-tool regression
+matrix is `backend/tests/test_benchmark.py`; Linux CI additionally exercises the
+existing resource/cancellation validator. These tests establish benchmark
+implementation correctness only. Authorized large-file, cache/concurrent-load,
+NFS/Lustre, insufficient-space and site tuning acceptance remains pending.
