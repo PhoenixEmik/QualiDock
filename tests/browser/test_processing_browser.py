@@ -65,8 +65,10 @@ def test_select_fastqs_process_compare_download_and_restart(workspace,browser):
     page.get_by_role('button',name='Open Browser fastp processing',exact=True).click()
     page.get_by_role('tab',name='QC metrics',exact=True).click()
     playwright.expect(page.get_by_role('region',name='Processing results').get_by_role('link',name='Download FASTQ',exact=True)).to_have_count(2)
-    page.set_viewport_size({'width':740,'height':1000})
-    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+    playwright.expect(page.locator('.processing-charts .quality-chart')).to_have_count(2)
+    page.set_viewport_size({'width':390,'height':844})
+    page.wait_for_function("() => [...document.querySelectorAll('.processing-charts .quality-chart canvas')].every(canvas => Math.abs(canvas.getBoundingClientRect().width-canvas.closest('.quality-chart').getBoundingClientRect().width)<2)")
+    page.wait_for_function('() => document.documentElement.scrollWidth<=innerWidth+1',timeout=5000)
     page.screenshot(path=str(directory/f'native-processing-mobile{suffix}.png'),full_page=True)
     page.close()
 

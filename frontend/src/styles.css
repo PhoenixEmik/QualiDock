@@ -1851,13 +1851,14 @@ dd {
     font-size: 8px;
   }
   .sidebar nav {
-    display: flex;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     margin-top: 18px;
   }
   .nav-item {
-    width: auto;
-    min-width: 125px;
+    width: 100%;
+    min-width: 0;
     margin: 0;
   }
   .sidebar-bottom {
