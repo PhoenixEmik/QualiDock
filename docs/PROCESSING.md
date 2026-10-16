@@ -53,10 +53,16 @@ The same seed is reproducible with the same inputs and tool version. The fractio
 is a probability, not an exact number of reads. This follows [SeqKit's documented
 paired sampling contract](https://bioinf.shenwei.me/seqkit/usage/#sample).
 
-Length filtering and identifier extraction still operate independently per file
-and explicitly publish unpaired outputs. Pair-preserving filtering and exact-number
-sampling are not implemented: these require separate validated semantics, rather
-than silently applying independent filters or treating approximate counts as exact.
+Length filtering accepts `preserve_pairs: true` to evaluate synchronized R1/R2
+records together. Both mates must meet the inclusive minimum/maximum lengths;
+otherwise both are removed. This uses the existing FASTQ parser through a small
+QualiDock selector under LocalExecutor. Its actual processor/version, pair counts,
+input/output byte observations and original bytes are retained in `selection.json`.
+Full input and output validation is still required. Independent-file filtering
+remains the API default for historical configurations. All-paired selection needs
+no SeqKit executable; mixed/single-end input still uses normal SeqKit filtering.
+Identifier extraction remains independent, and exact-number sampling is not yet
+implemented.
 Statistics is read-only and produces no derived FASTQ. No reads are concatenated
 or automatically repaired.
 

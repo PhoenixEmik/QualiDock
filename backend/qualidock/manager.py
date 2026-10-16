@@ -187,7 +187,8 @@ class RunManager:
             input_pairing = deepcopy(source.get('input_pairing', []))
             normalized_groups = deepcopy(source.get('sample_groups', []))
             sample_input_paths = source.get('sample_input_paths', source['inputs'])
-        required = processing.required(mode, operation_options) if mode in processing.MODES else ["fastqc"] if mode == "fastqc" else ["multiqc"] if mode == "multiqc" else ["fastqc", "multiqc"]
+        operation_units = processing.units({'mode': mode, 'inputs': list(map(str, paths)), 'input_pairing': input_pairing}, operation_options) if mode in processing.MODES else []
+        required = processing.required(mode, operation_options, operation_units) if mode in processing.MODES else ["fastqc"] if mode == "fastqc" else ["multiqc"] if mode == "multiqc" else ["fastqc", "multiqc"]
         for tool in required:
             info = self.tool_info.get(tool)
             executable = getattr(self.settings, tool)
@@ -217,7 +218,7 @@ class RunManager:
                "executions": [], "parameters": {"threads": threads, "memory_mb": self.settings.memory_mb, "executor": "local"},
                "progress": 0, "error": None, "warnings": [], "reports": [], "sample_count": 0}
         if mode in processing.MODES:
-            run['processing'] = {'schema_version': 1, 'options': operation_options, 'units': processing.units(run), 'quality_encoding': 'Phred+33' if mode == 'fastp' else None}
+            run['processing'] = {'schema_version': 1, 'options': operation_options, 'units': operation_units, 'quality_encoding': 'Phred+33' if mode == 'fastp' else None}
             run['derived_datasets'] = []
         self.runs[run_id] = run
         self.update(run)
@@ -380,7 +381,7 @@ class RunManager:
                     return
                 self.update(run, state="running", stage="Preparing inputs", started_at=now())
                 tools = await self.detect_tools()
-                required = processing.required(run["mode"], run["processing"]["options"]) if run.get("processing") else ["fastqc"] if run["mode"] == "fastqc" else ["multiqc"] if run["mode"] == "multiqc" else ["fastqc", "multiqc"]
+                required = processing.required(run["mode"], run["processing"]["options"], run["processing"]["units"]) if run.get("processing") else ["fastqc"] if run["mode"] == "fastqc" else ["multiqc"] if run["mode"] == "multiqc" else ["fastqc", "multiqc"]
                 self.update(run, tools={name: dict(tools[name]) for name in required})
                 with (directory / "analysis.log").open("a") as stream:
                     for name in required:

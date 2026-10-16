@@ -32,6 +32,7 @@ class FastpOptions(BaseModel):
 class SeqkitOptions(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
     gzip: bool = True
+    preserve_pairs: bool = False
     fraction: float = Field(default=0.1, gt=0, le=1, allow_inf_nan=False)
     seed: int = Field(default=11, ge=0, le=2147483647)
     min_length: int = Field(default=15, ge=1, le=1000000)
@@ -55,21 +56,24 @@ def options(mode, supplied):
     return value
 
 
-def required(mode, value):
+def required(mode, value, operation_units=None):
     if mode == 'fastp':
         return ['fastp', *(['fastqc'] if value['compare_qc'] else []), *(['multiqc'] if value['multiqc'] else [])]
+    if mode == 'seqkit-filter' and value.get('preserve_pairs') and operation_units and all(len(unit['inputs']) == 2 for unit in operation_units):
+        return []
     return ['seqkit']
 
 
-def units(run):
+def units(run, value=None):
     """Use persisted mutual pairs; lanes are never merged. Only fastp and validated fraction sampling preserve pairs."""
+    value = value or run.get('processing', {}).get('options', {})
     relationships = {row['path']: row for row in run.get('input_pairing', [])}
     result, seen = [], set()
     for path in run['inputs']:
         if path in seen: continue
         member = relationships.get(path, {})
         paths = [path]
-        if run['mode'] in {'fastp', 'seqkit-sample'} and member.get('paired'):
+        if (run['mode'] in {'fastp', 'seqkit-sample'} or run['mode'] == 'seqkit-filter' and value.get('preserve_pairs')) and member.get('paired'):
             mate = relationships.get(member.get('mate'), {})
             if mate.get('mate') != path or mate.get('read') == member.get('read'):
                 raise ValueError('Conflicting paired-end metadata')
@@ -143,7 +147,7 @@ async def execute(manager, run, metrics, errors):
     directory = manager.directory(run['id'])
     value = run['processing']['options']
     paths = await asyncio.to_thread(manager.checked_inputs, run)
-    pair_rows = [{'id': row['pair_key'], 'r1': row['path'], 'r2': row['mate']} for row in run['input_pairing'] if row.get('paired') and row['read'] == 'R1'] if run['mode'] in {'fastp', 'seqkit-sample'} else []
+    pair_rows = [{'id': row['pair_key'], 'r1': row['path'], 'r2': row['mate']} for row in run['input_pairing'] if row.get('paired') and row['read'] == 'R1'] if any(len(unit['inputs']) == 2 for unit in run['processing']['units']) else []
     manager.update(run, stage='Validating source FASTQs')
     validation = await validate(manager, run, paths, pair_rows, 'source')
     if validation is None: return
@@ -174,13 +178,26 @@ async def execute(manager, run, metrics, errors):
             ids = manager.stores.subdirectory(run['id'], 'processing/private', exist_ok=True) / 'identifiers.txt'
             if run['mode'] == 'seqkit-extract': ids.write_text('\n'.join(value['identifiers']) + '\n')
             tool = 'fastp' if run['mode'] == 'fastp' else 'seqkit'
-            commands = [fastp_command(run['tools'][tool]['executable'], source, outputs, destination, run['threads'], value)] if tool == 'fastp' else [seqkit_command(run['tools'][tool]['executable'], run['mode'], path, output, run['threads'], value, ids) for path, output in zip(source, outputs)]
-            # Identical seed/fraction on synchronized sources; publication still
-            # requires a full output identifier/order check, not equal counts alone.
+            synchronized = run['mode'] == 'seqkit-filter' and len(source) == 2
+            if synchronized:
+                config = ids.parent / (unit['id'] + '-selection-config.json')
+                result = destination / 'selection.json'
+                save_json(config, {'inputs': list(map(str, source)), 'outputs': list(map(str, outputs)),
+                                   'snapshots': [valid[str(path)]['source_snapshot'] for path in source],
+                                   'min_length': value['min_length'], 'max_length': value['max_length'],
+                                   'gzip': value['gzip'], 'result': str(result)})
+                commands = [[sys.executable, '-m', 'qualidock.paired_reads', '--config', str(config)]]
+                tool = 'QualiDock synchronized FASTQ selector'
+            else:
+                commands = [fastp_command(run['tools'][tool]['executable'], source, outputs, destination, run['threads'], value)] if tool == 'fastp' else [seqkit_command(run['tools'][tool]['executable'], run['mode'], path, output, run['threads'], value, ids) for path, output in zip(source, outputs)]
             for argv in commands:
                 code = await manager.command(run, tool, argv, directory)
                 if run['id'] in manager.cancelled: return
                 if code: raise ValueError(f'{tool} exited with code {code}; see analysis log')
+            if synchronized:
+                unit['selection'] = json.loads(bounded_text(local_file(directory, str(result.relative_to(directory)))))
+                if unit['selection']['input_records'] != valid[unit['inputs'][0]]['records_scanned']:
+                    raise ValueError('Selection input count differs from validated sources')
             await asyncio.to_thread(manager.checked_inputs, run)
             for path in outputs: local_file(directory, str(path.relative_to(directory)))
             if tool == 'fastp':
@@ -196,6 +213,8 @@ async def execute(manager, run, metrics, errors):
                 if checked is None: return
                 if checked['result'] != 'passed': raise ValueError('Derived FASTQ validation failed; outputs are not published')
                 unit['output_validation'] = checked
+                if synchronized and any(row['records_scanned'] != unit['selection']['retained_records'] for row in checked['files']):
+                    raise ValueError('Selection output counts differ from validated records')
                 if tool == 'fastp' and any(sum(row[scanned] for row in checked['files']) != unit['fastp']['summary']['after_filtering'][reported] for scanned, reported in [('records_scanned','total_reads'),('bases_scanned','total_bases')]):
                     raise ValueError('fastp output read/base totals differ from validated derived records')
                 for index, path in enumerate(outputs):

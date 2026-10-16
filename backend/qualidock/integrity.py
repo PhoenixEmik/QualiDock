@@ -47,8 +47,15 @@ def line(stream):
     return value
 
 
-def record(stream):
-    header = line(stream)
+def record(stream, raw=None):
+    # Optional bounded record capture lets synchronized selectors preserve the
+    # original bytes without maintaining another FASTQ parser.
+    def read_line():
+        value = line(stream)
+        if raw is not None: raw.append(value)
+        return value
+
+    header = read_line()
     if not header:
         return None
     if not header.startswith(b'@') or not header[1:].strip():
@@ -56,7 +63,7 @@ def record(stream):
     identifier = header[1:].split()[0]
     length = 0
     while True:
-        sequence = line(stream)
+        sequence = read_line()
         if not sequence:
             raise ValueError('Truncated FASTQ sequence or missing + separator')
         if sequence.startswith(b'+'):
@@ -72,7 +79,7 @@ def record(stream):
             raise Unsupported('Read exceeds the 4 MiB supported validation limit')
     quality_length, histogram = 0, [0] * 94
     while quality_length < length or length == 0:
-        quality = line(stream)
+        quality = read_line()
         if not quality:
             raise ValueError('Truncated FASTQ qualities')
         quality = quality.rstrip(b'\r\n')
