@@ -28,5 +28,25 @@ def test_full_integrity_readonly_evidence_and_download(workspace,browser):
   with workspace.api() as client:
    run=client.get(f"api/runs/{workspace.fastqc['id']}").json()
    assert run['state']=='completed'
+  page.get_by_text('Delivery manifest & yield',exact=True).click()
+  delivery=page.get_by_role('region',name='Delivery manifest and yield',exact=True)
+  expect(delivery.get_by_text('400 read pairs',exact=True)).to_be_visible()
+  delivery.get_by_label('Target unit for coverage',exact=True).select_option('read_pairs')
+  delivery.get_by_label('Minimum quantity for coverage',exact=True).fill('500')
+  delivery.get_by_role('button',name='Save quantity targets',exact=True).click()
+  expect(delivery.get_by_text('below target',exact=True)).to_be_visible()
+  delivery.get_by_text('Expected delivery reconciliation',exact=False).first.click()
+  delivery.get_by_label('Expected delivery manifest file',exact=True).set_input_files({'name':'expected.csv','mimeType':'text/csv','buffer':b'filename,expected_reads\ncoverage_R1.fastq.gz,400\ncoverage_R2.fastq.gz,400\nmissing_L002_R1.fastq.gz,400\n'})
+  delivery.get_by_role('button',name='Import expected manifest',exact=True).click()
+  expect(delivery.get_by_text('2 matched · 1 missing',exact=False)).to_be_visible()
+  with page.expect_download() as manifest:
+   delivery.get_by_role('link',name='Manifest JSON',exact=True).click()
+  exported=json.loads(Path(manifest.value.path()).read_text())
+  assert exported['yields'][0]['totals']['read_pairs']==400
+  assert exported['yields'][0]['target_state']=='below_target'
+  assert len(exported['reconciliation']['missing'])==1
+  assert str(workspace.settings.output) not in json.dumps(exported)
+  Path('validation').mkdir(exist_ok=True)
+  page.screenshot(path='validation/native-delivery'+workspace.settings.prefix.replace('/','-')+'.png',full_page=True)
   page.set_viewport_size({'width':390,'height':844})
   page.wait_for_function('() => document.documentElement.scrollWidth <= innerWidth',timeout=3000)

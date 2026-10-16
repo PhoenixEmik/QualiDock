@@ -2562,3 +2562,66 @@ tr.row-selected:hover {
 .integrity-review p {
   overflow-wrap: anywhere;
 }
+
+.delivery-review {
+  min-width: 0;
+}
+.delivery-review > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.delivery-review > div {
+  padding-top: 12px;
+  min-width: 0;
+}
+.delivery-review details {
+  margin-top: 14px;
+}
+.delivery-review .table-scroll {
+  max-width: 100%;
+}
+.delivery-review table {
+  min-width: 950px;
+}
+.delivery-review td {
+  max-width: 320px;
+  overflow-wrap: anywhere;
+}
+.delivery-review td small {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-secondary);
+}
+.delivery-review .analytics-actions {
+  flex-wrap: wrap;
+  align-items: end;
+}
+.delivery-review input[type="file"] {
+  max-width: 100%;
+}
+.delivery-review input:not([type="checkbox"]),
+.delivery-review select {
+  max-width: 100%;
+}
+.delivery-notes {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+}
+.delivery-notes textarea {
+  width: 100%;
+  min-height: 64px;
+  resize: vertical;
+}
+.delivery-review p {
+  overflow-wrap: anywhere;
+}
+
+.delivery-notes textarea {
+  font: inherit;
+  padding: 8px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+}

@@ -124,3 +124,5 @@ The core package has no OOD or PBS API dependency. `Executor` defines execution 
 Metrics are parsed from bounded `fastqc_data.txt` and `summary.txt` files in FastQC ZIPs or extracted result directories, without extracting archives. Raw cells, metadata, summary statuses, and unsupported module tables are preserved. MultiQC general statistics are read from its structured JSON without applying display scaling. New version-2 manifests add tool versions, command arguments, exit codes, resource parameters, and source-run references; version-1 records remain readable without rewriting completed runs. Per-base categories preserve FastQC's grouped positions; quartiles and 10th/90th percentiles are preserved. No Q30 fraction is inferred from these aggregated statistics.
 
 Licensed under [GNU GPLv3](LICENSE). FastQC, MultiQC, Apache ECharts, and other dependencies retain their respective licenses.
+
+Delivery inventories, independent expected-file reconciliation and explicit per-sample quantity targets are available in analysis Overview & logs. See [Delivery manifests and yield](docs/DELIVERY.md) for exact count definitions, privacy defaults and CSV/JSON schemas.

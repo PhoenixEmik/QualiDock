@@ -67,6 +67,8 @@ class RunManager:
         self.tool_checked_at = 0.0
         from .validation_jobs import ValidationJobs
         self.validation = ValidationJobs(self)
+        from .delivery_service import DeliveryService
+        self.delivery = DeliveryService(self)
 
     def start(self):
         self.stores.start()

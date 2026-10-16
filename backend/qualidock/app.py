@@ -1,5 +1,6 @@
 import asyncio
 from contextlib import asynccontextmanager
+from copy import deepcopy
 import hashlib
 import json
 import os
@@ -18,6 +19,7 @@ from .files import PathViolation, DirectoryChanged
 from .manager import RunManager
 from .preview import PREVIEW_PATH, application_csp, report_preview, UnsupportedPreview
 from .history import page as history_page, invalidation
+from .delivery import export_data, csv_export, expected_template
 
 
 class SessionRequest(BaseModel):
@@ -53,6 +55,24 @@ class RenameRequest(BaseModel):
 
 class IntegrityRequest(BaseModel):
     mode: Literal['full', 'quick'] = 'full'
+
+
+class ExpectedDeliveryRequest(BaseModel):
+    format: Literal['csv','json']
+    content: str = Field(max_length=1024 * 1024)
+
+
+class QuantityTarget(BaseModel):
+    sample_id: str = Field(max_length=128)
+    metric: Literal['reads','read_pairs','bases']
+    minimum: int = Field(strict=True,ge=0,le=2**53-1)
+
+
+class YieldConfigRequest(BaseModel):
+    assay: str = Field(default='Unspecified',max_length=120)
+    input_stage: Literal['unknown','raw_fastq','upstream_processed'] = 'unknown'
+    processing_notes: str = Field(default='',max_length=2000)
+    targets: list[QuantityTarget] = Field(default_factory=list,max_length=500)
 
 
 class AnalysisRequest(BaseModel):
@@ -225,6 +245,34 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post('/api/runs/{run_id}/integrity/cancel')
     async def cancel_integrity(run_id: str):
         return await manager.validation.cancel(run_id)
+
+    @app.get('/api/runs/{run_id}/delivery')
+    async def delivery(run_id: str):
+        return await asyncio.to_thread(manager.delivery.inspect, run_id, deepcopy(manager.runs[run_id]))
+
+    @app.get('/api/runs/{run_id}/expected-template')
+    async def delivery_template(run_id: str):
+        data = await asyncio.to_thread(manager.delivery.inspect, run_id, deepcopy(manager.runs[run_id]))
+        return Response(json.dumps(expected_template(data),indent=2)+'\n',media_type='application/octet-stream',headers={
+            'Content-Disposition':f'attachment; filename="qualidock-{run_id}-expected-template.json"',
+            'Content-Security-Policy':"sandbox; default-src 'none'"})
+
+    @app.post('/api/runs/{run_id}/expected-delivery')
+    async def expected_delivery(run_id: str, body: ExpectedDeliveryRequest):
+        return manager.delivery.expected(run_id, body.content, body.format)
+
+    @app.post('/api/runs/{run_id}/yield-targets')
+    async def yield_targets(run_id: str, body: YieldConfigRequest):
+        data = await asyncio.to_thread(manager.delivery.inspect, run_id, deepcopy(manager.runs[run_id]))
+        return manager.delivery.targets(run_id,body.model_dump(),{entry['sample_id'] for entry in data['files']})
+
+    @app.get('/api/runs/{run_id}/delivery-manifest')
+    async def delivery_manifest(run_id: str, format: Literal['json','csv']='json', mode: Literal['spreadsheet','verbatim']='spreadsheet', include_paths: bool=False):
+        data = await asyncio.to_thread(manager.delivery.inspect, run_id, deepcopy(manager.runs[run_id]))
+        text = json.dumps(export_data(data,include_paths),indent=2,allow_nan=False)+'\n' if format == 'json' else csv_export(data,mode,include_paths)
+        return Response(text,media_type='application/octet-stream',headers={
+            'Content-Disposition':f'attachment; filename="qualidock-{run_id}-manifest-{mode}.{format}"',
+            'Content-Security-Policy':"sandbox; default-src 'none'"})
 
     @app.get("/api/runs/{run_id}/logs")
     async def logs(run_id: str, offset: int = 0):
