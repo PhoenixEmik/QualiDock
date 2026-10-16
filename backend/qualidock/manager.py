@@ -83,6 +83,9 @@ class RunManager:
         self.stores.start()
         self.lock = self.stores.locks[self.stores.default]
         try:
+            # Validate catalog compatibility before restart recovery can rewrite
+            # active analysis manifests. A refused downgrade is read-only.
+            self.catalog.start()
             for root in self.stores.roots:
                 for path in root.glob("*/manifest.json"):
                     if path.is_symlink() or path.parent.is_symlink():
@@ -112,7 +115,6 @@ class RunManager:
                         self.runs[run["id"]] = run
                     except (OSError, ValueError, KeyError):
                         continue
-            self.catalog.start()
         except Exception:
             self.stores.close()
             raise

@@ -140,16 +140,21 @@ def test_legacy_installation_and_schema_upgrade_rollback_are_non_destructive(set
     with sqlite3.connect(db_path) as db:
         assert db.execute('PRAGMA user_version').fetchone()[0] == 1
         db.execute('PRAGMA user_version=99')
+    pending = json.loads(raw)
+    pending['state'] = 'queued'
+    pending_bytes = json.dumps(pending).encode()
+    manifest.write_bytes(pending_bytes)
     before = db_path.read_bytes()
     manager = RunManager(settings)
     with pytest.raises(ValueError, match='newer'):
         manager.start()
     assert not manager.stores.locks and db_path.read_bytes() == before
-    assert manifest.read_bytes() == raw
+    assert manifest.read_bytes() == pending_bytes
     with sqlite3.connect(db_path) as db:
         db.execute('PRAGMA user_version=1')
     with TestClient(create_app(settings), headers=headers(settings)) as client:
         assert client.get('/api/projects').json()['total'] == 1
+        assert client.get('/api/runs/' + legacy_id).json()['state'] == 'interrupted'
 
 
 @pytest.mark.parametrize('attack', ['symlink', 'hardlink', 'public', 'unversioned', 'journal_symlink'])
