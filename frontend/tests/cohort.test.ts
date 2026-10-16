@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cohortMetrics, cohortPlot, pointLabel } from "../src/cohort.ts";
+import {
+  cohortMetrics,
+  cohortPlot,
+  pointLabel,
+  compactPointLabel,
+} from "../src/cohort.ts";
 import type { CohortPoint, CohortResult } from "../src/cohort.ts";
 import { selectCohortRows } from "../src/batch.ts";
 import { overlayColors } from "../src/fastqcTheme.ts";
@@ -148,5 +153,26 @@ test("run legend identities stay distinct even when display names and UUID suffi
   assert.equal(
     (view.options.legend as any).formatter(view.series[0].name),
     view.series[0].label,
+  );
+});
+
+test("compact axis labels preserve read, lane and chunk without rotated labels crossing zoom controls", () => {
+  const label = compactPointLabel({
+    ...point,
+    filename: "very-long-biological-display-name_L002_R2_003.fastq.gz",
+    context: { ...point.context, read: "R2", lane: "L002", chunk: "003" },
+  });
+  assert.match(label, /R2 · L002 · 003/);
+  assert.equal(label.split("\n").length, 3);
+  assert.ok(!label.includes("fastq.gz"));
+  const options = cohortPlot(result).options as any;
+  assert.equal(options.xAxis.axisLabel.rotate, 0);
+  assert.equal(
+    options.xAxis.axisLabel.formatter("unused", 0),
+    compactPointLabel(point),
+  );
+  assert.match(
+    compactPointLabel({ ...point, file_id: null, file_count: 2 }),
+    /2 selected read files/,
   );
 });

@@ -2807,3 +2807,6 @@ section[aria-label="Analysis jobs"] > .table-scroll {
   min-width: 0;
   max-width: 100%;
 }
+[aria-label="Project cohort comparison"] .quality-chart {
+  height: 390px;
+}

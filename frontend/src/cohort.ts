@@ -104,6 +104,26 @@ export function pointLabel(point: CohortPoint): string {
     .filter(Boolean)
     .join(" · ");
 }
+/** Compact axis labels keep read/lane/chunk visible; full identity stays in tooltips/tables. */
+export function compactPointLabel(point: CohortPoint): string {
+  const shorten = (text: string, limit = 22) =>
+    text.length > limit ? `${text.slice(0, 11)}…${text.slice(-10)}` : text;
+  if (!point.file_id)
+    return `${shorten(point.context.run_name)}\n${point.file_count ?? "?"} selected read files`;
+  const filename = (point.filename ?? point.file_id).replace(
+    /\.(fastq|fq)(\.gz)?$/i,
+    "",
+  );
+  return [
+    shorten(filename),
+    [point.context.read, point.context.lane, point.context.chunk]
+      .filter(Boolean)
+      .join(" · "),
+    shorten(point.context.run_name),
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
 export function cohortPlot(
   result: CohortResult,
   hidden: ReadonlySet<string> = new Set(),
@@ -160,9 +180,12 @@ export function cohortPlot(
       data: points.map(pointLabel),
       axisLabel: {
         color: "#475467",
-        rotate: 35,
-        formatter: (value: string) =>
-          value.length > 35 ? value.slice(0, 32) + "…" : value,
+        rotate: 0,
+        hideOverlap: true,
+        lineHeight: 15,
+        margin: 12,
+        formatter: (_value: string, index: number) =>
+          compactPointLabel(points[index]),
       },
     },
     yAxis: {
@@ -197,7 +220,7 @@ export function cohortPlot(
       },
       {
         type: "slider",
-        bottom: 55,
+        bottom: 35,
         height: 20,
         start: 0,
         end: points.length > 16 ? 1600 / points.length : 100,
