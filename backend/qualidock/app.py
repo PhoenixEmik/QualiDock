@@ -8,7 +8,7 @@ import secrets
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from typing import Literal
@@ -55,6 +55,13 @@ class ReuseRequest(BaseModel):
 class SampleConfigurationRequest(BaseModel):
     paths: list[str] = Field(min_length=1, max_length=500)
     input_datasets: list[DatasetReference] = Field(default_factory=list, max_length=500)
+
+
+class InspectorRequest(BaseModel):
+    paths: list[str] = Field(min_length=1, max_length=2)
+    input_datasets: list[DatasetReference] = Field(default_factory=list, max_length=2)
+    count: int = Field(default=5, ge=1, le=20, strict=True)
+    paired: bool = False
 
 
 class RenameRequest(BaseModel):
@@ -200,6 +207,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/api/sample-configuration")
     async def sample_configuration(body: SampleConfigurationRequest):
         return await asyncio.to_thread(manager.sample_configuration, body.paths, input_datasets=[r.model_dump() for r in body.input_datasets])
+
+    @app.post('/api/inspector')
+    async def inspect_fastq(body: InspectorRequest):
+        from .inspector import inspect, MAX_RESPONSE
+        if any(len(path)>4096 for path in body.paths): raise HTTPException(400, 'FASTQ path is too long')
+        result = await asyncio.to_thread(inspect, manager, body.paths, [r.model_dump() for r in body.input_datasets], body.count, body.paired)
+        response = JSONResponse(result)
+        if len(response.body)>MAX_RESPONSE: raise HTTPException(413, 'FASTQ preview response exceeds its byte limit')
+        return response
 
     @app.patch("/api/runs/{run_id}")
     async def rename_run(run_id: str, body: RenameRequest):

@@ -30,6 +30,7 @@ import type {
 } from "./types";
 import { Empty } from "./Feedback";
 import FileExplorer from "./FileExplorer";
+import FastqInspector from "./FastqInspector";
 import AnalysisDetail from "./AnalysisDetail";
 import ResultsList from "./ResultsList";
 import NewAnalysisForm from "./NewAnalysisForm";
@@ -860,6 +861,11 @@ export default function App() {
                   </button>
                 </div>
               )}
+              <FastqInspector
+                key={fastqPaths.join("\n")}
+                paths={fastqPaths}
+                references={inputDatasets}
+              />
             </div>
           )}
           {view === "processing" && (

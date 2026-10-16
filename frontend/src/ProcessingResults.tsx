@@ -3,6 +3,7 @@ import type { Run, Sample } from "./types";
 import { url } from "./api";
 import { downloadDataset, retention, publishedDatasets } from "./processing";
 import QcModule from "./QcModule";
+import FastqInspector from "./FastqInspector";
 const metrics = [
   "Per base sequence quality",
   "Per sequence quality scores",
@@ -303,6 +304,22 @@ export default function ProcessingResults({
         </>
       )}
       <h3>Derived FASTQ datasets</h3>
+      {!!datasets.length && run.output_directory && (
+        <FastqInspector
+          key={datasets
+            .filter((d) => chosen === null || chosen.has(d.id))
+            .map((d) => d.id)
+            .join(",")}
+          paths={datasets
+            .filter((d) => chosen === null || chosen.has(d.id))
+            .map((d) => `${run.output_directory}/${d.path}`)}
+          references={datasets.map((d) => ({
+            run_id: run.id,
+            dataset_id: d.id,
+            path: `${run.output_directory}/${d.path}`,
+          }))}
+        />
+      )}
       {!!datasets.length && (
         <div className="processing-selection">
           <button

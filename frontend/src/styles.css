@@ -2634,3 +2634,18 @@ section[aria-label="Analysis jobs"] > .table-scroll {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.fastq-inspector { min-width: 0; margin: 12px 0; }
+.fastq-inspector > small { margin-left: 10px; }
+.inspector-panel { background: var(--surface); border: 1px solid var(--border); padding: 16px; margin-top: 12px; min-width: 0; border-radius: 6px; }
+.inspector-panel ol { padding-left: 24px; overflow-wrap: anywhere; }
+.inspector-panel input[type="number"] { width: 72px; }
+.inspector-files { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px; min-width: 0; }
+.inspector-files > section { min-width: 0; }
+.inspector-files h3 { overflow-wrap: anywhere; }
+.inspector-record { border-top: 1px solid var(--border); padding: 8px 0; }
+.inspector-record h4 { margin: 8px 0; }
+.inspector-record dl { margin: 0; }
+.inspector-record dt { color: var(--text-secondary); font-size: 12px; margin-top: 8px; }
+.inspector-record dd { margin: 2px 0; }
+.inspector-record code { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-all; font-size: 12px; }

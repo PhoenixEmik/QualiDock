@@ -69,7 +69,7 @@ jobs:
         if: matrix.multiqc == '1.35'
         env:
           QUALIDOCK_REQUIRE_PROCESSING_TESTS: '1'
-        run: pytest -q backend/tests/test_processing_real.py backend/tests/test_paired_processing.py backend/tests/test_benchmark.py
+        run: pytest -q backend/tests/test_processing_real.py backend/tests/test_paired_processing.py backend/tests/test_benchmark.py backend/tests/test_inspector.py
       - uses: actions/upload-artifact@v4
         if: always() && matrix.multiqc == '1.35'
         with:
@@ -131,11 +131,15 @@ jobs:
           QUALIDOCK_BROWSER: ${{ matrix.browser }}
           QUALIDOCK_REQUIRE_PROCESSING_TESTS: '1'
         run: pytest -q tests/browser/test_processing_browser.py --junitxml=validation/processing-browser.xml
+      - name: Bounded raw and derived FASTQ Inspector
+        env:
+          QUALIDOCK_BROWSER: ${{ matrix.browser }}
+        run: pytest -q tests/browser/test_inspector_browser.py --junitxml=validation/inspector-browser.xml
       - name: Real reports, opaque-origin isolation, proxy paths and restart
         if: matrix.browser == 'chromium'
         env:
           QUALIDOCK_BROWSER: ${{ matrix.browser }}
-        run: pytest -q tests/browser --ignore=tests/browser/test_processing_browser.py --junitxml=validation/report-browser.xml
+        run: pytest -q tests/browser --ignore=tests/browser/test_processing_browser.py --ignore=tests/browser/test_inspector_browser.py --junitxml=validation/report-browser.xml
       - name: Firefox critical report isolation and interaction
         if: matrix.browser == 'firefox'
         env:
@@ -147,6 +151,8 @@ jobs:
           name: report-browser-${{ matrix.browser }}
           path: |
             validation/processing-browser.xml
+            validation/inspector-browser.xml
+            validation/inspector-*.png
             validation/report-browser.xml
             validation/native-*.png
             validation/paired-processing-*.png

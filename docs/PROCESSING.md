@@ -157,3 +157,31 @@ Before/after charts reuse the existing exact FastQC modules and Raw Data exports
 incompatible bins remain on separate axes. Q20/Q30 are unavailable unless actually
 reported. Official HTML remains sandboxed. Current ECharts bundle-size warnings
 remain; no new library, database or global state framework was added.
+
+## FASTQ Inspector (#26)
+
+Select one or two FASTQs in Workspace and choose **Inspect FASTQ**, or inspect
+selected published outputs in Processing results. This reads the first 5 records
+(default), adjustable from 1–20. Sequence identifiers, ordinals, lengths, nucleotide
+sequences and original quality characters are shown. No encoding is inferred.
+Confirm the displayed R1/R2 order explicitly to compare observed normalized IDs;
+a matching preview is **not** evidence of full-file synchronization.
+
+Authenticated `POST /api/inspector` accepts `paths`, `count`, optional `paired`
+and exact `input_datasets` authorities. It shares raw-root and registered-artifact
+checks, rejects aliases/symlinks, and never makes output roots generally readable.
+Results inside output roots require registered dataset references even when an
+input root overlaps. Missing/changed derived artifacts fail the normal registry
+checks. No FASTQ, sequence or identifier is written to manifests/logs by inspection;
+paths travel in the POST body rather than URL query strings. API responses are
+`no-store`, require normal session/CSRF protection and remain inaccessible to the
+isolated HTML report context.
+
+Per file: at most 512 KiB compressed input, 128 KiB decompressed parser input and
+32 KiB per record representation; total JSON response is capped at 512 KiB.
+Wrapped records/CRLF and gzip are supported through the existing FASTQ parser.
+Oversized previews report `record_too_large`; malformed, non-ASCII-header,
+truncated and changed files report unavailable, with no raw parser exception text.
+ASCII quality characters are displayed unchanged. Empty files are explicit.
+No hashing, full-file scan, random access, index, FastQC or extra job is started.
+A valid first-N preview does not verify later records or a complete gzip CRC.
