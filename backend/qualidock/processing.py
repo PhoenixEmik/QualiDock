@@ -164,7 +164,7 @@ async def execute(manager, run, metrics, errors):
                 await manager.fastqc_results(run, raw_records, metrics, errors, 'raw')
             if run['id'] in manager.cancelled: return
             suffix = '.fastq.gz' if value['gzip'] else '.fastq'
-            outputs = [destination / (f'processed_R{index+1}' + suffix) for index in range(len(source))]
+            outputs = [destination / ((f'processed_R{index+1}' if len(source) == 2 else 'processed') + suffix) for index in range(len(source))]
             if run['mode'] == 'seqkit-stats': outputs = [destination / 'stats.tsv']
             ids = directory / 'processing/private/identifiers.txt'
             if run['mode'] == 'seqkit-extract': ids.write_text('\n'.join(value['identifiers']) + '\n')
@@ -206,6 +206,9 @@ async def execute(manager, run, metrics, errors):
             else:
                 unit['statistics'] = list(csv.DictReader(io.StringIO(bounded_text(outputs[0])), delimiter='\t'))
                 if len(unit['statistics']) != 1: raise ValueError('SeqKit statistics did not contain exactly one input row')
+            for entry in pending:
+                if entry['unit_id'] == unit['id'] and snapshot(local_file(directory, entry['path']).stat()) != entry['snapshot']:
+                    raise ValueError('Derived FASTQ changed during QC; outputs are not published')
             unit.update(state='completed', outputs=[str(path.relative_to(directory)) for path in outputs])
         except (ValueError, OSError, KeyError, TypeError) as exc:
             unit.update(state='failed', error=str(exc))

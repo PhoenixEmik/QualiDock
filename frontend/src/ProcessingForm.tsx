@@ -56,10 +56,15 @@ export default function ProcessingForm({
     tool = fastp ? "fastp" : "seqkit";
   const update = (changes: Partial<ProcessingOptions>) =>
     setOptions({ ...options, ...changes });
-  const unavailable =
-    !config?.tool_details?.[tool]?.compatible ||
-    (fastp && options.compare_qc && !config?.tools.fastqc) ||
-    (fastp && options.multiqc && !config?.tools.multiqc);
+  const required = [
+    tool,
+    ...(fastp && options.compare_qc ? ["fastqc"] : []),
+    ...(fastp && options.multiqc ? ["multiqc"] : []),
+  ];
+  const missing = required.filter(
+    (name) => !config?.tool_details?.[name]?.compatible,
+  );
+  const unavailable = missing.length > 0;
   return (
     <section className="processing-setup" aria-label="Read processing setup">
       <div className="form-section">
@@ -305,8 +310,13 @@ export default function ProcessingForm({
         </p>
         {unavailable && (
           <p role="status" className="tool-warning">
-            {config?.tool_details?.[tool]?.error ||
-              "A required tool is unavailable. Configure its executable path."}
+            {missing
+              .map(
+                (name) =>
+                  config?.tool_details?.[name]?.error ||
+                  `${name} is unavailable; configure its executable path.`,
+              )
+              .join(" ")}
           </p>
         )}
         <button

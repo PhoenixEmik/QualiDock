@@ -48,7 +48,7 @@ def test_select_fastqs_process_compare_download_and_restart(workspace,browser):
     raw.locator('summary').click()
     source=next(sample for sample in metrics['samples'] if sample['id']==run['processing']['units'][0]['raw_qc'][0]['report'])
     module=next(module for module in source['modules'] if module['name']=='Per base sequence quality')
-    assert raw.locator('tbody tr').first.locator('td').all_text_contents()==module['rows'][0]
+    playwright.expect(raw.locator('tbody tr').first.locator('td')).to_have_text(module['rows'][0])
     with page.expect_download() as downloaded:
         result.get_by_role('link',name='Download FASTQ',exact=True).first.click()
     import hashlib

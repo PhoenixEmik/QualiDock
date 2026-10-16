@@ -75,6 +75,9 @@ def test_actual_before_after_and_multiqc(tmp_path):
         assert len(data['samples'])==4
         assert {row['processing_stage'] for row in run['report_input_map'].values() if row.get('processing_stage')}=={'raw','processed'}
         assert data['multiqc']['status']=='available'
+        native_sources=[row for row in run['report_input_map'].values() if row.get('processing_stage')]
+        assert len(native_sources)==4 and all(row.get('multiqc_name') for row in native_sources), run['warnings']
+        assert len({row['multiqc_name'] for row in native_sources})==4
         assert any(row['path']=='multiqc/multiqc_report.html' for row in run['reports'])
         from qualidock.metrics import parse_report
         for sample in data['samples']:
