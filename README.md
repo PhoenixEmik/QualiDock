@@ -42,6 +42,8 @@ Each analysis retains native per-base quality boxplots, mean quality, GC distrib
 
 QC Metrics includes clickable module statuses, optional explanatory notes, paged Raw Data tables and exact CSV/TSV exports. New analyses with confirmed, persisted R1/R2 relationships can compare reported quality and compatible QC profiles. Incompatible bins stay on separate original axes, and old/unpaired results remain individually accessible. See [native FastQC behavior and comparison rules](docs/NATIVE-FASTQC.md).
 
+New analysis supports manual pair review/correction, single-end assignments and sample/lane grouping. Choose a persistent output location from configured roots, then rename or reopen a saved configuration from Analyses. Grouping never merges FASTQ files or QC distributions. See [sample and analysis management](docs/SAMPLE-MANAGEMENT.md) for output-root configuration, locking, API additions and compatibility.
+
 QC Metrics includes a native **Overview** with sortable/exportable MultiQC General Statistics and a clickable QC status heatmap, existing **Sample Details**, and **Compare Samples** with shared read-file selection, six supported comparison modules, and source/chart exports. See [native analytics, scientific constraints and compatibility](docs/NATIVE-ANALYTICS.md).
 
 The workspace uses neutral slate surfaces and blue controls, independently of the FastQC scientific palette. Native quality plots retain yellow quartile boxes, red medians, blue means and quality-region backgrounds. See [palettes, visual fidelity and validation](docs/CHART-FIDELITY.md).

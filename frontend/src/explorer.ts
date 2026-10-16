@@ -8,6 +8,7 @@ export interface ExplorerRow {
   sample: boolean;
   pairing: string;
   description: string;
+  paths?: string[];
 }
 
 export const isInput = (entry: Entry) =>
@@ -17,13 +18,18 @@ export const isInput = (entry: Entry) =>
 export function explorerRows(
   entries: Entry[],
   mode: ExplorerMode,
+  sampleGroups?: Listing["sample_groups"],
 ): ExplorerRow[] {
   const rows: ExplorerRow[] = [];
   const groups = new Map<string, ExplorerRow>();
   for (const entry of entries) {
     const sample = mode === "samples" && entry.kind === "fastq";
     const id =
-      sample && entry.pair_key ? `sample:${entry.pair_key}` : entry.path;
+      sample && entry.ambiguous
+        ? entry.path
+        : sample && (entry.sample_key || entry.pair_key)
+          ? `sample:${entry.sample_key || entry.pair_key}`
+          : entry.path;
     const existing = groups.get(id);
     if (existing) {
       existing.files.push(entry);
@@ -34,11 +40,16 @@ export function explorerRows(
       files: [entry],
       sample,
       name: sample
-        ? entry.pair_key?.split("/").pop() ||
+        ? entry.sample_name ||
+          entry.pair_key?.split("/").pop() ||
           entry.name.replace(/\.(fastq|fq)(\.gz)?$/i, "")
         : entry.name,
       pairing: "",
       description: "",
+      paths:
+        sample && entry.sample_key && !entry.ambiguous
+          ? sampleGroups?.[entry.sample_key]?.paths
+          : undefined,
     };
     rows.push(row);
     groups.set(id, row);
@@ -55,8 +66,10 @@ export function explorerRows(
     } else if (fastqs.some((entry) => entry.read)) {
       const reads = fastqs.map((entry) => entry.read);
       const ambiguous =
-        new Set(reads).size < reads.length ||
-        (reads.includes("R1") && reads.includes("R2"));
+        fastqs.some((entry) => entry.ambiguous) ||
+        (!fastqs.some((entry) => entry.sample_key) &&
+          (new Set(reads).size < reads.length ||
+            (reads.includes("R1") && reads.includes("R2"))));
       row.pairing = ambiguous ? "Ambiguous naming" : "Incomplete pair";
       row.description = ambiguous
         ? "Review individual files before running"
@@ -69,6 +82,27 @@ export function explorerRows(
   return rows;
 }
 
+export function explorerLanes(row: ExplorerRow) {
+  const groups = new Map<string, Entry[]>();
+  for (const file of row.files) {
+    const key = file.pair_key || file.path;
+    groups.set(key, [...(groups.get(key) || []), file]);
+  }
+  return [...groups.entries()].map(([id, files]) => ({
+    id,
+    files,
+    name:
+      [files[0].lane, files[0].chunk && `Chunk ${files[0].chunk}`]
+        .filter(Boolean)
+        .join(" · ") ||
+      (groups.size > 1
+        ? files[0].pair_key?.split("/").pop() || files[0].name
+        : "Reads"),
+    paths: rowInputPaths({ ...row, files, paths: undefined }),
+    incomplete: files.some((file) => !!file.read && !file.paired),
+  }));
+}
+
 export function matchesRow(row: ExplorerRow, search: string) {
   const query = search.trim().toLocaleLowerCase();
   return (
@@ -79,6 +113,7 @@ export function matchesRow(row: ExplorerRow, search: string) {
 
 /** Sample selection includes confirmed mates even when a directory page splits them. */
 export function rowInputPaths(row: ExplorerRow): string[] {
+  if (row.paths) return [...row.paths];
   return [
     ...new Set(
       row.files

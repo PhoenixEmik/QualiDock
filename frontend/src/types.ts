@@ -21,6 +21,11 @@ export interface Run {
   threads: number;
   inputs: string[];
   input_pairing?: InputPairing[];
+  sample_groups?: SampleGroup[];
+  sample_input_paths?: string[];
+  output_root?: string;
+  output_directory?: string;
+  rerun_of?: string | null;
   pairing_note?: string | null;
   progress: number;
   error: string | null;
@@ -36,6 +41,34 @@ export interface Run {
     finished_at: string | null;
   }[];
 }
+export type MetadataSource = "auto" | "confirmed" | "manual";
+export interface SampleGroup {
+  id: string;
+  display_name: string;
+  files: string[];
+  source: MetadataSource;
+}
+export interface SampleConfiguration {
+  input_pairing: InputPairing[];
+  sample_groups: SampleGroup[];
+  pairing_note?: string | null;
+}
+export interface OutputLocation {
+  path: string;
+  default: boolean;
+  available: boolean;
+  free_bytes: number | null;
+  error: string | null;
+}
+export interface RerunConfiguration extends SampleConfiguration {
+  name: string;
+  mode: Run["mode"];
+  paths: string[];
+  entries: Entry[];
+  threads: number;
+  output_root: string;
+  rerun_of: string;
+}
 export interface InputPairing {
   path: string;
   name: string;
@@ -43,6 +76,11 @@ export interface InputPairing {
   pair_key: string | null;
   paired: boolean;
   mate: string | null;
+  source?: MetadataSource;
+  ambiguous?: boolean;
+  assignment?: "paired" | "single" | "unpaired";
+  lane?: string | null;
+  chunk?: string | null;
 }
 export interface Entry {
   name: string;
@@ -54,12 +92,18 @@ export interface Entry {
   pair_key: string | null;
   paired: boolean;
   mate: string | null;
+  sample_key?: string | null;
+  sample_name?: string;
+  lane?: string | null;
+  chunk?: string | null;
+  ambiguous?: boolean;
 }
 export interface Listing {
   path: string;
   parent: string | null;
   entries: Entry[];
   total: number;
+  sample_groups?: Record<string, { paths: string[]; total: number }>;
   snapshot?: string;
   next_offset?: number | null;
 }
@@ -91,6 +135,8 @@ export interface MultiQCSummary {
 }
 export interface Config {
   roots: string[];
+  default_output?: string;
+  output_locations?: OutputLocation[];
   cpus: number;
   memory_mb: number;
   max_threads: number;

@@ -26,11 +26,15 @@ import type {
   Sample,
   MultiQCSummary,
   View,
+  SampleConfiguration,
+  RerunConfiguration,
 } from "./types";
 import { Empty, State } from "./Feedback";
 import FileExplorer from "./FileExplorer";
 import AnalysisDetail from "./AnalysisDetail";
 import NewAnalysisForm from "./NewAnalysisForm";
+import { reconcileConfig } from "./sampleConfig";
+import { filteredAnalyses } from "./analysisManagement";
 import { resolveEntries, listingUrl, type ExplorerMode } from "./explorer";
 
 const active = (run: Run) => ["queued", "running"].includes(run.state);
@@ -71,6 +75,14 @@ export default function App() {
   const [logs, setLogs] = useState("");
   const [logsLoading, setLogsLoading] = useState(false);
   const [name, setName] = useState("");
+  const [sampleConfiguration, setSampleConfiguration] =
+    useState<SampleConfiguration | null>(null);
+  const [outputRoot, setOutputRoot] = useState("");
+  const [rerunOf, setRerunOf] = useState<string | null>(null);
+  const [analysisMode, setAnalysisMode] = useState("all");
+  const [analysisSort, setAnalysisSort] = useState("created-desc");
+  const [renameId, setRenameId] = useState("");
+  const [renameName, setRenameName] = useState("");
   const [mode, setMode] = useState<Run["mode"]>("both");
   const [threads, setThreads] = useState(1);
   const [jobFilter, setJobFilter] = useState("all");
@@ -117,7 +129,14 @@ export default function App() {
           offset &&
           previous?.path === result.path &&
           previous.snapshot === result.snapshot
-            ? { ...result, entries: [...previous.entries, ...result.entries] }
+            ? {
+                ...result,
+                entries: [...previous.entries, ...result.entries],
+                sample_groups: {
+                  ...previous.sample_groups,
+                  ...result.sample_groups,
+                },
+              }
             : result;
         listingRef.current = combined;
         setListing(combined);
@@ -324,7 +343,34 @@ export default function App() {
       setBusy(false);
     }
   };
-  const newAnalysis = () => {
+  const prepareSamples = async () => {
+    const paths = [...selected.values()]
+      .filter((entry) => entry.kind === "fastq")
+      .map((entry) => entry.path);
+    if (!paths.length) {
+      setSampleConfiguration(null);
+      return true;
+    }
+    setBusy(true);
+    try {
+      setSampleConfiguration(
+        await api<SampleConfiguration>("api/sample-configuration", {
+          method: "POST",
+          body: JSON.stringify({ paths }),
+        }),
+      );
+      return true;
+    } catch (err) {
+      fail(err);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+  const newAnalysis = async () => {
+    setRerunOf(null);
+    setSampleConfiguration(null);
+    if (!(await prepareSamples())) return;
     if (
       selected.size &&
       [...selected.values()].every((entry) => entry.kind === "fastqc")
@@ -363,6 +409,18 @@ export default function App() {
                   )
                   .map((entry) => entry.path),
           threads,
+          output_root: outputRoot || null,
+          rerun_of: rerunOf,
+          ...(mode !== "multiqc" && sampleConfiguration
+            ? {
+                input_pairing: reconcileConfig(sampleConfiguration, [
+                  ...selected.keys(),
+                ]).input_pairing,
+                sample_groups: reconcileConfig(sampleConfiguration, [
+                  ...selected.keys(),
+                ]).sample_groups,
+              }
+            : {}),
         }),
       });
       setRuns((previous) =>
@@ -414,16 +472,39 @@ export default function App() {
     setBusy(true);
     setError("");
     try {
-      const entries = await resolveEntries(
-        run.inputs,
-        [],
-        (folder, offset, snapshot) =>
-          api<Listing>(listingUrl(folder, offset, snapshot)),
+      const draft = await api<RerunConfiguration>(
+        `api/runs/${run.id}/configuration`,
       );
-      setSelected(new Map(entries.map((entry) => [entry.path, entry])));
-      setName(`${run.name} · rerun`);
-      setMode(run.mode);
-      setThreads(Math.min(run.threads, config?.max_threads || 1));
+      setSelected(
+        new Map(
+          draft.entries
+            .filter(
+              (entry) =>
+                !(draft.mode === "multiqc" && entry.kind === "directory"),
+            )
+            .map((entry) => [entry.path, entry]),
+        ),
+      );
+      setName(draft.name);
+      setMode(draft.mode);
+      setMultiqcDirectory(
+        draft.mode === "multiqc" &&
+          draft.entries.length === 1 &&
+          draft.entries[0].kind === "directory"
+          ? draft.paths[0]
+          : "",
+      );
+      setThreads(draft.threads);
+      setOutputRoot(draft.output_root);
+      setRerunOf(draft.rerun_of);
+      setSampleConfiguration(
+        draft.input_pairing && draft.sample_groups
+          ? {
+              input_pairing: draft.input_pairing,
+              sample_groups: draft.sample_groups,
+            }
+          : null,
+      );
       open("new");
     } catch (err) {
       fail(err);
@@ -431,21 +512,32 @@ export default function App() {
       setBusy(false);
     }
   };
-  const filteredRuns = runs.filter((run) => {
-    const matchesState =
-      jobFilter === "all" ||
-      (jobFilter === "active" && active(run)) ||
-      (jobFilter === "completed" && run.state === "completed") ||
-      (jobFilter === "issues" &&
-        ["partial", "failed", "interrupted"].includes(run.state)) ||
-      (jobFilter === "cancelled" && run.state === "cancelled");
-    return (
-      matchesState &&
-      `${run.name} ${run.id}`
-        .toLocaleLowerCase()
-        .includes(analysisSearch.trim().toLocaleLowerCase())
-    );
-  });
+  const filteredRuns = filteredAnalyses(
+    runs,
+    analysisSearch,
+    jobFilter,
+    analysisMode,
+    analysisSort,
+  );
+  const rename = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const updated = await api<Run>(`api/runs/${renameId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: renameName }),
+      });
+      setRuns((old) =>
+        old.map((run) => (run.id === updated.id ? updated : run)),
+      );
+      setRenameId("");
+      setNotice("Analysis renamed.");
+    } catch (err) {
+      fail(err);
+    } finally {
+      setBusy(false);
+    }
+  };
   if (checking)
     return (
       <div className="auth-screen">
@@ -713,6 +805,15 @@ export default function App() {
           {view === "new" && (
             <NewAnalysisForm
               config={config}
+              sampleConfiguration={
+                sampleConfiguration
+                  ? reconcileConfig(sampleConfiguration, [...selected.keys()])
+                  : null
+              }
+              setSampleConfiguration={setSampleConfiguration}
+              prepareSamples={prepareSamples}
+              outputRoot={outputRoot}
+              setOutputRoot={setOutputRoot}
               multiqcDirectory={multiqcDirectory}
               setMultiqcDirectory={setMultiqcDirectory}
               selected={selected}
@@ -730,6 +831,40 @@ export default function App() {
           )}
           {view === "analyses" && (
             <section aria-label="Analysis jobs">
+              {renameId && (
+                <form
+                  className="rename-analysis"
+                  aria-label="Rename analysis"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void rename();
+                  }}
+                >
+                  <label>
+                    Analysis display name{" "}
+                    <input
+                      autoFocus
+                      maxLength={120}
+                      value={renameName}
+                      onChange={(e) => setRenameName(e.target.value)}
+                    />
+                  </label>
+                  <button
+                    className="button small"
+                    type="submit"
+                    disabled={busy || !renameName.trim()}
+                  >
+                    Save name
+                  </button>
+                  <button
+                    className="button small"
+                    type="button"
+                    onClick={() => setRenameId("")}
+                  >
+                    Cancel rename
+                  </button>
+                </form>
+              )}
               {runs.length > 0 && (
                 <div className="jobs-toolbar">
                   <div
@@ -748,6 +883,57 @@ export default function App() {
                       </button>
                     ))}
                   </div>
+                  <label>
+                    Workflow{" "}
+                    <select
+                      aria-label="Filter analysis workflow"
+                      value={analysisMode}
+                      onChange={(e) => setAnalysisMode(e.target.value)}
+                    >
+                      <option value="all">All workflows</option>
+                      <option value="fastqc">FastQC only</option>
+                      <option value="both">FastQC + MultiQC</option>
+                      <option value="multiqc">MultiQC only</option>
+                    </select>
+                  </label>
+                  <label>
+                    Sort{" "}
+                    <select
+                      aria-label="Sort analyses"
+                      value={analysisSort}
+                      onChange={(e) => setAnalysisSort(e.target.value)}
+                    >
+                      <option value="created-desc">Newest created</option>
+                      <option value="created-asc">Oldest created</option>
+                      <option value="finished-desc">Newest completed</option>
+                      <option value="finished-asc">Oldest completed</option>
+                    </select>
+                  </label>
+                  <label>
+                    State{" "}
+                    <select
+                      aria-label="Filter exact analysis state"
+                      value={jobFilter}
+                      onChange={(e) => setJobFilter(e.target.value)}
+                    >
+                      {[
+                        "all",
+                        "active",
+                        "issues",
+                        "queued",
+                        "running",
+                        "completed",
+                        "failed",
+                        "partial",
+                        "cancelled",
+                        "interrupted",
+                      ].map((state) => (
+                        <option key={state} value={state}>
+                          {state}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <label className="search-box">
                     <Search size={15} />
                     <input
@@ -776,6 +962,7 @@ export default function App() {
                         <th>Workflow</th>
                         <th>Files</th>
                         <th>Created</th>
+                        <th>Finished</th>
                         <th>
                           <span className="sr-only">Actions</span>
                         </th>
@@ -802,8 +989,30 @@ export default function App() {
                           <td>{modeLabel(run.mode)}</td>
                           <td>{run.inputs.length}</td>
                           <td className="subtle">{date(run.created_at)}</td>
+                          <td className="subtle">
+                            {run.finished_at ? date(run.finished_at) : "—"}
+                          </td>
                           <td>
                             <div className="row-actions">
+                              <button
+                                className="text-button"
+                                onClick={() => {
+                                  setRenameId(run.id);
+                                  setRenameName(run.name);
+                                }}
+                                aria-label={`Rename ${run.name}`}
+                              >
+                                Rename
+                              </button>
+                              {!active(run) && (
+                                <button
+                                  className="text-button"
+                                  onClick={() => void reselect(run)}
+                                  aria-label={`Rerun ${run.name}`}
+                                >
+                                  Rerun
+                                </button>
+                              )}
                               {active(run) && (
                                 <button
                                   className="text-button danger"
@@ -844,6 +1053,7 @@ export default function App() {
                         onClick={() => {
                           setJobFilter("all");
                           setAnalysisSearch("");
+                          setAnalysisMode("all");
                         }}
                       >
                         Clear filters

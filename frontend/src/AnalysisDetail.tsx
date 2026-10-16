@@ -28,6 +28,7 @@ import SampleDetails from "./SampleDetails";
 import { analyticsSamples } from "./analytics";
 import AnalyticsSelection from "./AnalyticsSelection";
 import AnalyticsSummary from "./AnalyticsSummary";
+import AnalysisGroups from "./AnalysisGroups";
 import GeneralStatistics from "./GeneralStatistics";
 import StatusMatrix from "./StatusMatrix";
 import CompareSamples from "./CompareSamples";
@@ -216,6 +217,21 @@ export default function AnalysisDetail({
       >
         <dl className="job-information">
           <div>
+            <dt>Analysis ID</dt>
+            <dd className="mono">{currentRun.id}</dd>
+          </div>
+          <div>
+            <dt>Display name</dt>
+            <dd>{currentRun.name}</dd>
+          </div>
+          <div>
+            <dt>Output directory</dt>
+            <dd className="mono">
+              {currentRun.output_directory ||
+                "Default persistent result store (historical record)"}
+            </dd>
+          </div>
+          <div>
             <dt>Stage</dt>
             <dd>{currentRun.stage}</dd>
           </div>
@@ -269,6 +285,7 @@ export default function AnalysisDetail({
             {warning}
           </p>
         ))}
+        <AnalysisGroups run={currentRun} samples={samples} />
         <details className="analysis-inputs">
           <summary>Input references ({currentRun.inputs.length})</summary>
           <ul>
@@ -332,6 +349,20 @@ export default function AnalysisDetail({
             />
             {analyticsView === "Overview" && (
               <>
+                <AnalysisGroups
+                  run={currentRun}
+                  samples={samples}
+                  selected={selected}
+                  select={select}
+                  inspect={(id) => {
+                    setSampleId(id);
+                    setQcMode("single");
+                    setAnalyticsView("Sample Details");
+                    requestAnimationFrame(() =>
+                      document.getElementById("qc-metric-heading")?.focus(),
+                    );
+                  }}
+                />
                 <GeneralStatistics
                   summary={multiqc}
                   version={currentRun.tools?.multiqc?.version}

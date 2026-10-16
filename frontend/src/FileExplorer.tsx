@@ -15,6 +15,7 @@ import { bytes, date } from "./api";
 import { Empty } from "./Feedback";
 import {
   explorerRows,
+  explorerLanes,
   matchesRow,
   rowInputPaths,
   selectionState,
@@ -62,9 +63,11 @@ export default function FileExplorer({
     }
     previousDirectory.current = listing?.path;
   }, [listing?.path]);
-  const rows = explorerRows(listing?.entries || [], mode).filter((row) =>
-    matchesRow(row, search),
-  );
+  const rows = explorerRows(
+    listing?.entries || [],
+    mode,
+    listing?.sample_groups,
+  ).filter((row) => matchesRow(row, search));
   const paths = [...new Set(rows.flatMap(rowInputPaths))];
   const selection = selectionState(paths, selected);
   return (
@@ -275,26 +278,84 @@ export default function FileExplorer({
                               {row.files.length}{" "}
                               {row.files.length === 1 ? "file" : "files"}
                               {inputs.length > row.files.length
-                                ? " loaded · mate on another page"
+                                ? " loaded · more reads on another page"
                                 : ""}
                             </summary>
-                            <ul>
-                              {row.files.map((file) => (
-                                <li key={file.path}>
-                                  <span className="sample-read">
-                                    {file.read || "Read"}
-                                  </span>
-                                  <span title={file.path}>{file.name}</span>
-                                  <small>
-                                    {bytes(file.size)} ·{" "}
-                                    {date(
-                                      new Date(
-                                        file.modified * 1000,
-                                      ).toISOString(),
-                                    )}
-                                  </small>
-                                </li>
-                              ))}
+                            <ul className="explorer-lanes">
+                              {explorerLanes(row).map((lane) => {
+                                const laneSelection = selectionState(
+                                  lane.paths,
+                                  selected,
+                                );
+                                return (
+                                  <li key={lane.id}>
+                                    <details open>
+                                      <summary>
+                                        <input
+                                          type="checkbox"
+                                          aria-label={`Select lane ${lane.name} of ${row.name}`}
+                                          checked={laneSelection.all}
+                                          ref={(element) => {
+                                            if (element)
+                                              element.indeterminate =
+                                                laneSelection.some;
+                                          }}
+                                          disabled={busy}
+                                          onClick={(event) =>
+                                            event.stopPropagation()
+                                          }
+                                          onChange={(event) =>
+                                            void select(
+                                              lane.paths,
+                                              event.target.checked,
+                                            )
+                                          }
+                                        />
+                                        {lane.name}
+                                        {lane.incomplete
+                                          ? " · Incomplete pair"
+                                          : ""}
+                                      </summary>
+                                      <ul>
+                                        {lane.files.map((file) => (
+                                          <li key={file.path}>
+                                            <label>
+                                              <input
+                                                type="checkbox"
+                                                aria-label={`Select read ${file.name}`}
+                                                checked={selected.has(
+                                                  file.path,
+                                                )}
+                                                disabled={busy}
+                                                onChange={(event) =>
+                                                  void select(
+                                                    [file.path],
+                                                    event.target.checked,
+                                                  )
+                                                }
+                                              />
+                                              <span className="sample-read">
+                                                {file.read || "Read"}
+                                              </span>
+                                              <span title={file.path}>
+                                                {file.name}
+                                              </span>
+                                            </label>
+                                            <small>
+                                              {bytes(file.size)} ·{" "}
+                                              {date(
+                                                new Date(
+                                                  file.modified * 1000,
+                                                ).toISOString(),
+                                              )}
+                                            </small>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </details>
+                                  </li>
+                                );
+                              })}
                             </ul>
                           </details>
                         )}

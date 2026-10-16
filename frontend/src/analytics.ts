@@ -22,6 +22,10 @@ export interface AnalyticsSample {
   multiqcName?: string;
   read?: "R1" | "R2";
   pair?: string;
+  groupId?: string;
+  groupName?: string;
+  lane?: string | null;
+  chunk?: string | null;
 }
 /** Match only unique, exact FastQC input/report stems. Never merge lanes or infer pairs. */
 export function analyticsSamples(
@@ -32,16 +36,29 @@ export function analyticsSamples(
   const pairs = confirmedPairs(run, samples);
   const entities: AnalyticsSample[] = samples.map((sample) => {
     const filename = inputFilename(sample);
-    const inputs = run.inputs.filter(
+    const inputs = (run.sample_input_paths || run.inputs).filter(
       (path) => path.split("/").pop() === filename,
     );
     const pair = pairs.find(
       (pair) => pair.r1.id === sample.id || pair.r2.id === sample.id,
     );
+    const source = inputs.length === 1 ? inputs[0] : sample.id;
+    const group =
+      inputs.length === 1
+        ? run.sample_groups?.find((group) => group.files.includes(inputs[0]))
+        : undefined;
+    const record =
+      inputs.length === 1
+        ? run.input_pairing?.find((record) => record.path === inputs[0])
+        : undefined;
     return {
       id: sample.id,
       name: filename,
-      source: inputs.length === 1 ? inputs[0] : sample.id,
+      source,
+      groupId: group?.id,
+      groupName: group?.display_name,
+      lane: record?.lane,
+      chunk: record?.chunk,
       analysisId: run.id,
       tool: "FastQC",
       version: sample.fastqc_version || null,

@@ -58,6 +58,21 @@ export default function AnalyticsSelection({
               <span>
                 {entity.name}
                 {entity.read ? " · " + entity.read : ""}
+                {[
+                  entity.groupName,
+                  entity.lane,
+                  entity.chunk && `Chunk ${entity.chunk}`,
+                ].filter(Boolean).length > 0 && (
+                  <small>
+                    {[
+                      entity.groupName,
+                      entity.lane,
+                      entity.chunk && `Chunk ${entity.chunk}`,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </small>
+                )}
                 <small className="subtle">{entity.source}</small>
               </span>
             </label>

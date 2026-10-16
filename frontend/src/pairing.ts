@@ -28,7 +28,7 @@ export function confirmedPairs(run: Run, samples: Sample[]): SamplePair[] {
       input.paired &&
       input.pair_key &&
       input.mate &&
-      run.inputs.includes(input.path) &&
+      (run.sample_input_paths || run.inputs).includes(input.path) &&
       input.name === input.path.split("/").pop() &&
       names.get(input.name) === 1
     )
@@ -56,7 +56,17 @@ export function confirmedPairs(run: Run, samples: Sample[]): SamplePair[] {
       continue;
     result.push({
       id,
-      name: id.split("/").pop() || id,
+      name: [
+        run.sample_groups?.find((group) => group.files.includes(r1.path))
+          ?.display_name ||
+          id.split("/").pop() ||
+          id,
+        r1.lane,
+        r1.chunk && `Chunk ${r1.chunk}`,
+        r1.source === "manual" ? "manual" : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
       r1: left[0],
       r2: right[0],
       inputs: [r1, r2],

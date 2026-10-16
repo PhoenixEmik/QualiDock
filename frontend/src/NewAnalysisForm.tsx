@@ -11,10 +11,18 @@ import {
 } from "lucide-react";
 import { bytes, modeLabel } from "./api";
 import { Empty } from "./Feedback";
+import SampleEditor from "./SampleEditor";
+import OutputDirectory from "./OutputDirectory";
+import type { SampleConfiguration } from "./types";
 import type { Config, Entry, Run } from "./types";
 
 interface Props {
   config: Config | null;
+  sampleConfiguration: SampleConfiguration | null;
+  setSampleConfiguration: (value: SampleConfiguration) => void;
+  prepareSamples: () => Promise<unknown>;
+  outputRoot: string;
+  setOutputRoot: (value: string) => void;
   multiqcDirectory: string;
   setMultiqcDirectory: (value: string) => void;
   selected: Map<string, Entry>;
@@ -31,6 +39,11 @@ interface Props {
 }
 export default function NewAnalysisForm({
   config,
+  sampleConfiguration,
+  setSampleConfiguration,
+  prepareSamples,
+  outputRoot,
+  setOutputRoot,
   multiqcDirectory,
   setMultiqcDirectory,
   selected,
@@ -152,7 +165,7 @@ export default function NewAnalysisForm({
                 <Dna size={17} />
                 {mode === "multiqc"
                   ? "Existing FastQC reports will be copied into this run."
-                  : `${pairCount} complete read pairs detected. Both reads are analyzed independently.`}
+                  : `${sampleConfiguration ? sampleConfiguration.input_pairing.filter((record) => record.paired && record.read === "R1").length : pairCount} complete read pairs detected. Both reads are analyzed independently.`}
               </div>
             </>
           ) : (
@@ -163,6 +176,29 @@ export default function NewAnalysisForm({
             </Empty>
           )}
         </section>
+        {mode !== "multiqc" &&
+          configuredPaths.length > 0 &&
+          (sampleConfiguration ? (
+            <SampleEditor
+              value={sampleConfiguration}
+              change={setSampleConfiguration}
+              busy={busy}
+            />
+          ) : (
+            <button
+              className="button"
+              disabled={busy}
+              onClick={() => void prepareSamples()}
+            >
+              Review sample relationships
+            </button>
+          ))}
+        <OutputDirectory
+          config={config}
+          value={outputRoot}
+          change={setOutputRoot}
+          busy={busy}
+        />
         <section className="form-section">
           <div className="form-heading">
             <span>03</span>
@@ -212,6 +248,14 @@ export default function NewAnalysisForm({
           <div>
             <dt>CPU threads</dt>
             <dd>{threads}</dd>
+          </div>
+          <div>
+            <dt>Output root</dt>
+            <dd className="output-destination">
+              {outputRoot ||
+                config?.default_output ||
+                "Default results directory"}
+            </dd>
           </div>
           <div>
             <dt>Executor</dt>

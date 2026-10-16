@@ -2428,3 +2428,130 @@ tr.row-selected:hover {
   font-size: 14px;
   font-weight: 500;
 }
+
+/* Sample metadata extends the existing compact forms; source files stay read-only. */
+.sample-editor details,
+.analysis-groups details {
+  margin: 12px 0;
+}
+.sample-editor summary,
+.analysis-groups summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.metadata-pairs {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+.metadata-pairs > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.metadata-pairs strong {
+  overflow-wrap: anywhere;
+}
+.metadata-pairs small {
+  color: var(--text-secondary);
+}
+.metadata-groups > details {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.metadata-groups ul,
+.analysis-groups ul {
+  list-style: none;
+  padding: 0;
+  max-height: 360px;
+  overflow: auto;
+}
+.metadata-groups li,
+.analysis-groups li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.metadata-groups li > span,
+.analysis-groups li > span {
+  flex: 1;
+  min-width: 160px;
+  overflow-wrap: anywhere;
+}
+.metadata-groups small,
+.analysis-groups small {
+  display: block;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+.metadata-groups label,
+.sample-editor .analytics-actions label,
+.rename-analysis label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.sample-editor input:not([type="checkbox"]),
+.metadata-groups select {
+  max-width: 100%;
+  min-width: 0;
+}
+.metadata-groups select {
+  max-width: 220px;
+}
+.sample-editor .analytics-actions input {
+  width: 160px;
+}
+.sample-editor .analytics-actions select {
+  max-width: 280px;
+}
+.output-destination {
+  overflow-wrap: anywhere;
+  white-space: normal;
+  font-size: 11px;
+}
+.rename-analysis {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  margin-bottom: 16px;
+}
+.jobs-toolbar {
+  flex-wrap: wrap;
+}
+.jobs-toolbar > label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.explorer-lanes > li {
+  display: block;
+  padding: 7px 0;
+}
+.explorer-lanes summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.explorer-lanes label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+.analysis-groups summary input {
+  margin-right: 9px;
+}
