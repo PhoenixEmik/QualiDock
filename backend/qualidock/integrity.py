@@ -146,10 +146,13 @@ def scan_file(entry, mode='full', quick_reads=10000, progress=lambda value: None
             last_progress = 0.0
             full = False
             while True:
-                parsed = record(opened)
+                raw = [] if entry.get('four_line') else None
+                parsed = record(opened, raw)
                 if parsed is None:
                     full = True
                     break
+                if raw is not None and len(raw) != 4:
+                    raise Unsupported('FastQ Screen requires exactly four lines per FASTQ record; wrapped records are unsupported')
                 identifier, length, qualities = parsed
                 ordered.update(struct.pack('>I', len(identifier)))
                 ordered.update(identifier)

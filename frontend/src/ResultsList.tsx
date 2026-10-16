@@ -152,6 +152,7 @@ export default function ResultsList({
               <option value="both">FastQC + MultiQC</option>
               <option value="multiqc">MultiQC only</option>
               <option value="nanoq">nanoq long-read QC</option>
+              <option value="fastq-screen">FastQ Screen</option>
               {processingModes.map((mode) => (
                 <option key={mode} value={mode}>
                   {modeLabel(mode)}

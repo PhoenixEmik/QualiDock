@@ -1,0 +1,6 @@
+#Fastq_screen version: 0.16.0	#Aligner: bowtie2	#Reads in subset: 10
+Genome	#Reads_processed	#Unmapped	%Unmapped	#One_hit_one_genome	%One_hit_one_genome	#Multiple_hits_one_genome	%Multiple_hits_one_genome	#One_hit_multiple_genomes	%One_hit_multiple_genomes	Multiple_hits_multiple_genomes	%Multiple_hits_multiple_genomes
+alpha	20	8	40.00	12	60.00	0	0.00	0	0.00	0	0.00
+beta	20	14	70.00	6	30.00	0	0.00	0	0.00	0	0.00
+
+%Hit_no_genomes: 10.00

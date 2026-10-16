@@ -18,6 +18,7 @@ from .files import PathViolation, DirectoryChanged
 from .manager import RunManager
 from .preview import PREVIEW_PATH, application_csp, report_preview, UnsupportedPreview
 from .history import page as history_page, invalidation
+from .fastq_screen import listing as screen_panels
 
 
 class SessionRequest(BaseModel):
@@ -74,13 +75,14 @@ class IntegrityRequest(BaseModel):
 
 class AnalysisRequest(BaseModel):
     name: str = Field(default="", max_length=120)
-    mode: Literal["both", "fastqc", "multiqc", "nanoq", "fastp", "seqkit-stats", "seqkit-sample", "seqkit-filter", "seqkit-extract"] = "both"
+    mode: Literal["both", "fastqc", "multiqc", "nanoq", "fastq-screen", "fastp", "seqkit-stats", "seqkit-sample", "seqkit-filter", "seqkit-extract"] = "both"
     paths: list[str] = Field(min_length=1, max_length=500)
     threads: int = Field(default=1, ge=1, le=32)
     input_pairing: list[ReadAssignment] | None = Field(default=None, max_length=500)
     sample_groups: list[SampleGroup] | None = Field(default=None, max_length=500)
     output_root: str | None = Field(default=None, max_length=4096)
     processing_options: dict | None = None
+    qc_options: dict | None = None
     input_datasets: list[DatasetReference] | None = Field(default=None, max_length=500)
     rerun_of: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
 
@@ -174,7 +176,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "memory_mb": settings.memory_mb, "max_threads": settings.max_threads, "prefix": settings.prefix,
                 "tools": {name: info["compatible"] for name, info in (await manager.detect_tools()).items()},
                 "tool_details": manager.tool_info, "default_output": str(manager.stores.default),
-                "output_locations": await asyncio.to_thread(manager.stores.listing)}
+                "output_locations": await asyncio.to_thread(manager.stores.listing),
+                "screen_panels": await asyncio.to_thread(screen_panels, settings)}
 
     @app.get("/api/files")
     async def files(path: str, offset: int = 0, limit: int = 500, snapshot: str | None = None, refresh: bool = False):
@@ -198,7 +201,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                                     input_pairing=[record.model_dump(exclude_unset=True) for record in body.input_pairing] if body.input_pairing is not None else None,
                                     sample_groups=[group.model_dump() for group in body.sample_groups] if body.sample_groups is not None else None,
                                     output_root=body.output_root, rerun_of=body.rerun_of, processing_options=body.processing_options,
-                                    input_datasets=[record.model_dump() for record in body.input_datasets] if body.input_datasets is not None else None)
+                                    input_datasets=[record.model_dump() for record in body.input_datasets] if body.input_datasets is not None else None, qc_options=body.qc_options)
 
     @app.get("/api/output-locations")
     async def output_locations():

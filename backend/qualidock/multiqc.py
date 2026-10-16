@@ -37,9 +37,9 @@ async def summary(directory):
         return {'status':'invalid', 'message':f'Cannot parse MultiQC General Statistics: {exc}', 'columns':[], 'rows':[]}
 
 
-async def report_names(directory, reports, statistics):
+async def report_names(directory, reports, statistics=None, *, sample_names=None):
     sources = await asyncio.to_thread(source_mappings, directory/'multiqc/multiqc_data/multiqc_data.json')
-    actual = {row['sample'] for row in statistics['rows']}
+    actual = set(sample_names) if sample_names is not None else {row['sample'] for row in statistics['rows']}
     names = {}
     for path in reports:
         candidates = sources.get(str(path), set()) & actual

@@ -50,6 +50,7 @@ export interface Run {
     | "fastqc"
     | "multiqc"
     | "nanoq"
+    | "fastq-screen"
     | "fastp"
     | "seqkit-stats"
     | "seqkit-sample"
@@ -86,8 +87,14 @@ export interface Run {
   }[];
   processing?: ProcessingResult;
   qc?: {
-    tool: "nanoq";
+    tool: "nanoq" | "fastq_screen";
     options: Record<string, unknown>;
+    reference_panel?: {
+      id: string;
+      sha256: string;
+      index_identity: string;
+      references: { name: string; prefix: string }[];
+    };
     results: {
       id: string;
       path: string;
@@ -96,6 +103,12 @@ export interface Run {
       error: string | null;
       report: string;
       source_sha256?: string;
+      screen?: {
+        columns: string[];
+        rows: string[][];
+        no_genome_percent: string;
+        processed_reads: number;
+      };
       summary: Record<
         string,
         number | Record<string, number> | number[]
@@ -220,6 +233,7 @@ export interface OutputLocation {
   error: string | null;
 }
 export interface RerunConfiguration extends SampleConfiguration {
+  qc_options?: ScreenOptions;
   input_datasets?: DatasetReference[];
   name: string;
   mode: Run["mode"];
@@ -295,6 +309,12 @@ export interface MultiQCSummary {
   rows: { sample: string; values: Record<string, string | number> }[];
 }
 export interface Config {
+  screen_panels?: {
+    id: string;
+    available: boolean;
+    references: string[];
+    error: string | null;
+  }[];
   roots: string[];
   default_output?: string;
   output_locations?: OutputLocation[];
@@ -307,9 +327,16 @@ export interface Config {
     fastp?: boolean;
     seqkit?: boolean;
     nanoq?: boolean;
+    fastq_screen?: boolean;
+    bowtie2?: boolean;
   };
   prefix: string;
   tool_details?: Record<string, ToolInfo>;
+}
+export interface ScreenOptions {
+  panel: string;
+  subset: number;
+  multiqc: boolean;
 }
 export interface Module {
   name: string;

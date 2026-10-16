@@ -15,6 +15,8 @@ TOOL_SPECS = {
     'fastp': ('--version', (0, 23, 0), (2, 0, 0), '0.23 or newer, below 2'),
     'seqkit': ('version', (2, 6, 0), (3, 0, 0), '2.6 or newer, below 3'),
     'nanoq': ('--version', (0, 10, 0), (0, 10, 1), 'tested nanoq 0.10.0'),
+    'fastq_screen': ('--version', (0, 16, 0), (0, 17, 0), 'FastQ Screen 0.16.x'),
+    'bowtie2': ('--version', (2, 4, 0), (3, 0, 0), 'Bowtie2 2.4 or newer, below 3'),
 }
 
 
@@ -45,7 +47,8 @@ async def detect_tool(name: str, executable: str) -> dict:
             await process.wait()
             return b"".join(chunks).decode("utf-8", errors="replace").strip()
         response = await asyncio.wait_for(output(), timeout=PROBE_TIMEOUT)
-        match = re.search(r"(?i)\b" + re.escape(name) + r"(?:,?\s+(?:version|v))?\s*([0-9]+(?:\.[0-9]+){1,2})\b", response)
+        label = {'fastq_screen': r'FastQ Screen', 'bowtie2': r'bowtie2(?:-align-[sl])?'}.get(name, re.escape(name))
+        match = re.search(r"(?i)\b" + label + r"(?:,?\s+(?:version|v))?\s*([0-9]+(?:\.[0-9]+){1,2})\b", response)
         if process.returncode or not match:
             raise ValueError(f"Cannot detect {name} version (exit {process.returncode}): {response[:300]}")
         result["version"] = match[1]

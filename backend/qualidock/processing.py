@@ -114,13 +114,13 @@ def local_file(directory, relative):
     return path
 
 
-async def validate(manager, run, files, pairs, name, namespace='processing/private'):
+async def validate(manager, run, files, pairs, name, namespace='processing/private', four_line=False):
     """Reuse the bounded scanner in a cancellable, resource-governed subprocess."""
     from .store import save_json
     directory = manager.directory(run['id'])
     private = manager.stores.subdirectory(run['id'], namespace, exist_ok=True)
     config, output = private / f'{name}-config.json', private / f'{name}-validation.json'
-    entries = [{'id': f'f{index}', 'path': str(path), 'snapshot': snapshot(path.stat())} for index, path in enumerate(files)]
+    entries = [{'id': f'f{index}', 'path': str(path), 'snapshot': snapshot(path.stat()), 'four_line': four_line} for index, path in enumerate(files)]
     await asyncio.to_thread(save_json, config, {'mode': 'full', 'quick_reads': 10000, 'files': entries, 'pairs': pairs})
     code = await manager.command(run, 'FASTQ validation', [sys.executable, '-m', 'qualidock.integrity_worker', '--config', str(config), '--output', str(output)], directory)
     if run['id'] in manager.cancelled: return None

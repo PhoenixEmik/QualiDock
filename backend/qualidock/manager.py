@@ -19,7 +19,7 @@ from .metrics import parse_report
 from .import_formats import fastp_metadata
 from .reports import discover, metadata
 from .tools import detect_tool
-from . import processing, datasets, multiqc, optional_qc
+from . import processing, datasets, multiqc, optional_qc, fastq_screen
 from .store import ResultStores, now, save_json
 from .sample_metadata import validate_configuration
 from .outcomes import plan, batches, stop, counts
@@ -108,7 +108,7 @@ class RunManager:
 
     async def detect_tools(self):
         signature = []
-        for name in (self.settings.fastqc, self.settings.multiqc, self.settings.fastp, self.settings.seqkit, self.settings.nanoq):
+        for name in (self.settings.fastqc, self.settings.multiqc, self.settings.fastp, self.settings.seqkit, self.settings.nanoq, self.settings.fastq_screen, self.settings.bowtie2):
             executable = shutil.which(name)
             try:
                 stat = Path(executable).stat() if executable else None
@@ -117,7 +117,7 @@ class RunManager:
                 signature.append((name, None, None))
         async with self.tool_lock:
             if signature != self.tool_signature or time.monotonic() - self.tool_checked_at >= 60:
-                names = ("fastqc", "multiqc", "fastp", "seqkit", "nanoq")
+                names = ("fastqc", "multiqc", "fastp", "seqkit", "nanoq", "fastq_screen", "bowtie2")
                 detected = await asyncio.gather(*(detect_tool(name, getattr(self.settings, name)) for name in names))
                 self.tool_info = dict(zip(names, detected))
                 self.tool_signature = signature
@@ -136,10 +136,11 @@ class RunManager:
             return FileAccess([fastqc])
         return self.files
 
-    async def create(self, name: str, mode: str, raw_paths: list[str], threads: int, source_run_id=None, *, input_pairing=None, sample_groups=None, output_root=None, rerun_of=None, processing_options=None, input_datasets=None):
+    async def create(self, name: str, mode: str, raw_paths: list[str], threads: int, source_run_id=None, *, input_pairing=None, sample_groups=None, output_root=None, rerun_of=None, processing_options=None, input_datasets=None, qc_options=None):
         if mode not in {'both', 'fastqc', 'multiqc', *processing.MODES, *optional_qc.MODES}:
             raise ValueError('Invalid analysis mode')
         operation_options = processing.options(mode, processing_options)
+        qc_options = optional_qc.options(mode, qc_options)
         if self.closing:
             raise ValueError("Session is stopping")
         if self.settings.memory_mb < 1024:
@@ -191,7 +192,7 @@ class RunManager:
         operation_units = processing.units({'mode': mode, 'inputs': list(map(str, paths)), 'input_pairing': input_pairing}, operation_options) if mode in processing.MODES else []
         required = processing.required(mode, operation_options, operation_units) if mode in processing.MODES else ["fastqc"] if mode == "fastqc" else ["multiqc"] if mode == "multiqc" else ["fastqc", "multiqc"]
         if mode in optional_qc.MODES:
-            required = [mode]
+            required = optional_qc.required(mode, qc_options)
         for tool in required:
             info = self.tool_info.get(tool)
             executable = getattr(self.settings, tool)
@@ -200,6 +201,10 @@ class RunManager:
             if info and not info["compatible"]:
                 raise ValueError(info["error"])
         processing.check_features(mode, operation_options, self.tool_info)
+        screen_panel = None
+        if mode == 'fastq-screen':
+            screen_panel = await asyncio.to_thread(fastq_screen.panel, self.settings, qc_options['panel'])
+            fastq_screen.safe_path(self.stores.resolve(output_root))
         if self.closing or len([r for r in self.runs.values() if r["state"] in ACTIVE]) >= 20:
             raise ValueError("Session is stopping or the analysis queue is full")
         run_id = uuid.uuid4().hex
@@ -225,7 +230,9 @@ class RunManager:
             run['processing'] = {'schema_version': 1, 'options': operation_options, 'units': operation_units, 'quality_encoding': 'Phred+33' if mode == 'fastp' else None}
             run['derived_datasets'] = []
         if mode in optional_qc.MODES:
-            run['qc'] = {'tool': mode, 'options': {}, 'results': optional_qc.records(paths, mode)}
+            run['qc'] = {'tool': 'fastq_screen' if mode == 'fastq-screen' else mode, 'options': qc_options, 'results': optional_qc.records(paths, mode)}
+            if screen_panel:
+                run['qc']['reference_panel'] = screen_panel
         self.runs[run_id] = run
         self.update(run)
         self.tasks[run_id] = asyncio.create_task(self.execute(run))
@@ -301,7 +308,7 @@ class RunManager:
         return {'name': (run['name'] + ' · rerun')[:120], 'mode': run['mode'], 'paths': [str(path) for path in paths], 'entries': entries,
                 'threads': min(run.get('threads', 1), self.settings.max_threads), 'input_pairing': run.get('input_pairing') or None,
                 'sample_groups': run.get('sample_groups') or None, 'output_root': str(self.directory(run_id).parent), 'rerun_of': run_id,
-                'processing_options': deepcopy(run.get('processing', {}).get('options')), 'input_datasets': [{'run_id': row['run_id'], 'dataset_id': row['dataset_id'], 'path': path} for path, row in derived.items()]}
+                'processing_options': deepcopy(run.get('processing', {}).get('options')), 'qc_options': deepcopy(run.get('qc', {}).get('options')), 'input_datasets': [{'run_id': row['run_id'], 'dataset_id': row['dataset_id'], 'path': path} for path, row in derived.items()]}
 
     def checked_inputs(self, run):
         paths = []
@@ -389,7 +396,7 @@ class RunManager:
                 tools = await self.detect_tools()
                 required = processing.required(run["mode"], run["processing"]["options"], run["processing"]["units"]) if run.get("processing") else ["fastqc"] if run["mode"] == "fastqc" else ["multiqc"] if run["mode"] == "multiqc" else ["fastqc", "multiqc"]
                 if run['mode'] in optional_qc.MODES:
-                    required = [run['mode']]
+                    required = optional_qc.required(run['mode'], run['qc']['options'])
                 self.update(run, tools={name: dict(tools[name]) for name in required})
                 with (directory / "analysis.log").open("a") as stream:
                     for name in required:

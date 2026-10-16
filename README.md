@@ -43,6 +43,10 @@ Optional [nanoq 0.10.0 long-read QC](docs/OPTIONAL-QC.md) provides read-only cou
 N50, length and read-quality summaries through the existing Quality Control view.
 Configure `QUALIDOCK_NANOQ` or place the executable on PATH; it is independent of
 FastQC and no tool is installed automatically.
+Optional [FastQ Screen](docs/OPTIONAL-QC.md#fastq-screen-016x-tested-0160) uses
+administrator-approved, prebuilt Bowtie2 reference panels for read-level source
+screening. Original reports and verified MultiQC aggregation remain available;
+mapping observations are not definitive contamination diagnoses.
 
 - **Workspace:** browse connected storage, navigate directories, and select inputs. Switch between **Samples** (grouped detected read pairs) and **Files** (individual files). Incomplete pairs and unrecognized names remain available. Search covers currently loaded sample names and filenames; load more to include additional entries.
 - **Quality Control:** configure FastQC-only, combined FastQC/MultiQC, or existing-report MultiQC runs.

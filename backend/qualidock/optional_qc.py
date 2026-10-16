@@ -7,9 +7,23 @@ from pathlib import Path
 from .integrity import snapshot
 from .outcomes import stop
 from .processing import local_file, validate
+from .metrics import bounded_text
 from .store import now, save_json
+from . import fastq_screen, multiqc
 
-MODES = {'nanoq'}
+MODES = {'nanoq', 'fastq-screen'}
+
+
+def options(mode, supplied):
+    if mode == 'fastq-screen':
+        return fastq_screen.Options.model_validate(supplied or {}).model_dump()
+    if supplied:
+        raise ValueError('QC options require FastQ Screen; nanoq is report-only without filtering or fast mode')
+    return {}
+
+
+def required(mode, value):
+    return ['nanoq'] if mode == 'nanoq' else ['fastq_screen', 'bowtie2', *(['multiqc'] if value['multiqc'] else [])]
 
 
 def parse_nanoq(path):
@@ -53,14 +67,14 @@ def parse_nanoq(path):
 def records(paths, tool):
     from .outcomes import plan
     return [{**{key: row[key] for key in ('id', 'path', 'name', 'state', 'error', 'exit_code', 'finished_at')},
-             'report': f'qc/{row["id"]}/{tool}.json', 'summary': None} for row in plan(paths)]
+             'report': f'qc/{row["id"]}/input_screen.txt' if tool == 'fastq-screen' else f'qc/{row["id"]}/{tool}.json', 'summary': None} for row in plan(paths)]
 
 
 async def execute(manager, run, metrics, errors):
     directory = manager.directory(run['id'])
     paths = await asyncio.to_thread(manager.checked_inputs, run)
     manager.update(run, stage='Validating FASTQ inputs')
-    checked = await validate(manager, run, paths, [], 'source', namespace='qc/private')
+    checked = await validate(manager, run, paths, [], 'source', namespace='qc/private', four_line=run['mode'] == 'fastq-screen')
     if run['id'] in manager.cancelled:
         return
     validated = {row['path']: row for row in checked['files']}
@@ -73,25 +87,33 @@ async def execute(manager, run, metrics, errors):
                 raise ValueError(source.get('error') or 'Empty or incompletely validated FASTQ')
             # Recheck authorization and queued identity after the validation scan.
             await asyncio.to_thread(manager.checked_inputs, run)
-            manager.stores.subdirectory(run['id'], f'qc/{row["id"]}', exist_ok=True)
             row['state'] = 'running'
-            manager.update(run, stage=f'nanoq · {row["name"]}')
-            argv = [run['tools']['nanoq']['executable'], '--stats', '--json', '--report',
-                    str(directory / row['report']), '--input', row['path']]
-            code = await manager.command(run, 'nanoq', argv, directory)
-            if run['id'] in manager.cancelled:
-                break
-            row['exit_code'] = code
-            if code:
-                raise ValueError(f'nanoq exited with code {code}; see analysis log')
-            summary = await asyncio.to_thread(parse_nanoq, local_file(directory, row['report']))
-            if (summary['reads'], summary['bases'], summary['shortest'], summary['longest']) != (
-                    source['records_scanned'], source['bases_scanned'], source['min_length'], source['max_length']):
-                raise ValueError('nanoq counts or length range differ from validated source records')
+            manager.update(run, stage=f'{run["qc"]["tool"]} · {row["name"]}')
+            summary, screen = None, None
+            if run['mode'] == 'fastq-screen':
+                screen = await fastq_screen.execute(manager, run, row, source)
+                if run['id'] in manager.cancelled:
+                    break
+            else:
+                manager.stores.subdirectory(run['id'], f'qc/{row["id"]}', exist_ok=True)
+                argv = [run['tools']['nanoq']['executable'], '--stats', '--json', '--report',
+                        str(directory / row['report']), '--input', row['path']]
+                code = await manager.command(run, 'nanoq', argv, directory)
+                if run['id'] in manager.cancelled:
+                    break
+                row['exit_code'] = code
+                if code:
+                    raise ValueError(f'nanoq exited with code {code}; see analysis log')
+                summary = await asyncio.to_thread(parse_nanoq, local_file(directory, row['report']))
+                if (summary['reads'], summary['bases'], summary['shortest'], summary['longest']) != (
+                        source['records_scanned'], source['bases_scanned'], source['min_length'], source['max_length']):
+                    raise ValueError('nanoq counts or length range differ from validated source records')
             if snapshot(Path(row['path']).stat()) != source['source_snapshot']:
                 raise ValueError('Source changed during QC')
             await asyncio.to_thread(manager.checked_inputs, run)
             row.update(state='completed', summary=summary, source_sha256=source['sha256'], error=None)
+            if screen is not None:
+                row['screen'] = screen
             run['report_input_map'][row['report']] = {'id': row['id'], 'path': row['path']}
         except (ValueError, OSError, KeyError, TypeError) as exc:
             row.update(state='failed', summary=None, error=str(exc))
@@ -99,6 +121,28 @@ async def execute(manager, run, metrics, errors):
         row['finished_at'] = now()
         manager.update(run, sample_count=sum(r['state'] == 'completed' for r in run['qc']['results']))
     metrics['qc'] = run['qc']
+    if run['id'] not in manager.cancelled and run['qc']['options'].get('multiqc'):
+        reports = [directory/row['report'] for row in run['qc']['results'] if row['state'] == 'completed']
+        if reports:
+            manager.update(run, stage='MultiQC · FastQ Screen')
+            problem = await multiqc.execute(manager, run, reports, options=['--dirs', '--dirs-depth', '1'])
+            if problem:
+                errors.append(problem)
+            elif run['id'] not in manager.cancelled:
+                metrics['multiqc'] = await multiqc.summary(directory)
+                # FastQ Screen contributes its own plot/raw data, not General
+                # Statistics. Verify genuine module samples rather than invent GS.
+                structured = directory/'multiqc/multiqc_data/multiqc_data.json'
+                data = json.loads(await asyncio.to_thread(bounded_text, structured))
+                names = data.get('report_saved_raw_data', {}).get('multiqc_fastq_screen', {})
+                if not isinstance(names, dict) or len(names) != len(reports):
+                    errors.append('MultiQC FastQ Screen module samples unavailable; original reports remain available')
+                else:
+                    for report, name in (await multiqc.report_names(directory, reports, sample_names=names)).items():
+                        if name is None:
+                            errors.append(f'No unique MultiQC source mapping for {report}')
+                        else:
+                            run['report_input_map'][report]['multiqc_name'] = name
     await asyncio.to_thread(save_json, directory / 'metrics.json', metrics)
 
 

@@ -14,9 +14,11 @@ import { Empty } from "./Feedback";
 import { ReadRelationships } from "./SampleEditor";
 import OutputDirectory from "./OutputDirectory";
 import type { SampleConfiguration } from "./types";
-import type { Config, Entry, Run } from "./types";
+import type { Config, Entry, Run, ScreenOptions } from "./types";
 
 interface Props {
+  qcOptions: ScreenOptions;
+  setQcOptions: (value: ScreenOptions) => void;
   config: Config | null;
   sampleConfiguration: SampleConfiguration | null;
   setSampleConfiguration: (value: SampleConfiguration) => void;
@@ -38,6 +40,8 @@ interface Props {
   submit: () => Promise<void>;
 }
 export default function NewAnalysisForm({
+  qcOptions,
+  setQcOptions,
   config,
   sampleConfiguration,
   setSampleConfiguration,
@@ -64,13 +68,15 @@ export default function NewAnalysisForm({
       : entry.kind === "fastq";
   const configuredPaths = [...selected.values()].filter(suitable);
   const required =
-    mode === "nanoq"
-      ? ["nanoq"]
-      : mode === "fastqc"
-        ? ["fastqc"]
-        : mode === "multiqc"
-          ? ["multiqc"]
-          : ["fastqc", "multiqc"];
+    mode === "fastq-screen"
+      ? ["fastq_screen", "bowtie2", ...(qcOptions.multiqc ? ["multiqc"] : [])]
+      : mode === "nanoq"
+        ? ["nanoq"]
+        : mode === "fastqc"
+          ? ["fastqc"]
+          : mode === "multiqc"
+            ? ["multiqc"]
+            : ["fastqc", "multiqc"];
   const unavailable = config
     ? required.filter((tool) => !config.tools[tool as keyof Config["tools"]])
     : [];
@@ -96,7 +102,9 @@ export default function NewAnalysisForm({
           />
           <div className="field-label">QC workflow</div>
           <div className="mode-options" role="group" aria-label="QC workflow">
-            {(["both", "fastqc", "multiqc", "nanoq"] as const).map((value) => (
+            {(
+              ["both", "fastqc", "multiqc", "nanoq", "fastq-screen"] as const
+            ).map((value) => (
               <button
                 key={value}
                 className={`mode-option ${mode === value ? "chosen" : ""}`}
@@ -111,14 +119,92 @@ export default function NewAnalysisForm({
                     ? "Individual read QC and a combined report"
                     : value === "fastqc"
                       ? "Individual read quality assessment"
-                      : value === "nanoq"
-                        ? "Read-only long-read counts, N50 and quality summaries"
-                        : "Combine existing FastQC or fastp JSON reports"}
+                      : value === "fastq-screen"
+                        ? "Read-source mapping against an approved reference panel"
+                        : value === "nanoq"
+                          ? "Read-only long-read counts, N50 and quality summaries"
+                          : "Combine existing FastQC or fastp JSON reports"}
                 </small>
                 {mode === value && <Check size={15} />}
               </button>
             ))}
           </div>
+          {mode === "fastq-screen" && (
+            <div>
+              <label className="field-label" htmlFor="screen-panel">
+                Reference panel
+              </label>
+              <select
+                id="screen-panel"
+                value={qcOptions.panel}
+                disabled={busy}
+                onChange={(e) =>
+                  setQcOptions({ ...qcOptions, panel: e.target.value })
+                }
+              >
+                <option value="">Choose an approved panel</option>
+                {config?.screen_panels?.map((panel) => (
+                  <option
+                    key={panel.id}
+                    value={panel.id}
+                    disabled={!panel.available}
+                  >
+                    {panel.id}{" "}
+                    {panel.error
+                      ? `· ${panel.error}`
+                      : `· ${panel.references.join(", ")}`}
+                  </option>
+                ))}
+              </select>
+              {!config?.screen_panels?.some((p) => p.available) && (
+                <p role="status">
+                  No usable reference panel. An administrator must configure
+                  existing Bowtie2 indexes; QualiDock never downloads genomes or
+                  builds references.
+                </p>
+              )}
+              <p className="inline-note">
+                Each FASTQ is screened independently, including R1 and R2. No
+                paired alignments or definitive contamination judgments.
+                Alignment assumes Phred+33 qualities.
+              </p>
+              <details className="processing-advanced">
+                <summary>Screening settings (optional)</summary>
+                <label>
+                  Target subset size (reads per file){" "}
+                  <input
+                    type="number"
+                    min={1}
+                    max={1000000}
+                    value={qcOptions.subset}
+                    disabled={busy}
+                    onChange={(e) =>
+                      setQcOptions({
+                        ...qcOptions,
+                        subset: Number(e.target.value),
+                      })
+                    }
+                  />
+                </label>
+                <p className="inline-note">
+                  Systematic subsampling, not exact random sampling. FastQ
+                  Screen may process up to twice this target; actual counts are
+                  reported.
+                </p>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={qcOptions.multiqc}
+                    disabled={busy || !config?.tools.multiqc}
+                    onChange={(e) =>
+                      setQcOptions({ ...qcOptions, multiqc: e.target.checked })
+                    }
+                  />{" "}
+                  Generate MultiQC
+                </label>
+              </details>
+            </div>
+          )}
         </section>
         <section className="form-section">
           <div className="form-heading">
@@ -287,7 +373,11 @@ export default function NewAnalysisForm({
             busy ||
             (!configuredPaths.length &&
               !(mode === "multiqc" && multiqcDirectory.trim())) ||
-            unavailable.length > 0
+            unavailable.length > 0 ||
+            (mode === "fastq-screen" &&
+              !config?.screen_panels?.some(
+                (panel) => panel.id === qcOptions.panel && panel.available,
+              ))
           }
           onClick={() => void submit()}
         >

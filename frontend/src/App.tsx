@@ -27,6 +27,7 @@ import type {
   RerunConfiguration,
   ProcessingOptions,
   DatasetReference,
+  ScreenOptions,
 } from "./types";
 import { Empty } from "./Feedback";
 import FileExplorer from "./FileExplorer";
@@ -85,6 +86,11 @@ export default function App() {
   const [rerunOf, setRerunOf] = useState<string | null>(null);
   const [mode, setMode] = useState<Run["mode"]>("both");
   const [threads, setThreads] = useState(1);
+  const [qcOptions, setQcOptions] = useState<ScreenOptions>({
+    panel: "",
+    subset: 100000,
+    multiqc: false,
+  });
   const [processingOptions, setProcessingOptions] = useState<ProcessingOptions>(
     defaults("fastp"),
   );
@@ -108,6 +114,7 @@ export default function App() {
     setSampleConfiguration(null);
     setRerunOf(null);
     setMultiqcDirectory("");
+    setQcOptions({ panel: "", subset: 100000, multiqc: false });
     setOutputRoot("");
     setName("");
     setListing(null);
@@ -451,6 +458,7 @@ export default function App() {
       const payload = {
         name,
         mode,
+        ...(mode === "fastq-screen" ? { qc_options: qcOptions } : {}),
         ...(isProcessing(mode)
           ? { processing_options: processingOptions }
           : {}),
@@ -533,6 +541,8 @@ export default function App() {
     );
     setName(draft.name);
     setMode(draft.mode);
+    if (draft.mode === "fastq-screen" && draft.qc_options)
+      setQcOptions(draft.qc_options);
     if (isProcessing(draft.mode))
       setProcessingOptions(draft.processing_options || defaults(draft.mode));
     setMultiqcDirectory(
@@ -903,6 +913,8 @@ export default function App() {
           )}
           {view === "new" && (
             <NewAnalysisForm
+              qcOptions={qcOptions}
+              setQcOptions={setQcOptions}
               config={config}
               sampleConfiguration={
                 sampleConfiguration

@@ -66,8 +66,11 @@ jobs:
         if: matrix.multiqc == '1.35'
         run: bash scripts/setup-processing-ci.sh
       - name: Provision optional QC tools
-        if: matrix.multiqc == '1.35'
         run: bash scripts/setup-optional-qc-ci.sh
+      - name: Actual FastQ Screen and MultiQC compatibility
+        env:
+          QUALIDOCK_REQUIRE_SCREEN_TESTS: '1'
+        run: pytest -q backend/tests/test_screen_real.py
       - name: Actual nanoq QC
         if: matrix.multiqc == '1.35'
         env:
@@ -170,6 +173,7 @@ jobs:
           path: |
             validation/optional-qc-browser.xml
             validation/nanoq*.png
+            validation/screen*.png
             validation/processing-browser.xml
             validation/inspector-browser.xml
             validation/inspector-*.png

@@ -35,21 +35,23 @@ export async function api<T>(
   return response.json();
 }
 export const modeLabel = (mode: string) =>
-  mode === "nanoq"
-    ? "nanoq long-read QC"
-    : mode === "fastp"
-      ? "fastp processing"
-      : mode === "seqkit-filter"
-        ? "Length filtering"
-        : mode === "seqkit-extract"
-          ? "Extract read identifiers"
-          : mode.startsWith("seqkit-")
-            ? `SeqKit ${mode.slice(7)}`
-            : mode === "both"
-              ? "FastQC + MultiQC"
-              : mode === "fastqc"
-                ? "FastQC only"
-                : "MultiQC only";
+  mode === "fastq-screen"
+    ? "FastQ Screen"
+    : mode === "nanoq"
+      ? "nanoq long-read QC"
+      : mode === "fastp"
+        ? "fastp processing"
+        : mode === "seqkit-filter"
+          ? "Length filtering"
+          : mode === "seqkit-extract"
+            ? "Extract read identifiers"
+            : mode.startsWith("seqkit-")
+              ? `SeqKit ${mode.slice(7)}`
+              : mode === "both"
+                ? "FastQC + MultiQC"
+                : mode === "fastqc"
+                  ? "FastQC only"
+                  : "MultiQC only";
 export const bytes = (value: number | null) =>
   value === null
     ? "—"

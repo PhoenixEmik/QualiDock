@@ -14,6 +14,7 @@ const metrics: [string, string, string][] = [
 ];
 
 export default function OptionalQcResults({ run }: { run: Run }) {
+  if (run.qc?.tool === "fastq_screen") return <ScreenResults run={run} />;
   return (
     <section className="form-section" aria-label="nanoq QC results">
       <h2>nanoq long-read QC</h2>
@@ -121,6 +122,121 @@ export default function OptionalQcResults({ run }: { run: Run }) {
       <p className="inline-note">
         MultiQC aggregation is unavailable for this JSON adapter. MultiQC's
         nanoq module expects a text report; the original JSON remains available.
+      </p>
+    </section>
+  );
+}
+
+function ScreenResults({ run }: { run: Run }) {
+  const panel = run.qc?.reference_panel;
+  return (
+    <section className="form-section" aria-label="FastQ Screen results">
+      <h2>FastQ Screen</h2>
+      <p className="inline-note">
+        FastQ Screen {run.tools?.fastq_screen?.version || "version unavailable"}{" "}
+        · Bowtie2 {run.tools?.bowtie2?.version || "version unavailable"} ·
+        Panel: {panel?.id || "unavailable"}
+      </p>
+      <p>
+        Read-level mapping observations depend on the selected references and
+        alignment settings. They are not proof of contamination or sample
+        identity. R1 and R2 are screened independently; no paired alignments or
+        whole-library abundance estimates.
+      </p>
+      <p className="inline-note">
+        Target subset: {String(run.qc?.options.subset ?? "Unavailable")} reads
+        per file. Systematic subsampling can process up to twice this target.
+        Phred+33 alignment convention.
+      </p>
+      {run.qc?.results.map((row) => (
+        <section
+          key={row.id}
+          className="form-section"
+          aria-label={`Screen result ${row.name}`}
+        >
+          <h3>{row.name}</h3>
+          <p className="mono output-destination">{row.path}</p>
+          <p role="status">
+            {row.state}
+            {row.error ? ` · ${row.error}` : ""}
+          </p>
+          {row.state === "completed" && row.screen && (
+            <>
+              <p>
+                {row.screen.processed_reads.toLocaleString()} reads screened ·{" "}
+                {row.screen.no_genome_percent}% hit no reference in this panel.
+              </p>
+              <div
+                className="table-scroll"
+                role="region"
+                aria-label={`Reference mapping summary ${row.name}`}
+                tabIndex={0}
+              >
+                <table>
+                  <caption>
+                    Original FastQ Screen categories: # columns are counts; %
+                    columns are percentages of screened reads.
+                  </caption>
+                  <thead>
+                    <tr>
+                      {row.screen.columns.map((column) => (
+                        <th key={column}>{column}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {row.screen.rows.map((values) => (
+                      <tr key={values[0]}>
+                        {values.map((value, index) =>
+                          index === 0 ? (
+                            <th key={index} scope="row">
+                              {value}
+                            </th>
+                          ) : (
+                            <td key={index}>{value}</td>
+                          ),
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <a
+                className="button small"
+                href={url(
+                  `api/runs/${run.id}/download?path=${encodeURIComponent(row.report)}`,
+                )}
+              >
+                Download original summary
+              </a>
+            </>
+          )}
+        </section>
+      ))}
+      <details>
+        <summary>Reference provenance</summary>
+        <p className="mono output-destination">
+          Configuration SHA-256: {panel?.sha256 || "Unavailable"}
+        </p>
+        <p>
+          {panel?.index_identity || "Index identity unavailable"}. The actual
+          reference content has not been independently checksummed by QualiDock.
+        </p>
+        <ul>
+          {panel?.references.map((reference) => (
+            <li key={reference.name}>
+              {reference.name}:{" "}
+              <span className="mono output-destination">
+                {reference.prefix}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </details>
+      <p className="inline-note">
+        Official HTML, available graphs and optional MultiQC are in Reports.
+        Graphs require the optional upstream GD::Graph module. No FASTQ outputs
+        are published.
       </p>
     </section>
   );

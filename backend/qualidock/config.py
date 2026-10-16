@@ -47,6 +47,9 @@ class Settings:
     fastp: str = "fastp"
     seqkit: str = "seqkit"
     nanoq: str = "nanoq"
+    fastq_screen: str = "fastq_screen"
+    bowtie2: str = "bowtie2"
+    screen_panels: dict[str, str] = field(default_factory=dict)
     @property
     def max_threads(self) -> int:
         return max(1, min(self.cpus, (self.memory_mb - 512) // 768, 32))
@@ -70,4 +73,7 @@ class Settings:
             fastp=os.environ.get("QUALIDOCK_FASTP", "fastp"),
             seqkit=os.environ.get("QUALIDOCK_SEQKIT", "seqkit"),
             nanoq=os.environ.get("QUALIDOCK_NANOQ", "nanoq"),
+            fastq_screen=os.environ.get("QUALIDOCK_FASTQ_SCREEN", "fastq_screen"),
+            bowtie2=os.environ.get("QUALIDOCK_BOWTIE2", "bowtie2"),
+            screen_panels=json.loads(os.environ.get("QUALIDOCK_SCREEN_PANELS", "{}")),
         )
