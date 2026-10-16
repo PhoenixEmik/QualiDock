@@ -2801,3 +2801,9 @@ section[aria-label="Analysis jobs"] > .table-scroll {
     grid-template-columns: 1fr;
   }
 }
+[aria-label="Project cohort comparison"] label,
+[aria-label="Project cohort comparison"] input,
+[aria-label="Project cohort comparison"] select {
+  min-width: 0;
+  max-width: 100%;
+}
