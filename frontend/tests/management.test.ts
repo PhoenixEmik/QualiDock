@@ -69,6 +69,33 @@ test("self-pairs, unselected inputs and conflicting assignments are rejected", (
     /another pair/,
   );
 });
+test("cross-group manual pairing updates affected group provenance only", () => {
+  const before = config();
+  const fourth = "/data/fourth.fastq.gz";
+  before.input_pairing.push({
+    ...before.input_pairing[2],
+    path: fourth,
+    name: "fourth.fastq.gz",
+  });
+  before.sample_groups[1].files.push(fourth);
+  const paired = assignPair(
+    before,
+    "manual:cross-group",
+    paths[0],
+    paths[1],
+    null,
+    null,
+  );
+  assert.deepEqual(paired.sample_groups[1].files, [fourth]);
+  assert.equal(paired.sample_groups[1].source, "manual");
+  assert.equal(paired.sample_groups[2].source, "auto");
+  const moved = moveToGroup(before, paths[0], "g1");
+  assert.equal(
+    moved.sample_groups.find((g) => g.id === "g1")!.source,
+    "manual",
+  );
+  assert.equal(moved.sample_groups.find((g) => g.id === "g2")!.source, "auto");
+});
 test("remove and reassign a pair without renaming or modifying source references", () => {
   const removed = removePair(
     assignPair(config(), "p", paths[0], paths[1], null, null),

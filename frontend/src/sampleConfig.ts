@@ -58,7 +58,13 @@ export function assignPair(
             source: "manual" as const,
             files: [...new Set([...g.files, r2])],
           }
-        : { ...g, files: g.files.filter((path) => path !== r2) },
+        : g.files.includes(r2)
+          ? {
+              ...g,
+              source: "manual" as const,
+              files: g.files.filter((path) => path !== r2),
+            }
+          : g,
     )
     .filter((g) => g.files.length);
   return { ...config, input_pairing, sample_groups };
@@ -108,7 +114,11 @@ export function moveToGroup(
     sample_groups: config.sample_groups
       .map((group) => ({
         ...group,
-        source: "manual" as const,
+        source:
+          group.id === groupId ||
+          group.files.some((file) => moved.includes(file))
+            ? ("manual" as const)
+            : group.source,
         files:
           group.id === groupId
             ? [...new Set([...group.files, ...moved])]
