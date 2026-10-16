@@ -95,6 +95,9 @@ def workspace(tmp_path_factory, request):
     malicious_id = uuid.uuid4().hex
     directory = output / malicious_id
     directory.mkdir()
+    # Match RunManager's owned-run layout. A missing log caused background 500s
+    # and an unrelated Firefox report-load race in this synthetic security probe.
+    (directory / 'analysis.log').touch(mode=0o600)
     malicious_path = 'fastqc/<img src=x onerror=alert(1)>_fastqc.html'
     (directory / "fastqc").mkdir()
     (directory / malicious_path).write_text("""<!doctype html><title>Security probe</title><h1>Isolated security probe</h1><script>
@@ -110,6 +113,7 @@ parent.postMessage({type:'qualidock-report-ready',html:'<img onerror=alert(1)>'}
     instance.malicious_path = malicious_path
     try:
         with instance.api() as client:
+            assert client.get(f'api/runs/{malicious_id}/logs').status_code == 200
             tools = client.get("api/config").json()["tool_details"]
             assert tools["fastqc"]["version"] == "0.13.0"
             assert tools["multiqc"]["version"] == "1.35"
