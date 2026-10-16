@@ -40,6 +40,7 @@ def test_real_benchmark(tmp_path, monkeypatch, mode, flags):
     assert evidence['input_integrity_unchanged'] and evidence['hash_only_source_passes']==2
     assert evidence['execution_stages'] and not evidence['unpublished_fastqs']
     assert evidence['waited_child_cpu_seconds']>0
+    assert evidence['sampled_read_bytes'] is None and evidence['sampled_write_bytes'] is None
     assert all(s['exit_code']==0 for s in evidence['execution_stages'])
     if mode.startswith('seqkit-') or mode=='fastp':
         assert len(evidence['validation_scans'])>=2

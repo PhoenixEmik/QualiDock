@@ -115,7 +115,7 @@ def main(args):
               'input_integrity_evidence':'sha256_before_after' if args.hash_inputs else 'metadata_only_not_content_proof',
               'fingerprint_before_seconds':time.monotonic()-fingerprint_started,'hash_only_source_passes':2 if args.hash_inputs else 0,
               'mode':args.mode,'processing_options':options,'threads':args.threads,'memory_mb':budget,'api_requests':[],'stages':[],'process_counters':{},'cancellation_requested':False,
-              'measurement_limits':'Linux process counters are sampled lower bounds, not NFS/Lustre throughput; short processes may be missed. RSS is sampled, not exact peak. Non-Linux kernel I/O counters are unavailable.'}
+              'measurement_limits':'CPU samples miss short processes; RSS is sampled, not exact peak. Per-process I/O includes waited children, so counters are not summed into a workload total or NFS/Lustre throughput. Non-Linux kernel I/O is unavailable.'}
     started=time.monotonic()
     child_before=resource.getrusage(resource.RUSAGE_CHILDREN)
     try:
@@ -200,7 +200,9 @@ def main(args):
         evidence['sampled_cpu_seconds']=sum(value['cpu_ticks'] for value in observed)/os.sysconf('SC_CLK_TCK') if observed else None
         evidence['sampled_cpu_percent_one_core']=100*evidence['sampled_cpu_seconds']/evidence['wall_seconds'] if observed else None
         for key in ('read_bytes','write_bytes','rchar','wchar'):
-            evidence['sampled_'+key]=sum(value[key] for value in observed if key in value) if any(key in value for value in observed) else None
+            # /proc/PID/io includes waited-for children: summing sampled parents
+            # and children can double count. Preserve observations, not a false total.
+            evidence['sampled_'+key]=None
         child_after=resource.getrusage(resource.RUSAGE_CHILDREN)
         evidence['waited_child_cpu_seconds']=child_after.ru_utime+child_after.ru_stime-child_before.ru_utime-child_before.ru_stime
         evidence['child_cpu_scope']='Waited children of this benchmark, including tool probes and guardians; not parent API CPU or per-stage utilization'

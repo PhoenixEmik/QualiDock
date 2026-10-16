@@ -107,7 +107,10 @@ cancellation is recorded separately and never called completed processing.
 `validation_scans` records actual scanner bytes, coverage and checksum evidence.
 `execution_stages` records tool/validation wall time and sampled RSS from the
 executor; `process_counters` adds Linux sampled CPU and available rchar/wchar and
-read_bytes/write_bytes. Counters can miss short processes and are lower bounds.
+read_bytes/write_bytes. CPU sampling can miss short processes. Per-process I/O
+also includes waited children ([Linux proc_pid_io](https://man7.org/linux/man-pages/man5/proc_pid_io.5.html));
+those observations are retained individually, with workload I/O totals null
+rather than summing potentially overlapping parent/child counters.
 `waited_child_cpu_seconds` measures waited children (including probes/guardians),
 not API CPU; cumulative child high-water RSS is **not** a tree peak. Optional QC
 stages are explicit, not silently counted as baseline processing. Output audit
