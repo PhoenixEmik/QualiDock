@@ -24,6 +24,7 @@ export default function SampleEditor({
     [groupSeed, setGroupSeed] = useState("");
   const pairs = pairRecords(value.input_pairing),
     unpaired = value.input_pairing.filter((r) => !r.paired);
+  const startingFile = value.input_pairing.find((r) => r.path === groupSeed);
   return (
     <section
       className="form-section sample-editor"
@@ -201,6 +202,7 @@ export default function SampleEditor({
               aria-label="New sample starting file"
               value={groupSeed}
               onChange={(e) => setGroupSeed(e.target.value)}
+              disabled={busy}
             >
               <option value="">Choose file</option>
               {value.input_pairing.map((r) => (
@@ -212,11 +214,9 @@ export default function SampleEditor({
           </label>
           <button
             className="button small"
-            disabled={busy || !groupName.trim() || !groupSeed}
+            disabled={busy || !groupName.trim() || !startingFile}
             onClick={() => {
-              const first = value.input_pairing.find(
-                (r) => r.path === groupSeed,
-              )!;
+              if (!startingFile) return;
               const id = "sample:" + crypto.randomUUID();
               change(
                 moveToGroup(
@@ -232,7 +232,7 @@ export default function SampleEditor({
                       },
                     ],
                   },
-                  first.path,
+                  startingFile.path,
                   id,
                 ),
               );
@@ -315,6 +315,13 @@ export default function SampleEditor({
                           {value.sample_groups.map((g) => (
                             <option key={g.id} value={g.id}>
                               {g.display_name}
+                              {value.sample_groups.some(
+                                (other) =>
+                                  other.id !== g.id &&
+                                  other.display_name === g.display_name,
+                              )
+                                ? ` · ${g.id}`
+                                : ""}
                             </option>
                           ))}
                         </select>
