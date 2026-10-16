@@ -29,8 +29,9 @@ can be confirmed or corrected before running.
 Workspace Samples shows expandable lane/chunk groups with independent lane and
 read checkboxes; Files remains unchanged. Selecting a whole sample includes its
 other directory pages using the existing directory snapshot validation. A run is
-still limited to 500 inputs, and FastQC input stems must remain unique within a run
-to prevent official-output collisions. Duplicate display names never merge results.
+still limited to 500 inputs. Identical FASTQ stems in separate directories now use
+independent output namespaces; exact report-to-input mappings preserve identity.
+Duplicate display names never merge results.
 
 QC Overview displays the saved groups. Select a group to reuse its individual reads
 in native comparisons, or inspect a member's FastQC chart. Saved lane/read identities
@@ -127,6 +128,27 @@ analytics, rename and reviewed rerun alongside the existing chart/report/export 
 sandbox regression suite. Screenshot artifacts remain under `validation/`.
 
 Future work can add controlled subdirectory creation with an explicit lock/index
-ownership design, or isolated per-file tool outputs for colliding FASTQ basenames.
+ownership design.
 Cross-analysis projects, destructive deletion, preprocessing and scheduler execution
 remain outside this phase.
+
+## Per-file execution evidence
+
+New runs add `input_outcomes` (stable path-derived ID, exact input path, planned
+ZIP/HTML artifact, recorded state, batch exit code and any error), plus
+`report_input_map` for exact report-to-input identity. Unique-name report paths stay
+unchanged. Colliding stems use `fastqc/i_<path hash>/` without changing/copying source
+FASTQs or rewriting official FastQC files. MultiQC uses its supported `--dirs` /
+`--dirs-depth 1` when names collide; native statistics map only verified names.
+Imported reports retain report-source provenance and do not assert source integrity.
+
+FastQC runs bounded batches of at most eight inputs per output namespace, under
+the existing serial LocalExecutor/resource limits. Within a batch individual file
+start/progress is unknown; no running percentage is inferred. Completed means a
+ZIP parsed successfully with the correct reported filename. A nonzero batch exit
+can coexist with valid completed reports; missing/unparseable inputs have explicit
+errors. Earlier completed batches survive cancellation; unfinished states become
+cancelled/interrupted, or unknown if an unexpected failure prevents reconciliation.
+Saved completed records stay completed on restart; active unfinished records become
+interrupted. Historical records without these optional fields show unavailable
+execution evidence. QC WARN/FAIL classifications remain independent of execution.

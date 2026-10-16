@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timezone
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -22,6 +23,7 @@ from .reports import discover, metadata
 from .tools import detect_tool
 from .store import ResultStores
 from .sample_metadata import validate_configuration
+from .outcomes import plan, batches, stop, counts
 
 ACTIVE = {"queued", "running"}
 TERMINAL = {"completed", "failed", "partial", "cancelled", "interrupted"}
@@ -84,6 +86,7 @@ class RunManager:
                         self.stores.directory(run['id'])
                         if run["state"] in ACTIVE:
                             run.update(state="interrupted", finished_at=now(), stage="Session ended", error="The previous web session ended before this analysis finished.")
+                            stop(run.get('input_outcomes', []), 'interrupted', 'Previous session ended before a complete outcome was recorded')
                             save_json(path, run)
                         self.runs[run["id"]] = run
                     except (OSError, ValueError, KeyError):
@@ -172,9 +175,6 @@ class RunManager:
         else:
             if any(not p.is_file() or not FASTQ.search(p.name) for p in paths):
                 raise ValueError("FastQC requires .fastq, .fq, .fastq.gz, or .fq.gz files")
-            stems = [FASTQ.sub("", p.name) for p in paths]
-            if len(stems) != len(set(stems)):
-                raise ValueError("Input filenames must have unique FASTQ stems to avoid output collisions")
             configuration = await asyncio.to_thread(self.sample_configuration, paths, supplied_pairing, sample_groups)
             input_pairing = configuration['input_pairing'] if not configuration.get('pairing_note') or supplied_pairing is not None else []
             normalized_groups = configuration['sample_groups']
@@ -205,6 +205,7 @@ class RunManager:
                "started_at": None, "finished_at": None, "threads": threads, "inputs": [str(p) for p in paths],
                "input_metadata": [{**metadata(p), "kind": "directory" if p.is_dir() else "file", "device": p.stat().st_dev, "inode": p.stat().st_ino} for p in paths],
                "input_pairing": input_pairing, "sample_groups": normalized_groups, "sample_input_paths": sample_input_paths,
+               "input_outcomes": plan(paths) if mode != 'multiqc' else [], "report_input_map": {},
                "output_root": str(directory.parent), "output_directory": str(directory), "rerun_of": rerun_of,
                "pairing_note": pairing_note,
                "report_inputs": report_inputs, "source_run_id": source_run_id, "tools": {tool: dict(self.tool_info.get(tool, {})) for tool in required},
@@ -331,13 +332,45 @@ class RunManager:
                 paths = await asyncio.to_thread(self.checked_inputs, run)
                 if run_id in self.cancelled:
                     return
+                parsed_by_path = {}
                 if run["mode"] != "multiqc":
-                    self.update(run, stage="FastQC", progress=10)
-                    command = [run["tools"]["fastqc"]["executable"], "--outdir", str(directory / "fastqc"), "--threads", str(run["threads"]), "--memory", "512", "--format", "fastq", *map(str, paths)]
-                    code = await self.command(run, "fastqc", command, directory)
-                    if code:
-                        errors.append(f"FastQC exited with code {code}. See analysis log.")
-                    reports = sorted((directory / "fastqc").glob("*_fastqc.zip"))
+                    for batch in batches(run['input_outcomes']):
+                        if run_id in self.cancelled:
+                            break
+                        destination = directory / batch[0]['output_directory']
+                        destination.mkdir(parents=True, exist_ok=True)
+                        for record in batch:
+                            record.update(state='unknown', error='Submitted to FastQC; individual start is not reported by the tool')
+                        completed = counts(run['input_outcomes'])['completed']
+                        self.update(run, stage=f"FastQC · {completed} of {len(paths)} inputs completed")
+                        command = [run["tools"]["fastqc"]["executable"], "--outdir", str(destination), "--threads", str(run["threads"]), "--memory", "512", "--format", "fastq", *[record['path'] for record in batch]]
+                        code = await self.command(run, "fastqc", command, directory)
+                        if code and run_id not in self.cancelled:
+                            errors.append(f"FastQC exited with code {code}. See analysis log.")
+                        for record in batch:
+                            record.update(exit_code=code, finished_at=now())
+                            path = directory / record['report']
+                            try:
+                                if path.is_symlink() or not path.resolve().is_relative_to(directory):
+                                    raise ValueError('FastQC artifact escaped its output directory')
+                                sample = await asyncio.to_thread(parse_report, path, record['report'])
+                                if sample['name'] != record['name']:
+                                    raise ValueError('FastQC reported filename does not match the original input')
+                                record.update(state='completed', error=None)
+                                parsed_by_path[path] = sample
+                                metrics['samples'].append(sample)
+                                run['report_input_map'][sample['id']] = {'path': record['path'], 'id': record['id']}
+                            except (ValueError, OSError, zipfile.BadZipFile, UnicodeError, RuntimeError, NotImplementedError) as exc:
+                                if run_id in self.cancelled:
+                                    record.update(state='interrupted' if run['state'] == 'interrupted' else 'cancelled', error='Tool stopped before a usable report was recorded')
+                                else:
+                                    record.update(state='failed', error=f'No usable FastQC result: {exc}')
+                                    errors.append(f"{record['name']} ({record['id']}): {record['error']}")
+                        await asyncio.to_thread(save_json, directory / 'metrics.json', metrics)
+                        self.update(run, sample_count=len(metrics['samples']), stage=f"FastQC · {len(metrics['samples'])} of {len(paths)} inputs completed")
+                        self.refresh_reports(run)
+                    reports = list(parsed_by_path)
+                    metrics['samples'] = []  # Reuse the common import/aggregation parser below.
                 else:
                     reports = []
                     access = self.input_access(run.get("source_run_id"))
@@ -351,38 +384,50 @@ class RunManager:
                                 if source.is_symlink() or metadata(source) != {key: entry[key] for key in ("path", "size", "mtime_ns")}:
                                     raise ValueError(f"Input changed while queued: {source.name}")
                                 shutil.copyfile(source, destination / source.name)
-                            reports.append(destination / Path(record["path"]).name)
+                            report = destination / Path(record["path"]).name
+                            run['report_input_map'][str(report.relative_to(directory))] = {'source_report': record['path'], 'id': 'report_' + hashlib.sha256(record['path'].encode()).hexdigest()[:24]}
+                            if run.get('source_run_id'):
+                                source_run = self.runs[run['source_run_id']]
+                                source_report = str(Path(record['path']).relative_to(self.directory(source_run['id'])))
+                                mapping = source_run.get('report_input_map', {}).get(source_report)
+                                if mapping:
+                                    run['report_input_map'][str(report.relative_to(directory))] = {key: value for key, value in mapping.items() if key != 'multiqc_name'}
+                            reports.append(report)
                     await asyncio.to_thread(snapshot)
                 successful = []
                 sample_names = set()
+                multiqc_names = {}
+                namespaced = False
                 for path in reports:
                     try:
-                        sample = await asyncio.to_thread(parse_report, path, str(path.relative_to(directory)))
+                        sample = parsed_by_path.get(path) or await asyncio.to_thread(parse_report, path, str(path.relative_to(directory)))
                         metrics["samples"].append(sample)
-                        # MultiQC cleans FASTQ suffixes from sample names. Avoid silently overwriting duplicates.
                         sample_name = FASTQ.sub("", sample["name"])
-                        if run["mode"] != "fastqc" and sample_name in sample_names:
-                            errors.append(f"Duplicate sample name not aggregated by MultiQC: {sample['name']}")
-                        else:
-                            successful.append(path)
-                            sample_names.add(sample_name)
+                        namespaced = namespaced or sample_name in sample_names
+                        successful.append(path)
+                        sample_names.add(sample_name)
+                        multiqc_names[sample['id']] = sample_name
                     except (ValueError, OSError, zipfile.BadZipFile, UnicodeError, RuntimeError, NotImplementedError) as exc:
                         errors.append(f"Cannot parse {path.name}: {exc}")
                 await asyncio.to_thread(save_json, directory / "metrics.json", metrics)
-                self.update(run, sample_count=len(metrics["samples"]), warnings=[warning for sample in metrics["samples"] for warning in sample.get("warnings", [])], progress=65)
+                self.update(run, sample_count=len(metrics["samples"]), warnings=[warning for sample in metrics["samples"] for warning in sample.get("warnings", [])])
                 if run_id in self.cancelled:
                     return
                 if run["mode"] != "fastqc":
                     if not successful:
                         errors.append("No FastQC reports were produced for MultiQC.")
                     else:
-                        self.update(run, stage="MultiQC", progress=75)
+                        self.update(run, stage="MultiQC")
                         # An explicit list includes only successfully parsed, run-local QC reports.
                         file_list = directory / "multiqc-inputs.txt"
                         if any("\n" in str(path) or "\r" in str(path) for path in successful):
                             raise ValueError("MultiQC report paths cannot contain newlines")
                         file_list.write_text("".join(str(path) + "\n" for path in successful))
-                        code = await self.command(run, "multiqc", [run["tools"]["multiqc"]["executable"], "--file-list", str(file_list), "--outdir", str(directory / "multiqc"), "--force", "--data-format", "json", "--no-version-check"], directory)
+                        if namespaced:
+                            multiqc_names = {str(path.relative_to(directory)): path.parent.name + " | " + multiqc_names[str(path.relative_to(directory))] for path in successful}
+                            if len(set(multiqc_names.values())) != len(successful):
+                                raise ValueError("MultiQC sample namespaces are ambiguous; individual FastQC results are preserved")
+                        code = await self.command(run, "multiqc", [run["tools"]["multiqc"]["executable"], "--file-list", str(file_list), "--outdir", str(directory / "multiqc"), "--force", "--data-format", "json", "--no-version-check", *(["--dirs", "--dirs-depth", "1"] if namespaced else [])], directory)
                         if code:
                             errors.append(f"MultiQC exited with code {code}. See analysis log.")
                         elif not (directory / "multiqc/multiqc_report.html").is_file():
@@ -400,6 +445,14 @@ class RunManager:
                             metrics["multiqc"] = {"status": "invalid", "message": f"Cannot parse MultiQC General Statistics: {exc}", "columns": [], "rows": []}
                     if metrics["multiqc"]["status"] != "available":
                         run["warnings"].append(metrics["multiqc"]["message"])
+                if run['mode'] != 'fastqc' and metrics.get('multiqc', {}).get('status') == 'available':
+                    actual_names = {row['sample'] for row in metrics['multiqc']['rows']}
+                    for report, name in multiqc_names.items():
+                        if name in actual_names and report in run['report_input_map']:
+                            run['report_input_map'][report]['multiqc_name'] = name
+                    missing = set(multiqc_names.values()) - actual_names
+                    if missing:
+                        errors.append('MultiQC omitted expected report samples: ' + ', '.join(sorted(missing)))
                 await asyncio.to_thread(save_json, directory / "metrics.json", metrics)
                 expected = len(run.get("report_inputs", [])) if run["mode"] == "multiqc" else len(paths)
                 if len(metrics["samples"]) != expected:
@@ -422,6 +475,10 @@ class RunManager:
                     run.update(**changes, updated_at=now())
                     self.revision += 1
         finally:
+            pending = run.get('input_outcomes', [])
+            if any(record['state'] in {'queued', 'unknown', 'running'} for record in pending):
+                terminal = run['state'] if run['state'] in {'cancelled', 'interrupted'} else 'unknown'
+                stop(pending, terminal, 'No complete per-file outcome was recorded before the analysis stopped')
             try:
                 self.refresh_reports(run)
             except (OSError, ValueError):
@@ -444,6 +501,7 @@ class RunManager:
             return run
         self.cancelled.add(run_id)
         await self.executor.cancel(run_id)
+        stop(run.get('input_outcomes', []), 'cancelled', 'Analysis cancelled before a complete per-file outcome was recorded')
         self.update(run, state="cancelled", stage="Cancelled", finished_at=now())
         return run
 
@@ -453,6 +511,7 @@ class RunManager:
         self.cancelled.update(run_id for run_id, _ in unfinished)
         for run_id, run in unfinished:
             await self.executor.cancel(run_id)
+            stop(run.get('input_outcomes', []), 'interrupted', 'Session ended before a complete per-file outcome was recorded')
             changes = dict(state="interrupted", stage="Session ended", finished_at=now(), error="The web session ended. Start a new analysis to rerun these inputs.")
             try:
                 self.update(run, **changes)

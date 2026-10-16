@@ -32,6 +32,8 @@ import AnalysisGroups from "./AnalysisGroups";
 import GeneralStatistics from "./GeneralStatistics";
 import StatusMatrix from "./StatusMatrix";
 import CompareSamples from "./CompareSamples";
+import FileOutcomes from "./FileOutcomes";
+import { sampleLabel } from "./sampleIdentity";
 
 const active = (run: Run) => ["running", "queued"].includes(run.state);
 const detailTabs = [
@@ -286,6 +288,7 @@ export default function AnalysisDetail({
           </p>
         ))}
         <AnalysisGroups run={currentRun} samples={samples} />
+        <FileOutcomes run={currentRun} />
         <details className="analysis-inputs">
           <summary>Input references ({currentRun.inputs.length})</summary>
           <ul>
@@ -495,7 +498,7 @@ export default function AnalysisDetail({
                         >
                           {samples.map((sample) => (
                             <option key={sample.id} value={sample.id}>
-                              {sample.name}
+                              {sampleLabel(currentRun, sample, samples)}
                             </option>
                           ))}
                         </select>
@@ -589,7 +592,7 @@ export default function AnalysisDetail({
                               }}
                             >
                               <FileText size={17} />
-                              {sample.name}
+                              {sampleLabel(currentRun, sample, samples)}
                             </button>
                           </td>
                           <td>

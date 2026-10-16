@@ -199,14 +199,15 @@ def test_import_path_shell_characters_are_literal(client, setup):
     assert not (settings.output / run['id'] / 'PWNED').exists()
 
 
-def test_duplicate_sample_names_surface_partial_not_silent_overwrite(client, setup):
+def test_duplicate_sample_names_use_isolated_multiqc_directory_prefixes(client, setup):
     settings, root = setup
     first = copy_report(root)
     second = root / 'other' / 'coverage_R1_fastqc'
     shutil.copytree(first, second)
     run = wait(client, start(client, root, mode='multiqc', paths=[str(first), str(second)])['id'])
-    assert run['state'] == 'partial' and 'Duplicate sample name' in run['error']
-    assert len((settings.output / run['id'] / 'multiqc-inputs.txt').read_text().splitlines()) == 1
+    assert run['state'] == 'completed'
+    assert '--dirs' in run['executions'][0]['argv']
+    assert len((settings.output / run['id'] / 'multiqc-inputs.txt').read_text().splitlines()) == 2
     assert run['sample_count'] == 2
 
 

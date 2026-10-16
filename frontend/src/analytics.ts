@@ -10,6 +10,7 @@ import {
 import { confirmedPairs } from "./pairing.ts";
 import { alignBins } from "./comparison.ts";
 import { exportModule, type ExportMode } from "./rawExport.ts";
+import { sampleSource, sampleLabel } from "./sampleIdentity.ts";
 
 export interface AnalyticsSample {
   id: string;
@@ -35,14 +36,15 @@ export function analyticsSamples(
 ): AnalyticsSample[] {
   const pairs = confirmedPairs(run, samples);
   const entities: AnalyticsSample[] = samples.map((sample) => {
-    const filename = inputFilename(sample);
-    const inputs = (run.sample_input_paths || run.inputs).filter(
-      (path) => path.split("/").pop() === filename,
-    );
+    const original = sampleSource(run, sample);
+    const inputs = original ? [original] : [];
     const pair = pairs.find(
       (pair) => pair.r1.id === sample.id || pair.r2.id === sample.id,
     );
-    const source = inputs.length === 1 ? inputs[0] : sample.id;
+    const source =
+      inputs.length === 1
+        ? inputs[0]
+        : run.report_input_map?.[sample.id]?.source_report || sample.id;
     const group =
       inputs.length === 1
         ? run.sample_groups?.find((group) => group.files.includes(inputs[0]))
@@ -53,7 +55,7 @@ export function analyticsSamples(
         : undefined;
     return {
       id: sample.id,
-      name: filename,
+      name: sampleLabel(run, sample, samples),
       source,
       groupId: group?.id,
       groupName: group?.display_name,
@@ -72,8 +74,16 @@ export function analyticsSamples(
       (entity) =>
         entity.fastqc &&
         [
-          entity.name,
-          entity.name.replace(/\.(fastq|fq)(\.gz|\.bz2)?$/i, ""),
+          run.report_input_map?.[entity.id]?.multiqc_name,
+          ...(run.report_input_map?.[entity.id]?.multiqc_name
+            ? []
+            : [
+                inputFilename(entity.fastqc),
+                inputFilename(entity.fastqc).replace(
+                  /\.(fastq|fq)(\.gz|\.bz2)?$/i,
+                  "",
+                ),
+              ]),
         ].includes(row.sample),
     );
     if (matches.length === 1 && !matches[0].multiqcName)

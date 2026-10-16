@@ -137,3 +137,63 @@ def test_real_manual_pair_groups_custom_output_and_rerun(tmp_path):
         assert restored['output_root']==str(project)
         assert client.get(f"/api/runs/{run['id']}/metrics").json()==metrics
     assert before=={p:hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
+
+
+@pytest.mark.skipif(not FASTQC or not MULTIQC, reason='Real FastQC and MultiQC are required')
+def test_real_same_basename_pairs_namespaces_multiqc_and_restart(tmp_path):
+    import json
+    from dataclasses import replace
+    inputs=tmp_path/'duplicate-inputs';inputs.mkdir()
+    paths=[]
+    for study in ['study a','study b']:
+        folder=inputs/study;folder.mkdir()
+        for source in sorted(INPUTS.glob('*.fastq.gz')):
+            target=folder/source.name;shutil.copyfile(source,target);paths.append(target)
+    settings=replace(real_settings(tmp_path),roots=[inputs])
+    headers={'Authorization':f'Bearer {settings.token}','X-QualiDock-Request':'1'}
+    before={str(path):hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
+    with TestClient(create_app(settings),headers=headers) as client:
+        response=client.post('/api/runs',json={'mode':'both','paths':list(before)})
+        assert response.status_code==201,response.text
+        run=wait(client,response.json()['id'],timeout=180)
+        assert run['state']=='completed',run['error']
+        metrics=client.get(f"/api/runs/{run['id']}/metrics").json()
+        assert len(metrics['samples'])==len(metrics['multiqc']['rows'])==4
+        assert all(r['state']=='completed' for r in run['input_outcomes'])
+        assert len({row['sample'] for row in metrics['multiqc']['rows']})==4
+        assert {entry['path'] for entry in run['report_input_map'].values()}==set(before)
+        assert all(entry['multiqc_name'] in {row['sample'] for row in metrics['multiqc']['rows']} for entry in run['report_input_map'].values())
+        aggregated=client.post(f"/api/runs/{run['id']}/multiqc")
+        assert aggregated.status_code==201,aggregated.text
+        aggregated=wait(client,aggregated.json()['id'],timeout=180)
+        assert aggregated['state']=='completed',aggregated['error']
+        restored_metrics=client.get(f"/api/runs/{aggregated['id']}/metrics").json()
+        assert len(restored_metrics['multiqc']['rows'])==4
+        assert {entry['path'] for entry in aggregated['report_input_map'].values()}==set(before)
+        for sample in metrics['samples']:
+            parsed=parse_report(settings.output/run['id']/sample['id'],sample['id'])
+            assert sample==parsed
+    with TestClient(create_app(settings),headers=headers) as client:
+        restored=client.get(f"/api/runs/{run['id']}").json()
+        assert restored['report_input_map']==run['report_input_map']
+        assert restored['input_outcomes']==run['input_outcomes']
+    assert before=={str(path):hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
+
+
+@pytest.mark.skipif(not FASTQC, reason='Real FastQC is required')
+def test_real_corrupt_input_keeps_good_report_and_truthful_file_outcome(tmp_path):
+    from dataclasses import replace
+    root=tmp_path/'mixed';root.mkdir()
+    good=root/'coverage_R1.fastq.gz';shutil.copyfile(INPUTS/'coverage_R1.fastq.gz',good)
+    broken=root/'corrupt.fastq';broken.write_text('@broken\nACGT\n+\n')
+    settings=replace(real_settings(tmp_path),roots=[root])
+    with TestClient(create_app(settings)) as client:
+        client.headers.update({'Authorization':f'Bearer {settings.token}','X-QualiDock-Request':'1'})
+        response=client.post('/api/runs',json={'mode':'fastqc','paths':[str(good),str(broken)]})
+        assert response.status_code==201,response.text
+        run=wait(client,response.json()['id'],timeout=180)
+        assert run['state']=='partial',run['error']
+        by_name={record['name']:record for record in run['input_outcomes']}
+        assert by_name[good.name]['state']=='completed'
+        assert by_name[broken.name]['state']=='failed' and by_name[broken.name]['error']
+        assert client.get(f"/api/runs/{run['id']}/download",params={'path':by_name[good.name]['report']}).status_code==200

@@ -74,6 +74,11 @@ export default function AnalysisGroups({
                     <span title={path}>
                       {path.split("/").pop()}
                       <small>
+                        {run.input_outcomes?.find(
+                          (outcome) => outcome.path === path,
+                        )?.state || "Execution outcome not recorded"}
+                      </small>
+                      <small>
                         {[
                           record?.lane,
                           record?.chunk && `Chunk ${record.chunk}`,

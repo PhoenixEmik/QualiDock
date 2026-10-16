@@ -27,6 +27,21 @@ export interface Run {
   output_directory?: string;
   rerun_of?: string | null;
   pairing_note?: string | null;
+  report_input_map?: Record<
+    string,
+    { path?: string; source_report?: string; id: string; multiqc_name?: string }
+  >;
+  input_outcomes?: {
+    id: string;
+    path: string;
+    name: string;
+    state: string;
+    error: string | null;
+    report: string;
+    html: string;
+    exit_code: number | null;
+    finished_at: string | null;
+  }[];
   progress: number;
   error: string | null;
   reports: { path: string; size: number }[];
