@@ -2,7 +2,7 @@
 
 A single-user sequencing QC workspace for Linux workstations and HPC compute nodes. Browse existing FASTQ files, run FastQC and MultiQC, process reads with fastp or focused SeqKit utilities, inspect native charts and before/after QC, and download persistent reports and derived datasets.
 
-**Status: v0.1 development, not an accepted release.** Standalone Linux and an HPC deployment through Open OnDemand must pass end-to-end acceptance before tagging v0.1.0. See [validation](docs/VALIDATION.md).
+**Status: v0.1 development, not an accepted release.** Release acceptance targets standalone Linux. The retained Open OnDemand adapter requires separate site-specific acceptance and is not a standalone release gate. See [validation](docs/VALIDATION.md).
 
 ## Run locally
 
@@ -57,7 +57,7 @@ The workspace uses neutral slate surfaces and blue controls, independently of th
 
 Mate detection recognizes `_R1`/`_R2`, `.R1`/`.R2`, `-R1`/`-R2`, and corresponding `1`/`2` suffixes, optionally followed by `_001` (or equivalent separator). A pair is confirmed only when exactly one of each mate exists in the same directory. Both mates must be selected; unpaired files can also run. Each FASTQ is assessed independently.
 
-For **MultiQC only**, enter an existing QC results directory within a configured root, or select `*_fastqc.zip` / `fastqc_data.txt` files. Directory imports discover FastQC reports recursively, validate every path, and snapshot only bounded QC reports and their summary/HTML companions. FASTQ data is never copied or rerun. ZIP/extracted copies of the same result are imported once. Other QC tool formats remain outside this phase. Directory imports are limited to 20,000 entries, 500 reports, and 512 MiB of report snapshots.
+For **MultiQC only**, enter an existing QC results directory within a configured root, or select `*_fastqc.zip` / `fastqc_data.txt` files. Directory imports discover FastQC reports recursively, validate every path, and snapshot only bounded QC reports and their summary/HTML companions. FASTQ data is never copied or rerun. ZIP/extracted copies of the same result are imported once. Existing fastp JSON reports are also supported; see [verified import formats](docs/QC-IMPORTS.md). Other upstream tool formats are unsupported. Directory imports are limited to 20,000 entries, 500 reports, and 512 MiB of report snapshots.
 
 Use **Generate MultiQC** in a finished analysis to aggregate its saved FastQC results into a new run, even when the result store is outside the configured input roots. Successful FastQC results remain available if MultiQC fails. Identical FASTQ basenames in different directories use isolated official-output namespaces and exact source mapping. MultiQC adds directory prefixes when report names collide; missing expected summary rows are reported instead of silently merging inputs. Analysis details show recorded per-file outcomes and completed counts without estimated percentages.
 
@@ -74,8 +74,9 @@ Quick or interrupted scans retain explicit incomplete coverage.
 
 Every processing operation writes to a new analysis directory, never to the
 original FASTQ file. Select published outputs and choose **Use as input** to run
-QC or further processing without copying data. Confirmed paired-end sampling, filtering and ID extraction validate mate order
-before and after processing. Exact counts use SeqKit 2.14+ with explicit seed,
+QC or further processing without copying data. Confirmed paired-end sampling and
+pair-preserving filtering/ID extraction validate mate order before and after
+processing. Independent-file filtering/extraction stays available. Exact counts use SeqKit 2.14+ with explicit seed,
 uniform selection without replacement and preserved input order. Advanced parameters are optional. See [processing](docs/PROCESSING.md).
 
 Project catalogs, batch planning, cross-run cohorts, delivery policies, release
@@ -128,7 +129,7 @@ The smoke test requires real executables and checks paired-end inputs, FastQC/Mu
 
 The [Batch Connect adapter](deploy/ood) launches this same standalone server on a PBS-allocated compute node. See [the OOD deployment guide](docs/OOD.md) for site configuration and acceptance checks. Configure your site's cluster ID, queue/account, module names, and shared installation paths.
 
-See [Phase 2 implementation, changed files, and validation](docs/PHASE2.md) for detailed engine and reporting behavior.
+See [current validation evidence](docs/VALIDATION.md), [processing contracts](docs/PROCESSING.md) and [report isolation](docs/REPORT-VIEWER.md). The [Phase 2 record](docs/PHASE2.md) is historical.
 
 ## Architecture and security
 

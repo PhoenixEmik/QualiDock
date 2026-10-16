@@ -1,7 +1,9 @@
 # v0.1.0 release procedure
 
 **Not yet released.** Development versions remain in place until all release
-gates have actual evidence. A green CI run does not establish an actual HPC deployment or large-file performance. Automated real-browser standalone/proxy-prefix acceptance is recorded separately from actual site/HTTPS validation.
+gates have actual evidence. The release target is standalone Linux. CI establishes the recorded automated
+behavior, not large-file/shared-storage throughput or a real site deployment.
+The retained OOD adapter has a separate, optional acceptance track.
 
 ## Required evidence
 
@@ -9,12 +11,13 @@ gates have actual evidence. A green CI run does not establish an actual HPC depl
    intended release commit. Verify actual FastQC-only, combined, imported results,
    reports, security checks and restart persistence.
 2. Linux resource/process validation passes under the recorded cgroup limits.
-3. Complete `docs/OOD.md` site acceptance under the actual HTTPS reverse proxy,
-   PBS allocation, installed modules, user identity and NFS/Lustre paths.
-4. Complete authorized large-input validation following `docs/BENCHMARKING.md`.
-   Record actual observations; do not invent CPU/RAM/walltime recommendations.
+3. Review configured input/output roots, authentication, source immutability,
+   derived reuse, cancellation and restart recovery on the standalone target.
+4. Scope performance claims to actual observations in `docs/BENCHMARKING.md` and
+   issue #5. Large-input/NFS/Lustre acceptance remains pending; do not advertise
+   unmeasured throughput or invent CPU/RAM/walltime recommendations.
 5. Perform live browser QA: token login/logout, Workspace, pairing and paging,
-   changed-directory refresh, Analyses, all module charts/tables, sample switching,
+   changed-directory refresh, Results, Read Processing, all module charts/tables, sample switching,
    collapsed details, logs, cancellation, live SSE, attachment downloads, and
    narrow/mobile layouts. Record browser/version, proxy prefix and any limitations.
 6. Review `docs/VALIDATION.md`, `docs/CORE-FIRST.md`, README and the compatibility matrix
@@ -24,21 +27,34 @@ gates have actual evidence. A green CI run does not establish an actual HPC depl
 
 ## Candidate release notes
 
-Supported runtime: standalone Linux or an existing Open OnDemand/OpenPBS compute
-allocation, Python 3.11+, Java, FastQC 0.13.0 (0.12.1 compatibility retained), and
-MultiQC >=1.25,<2. Frontend builds require Node.js 22+.
+Supported release target: standalone Linux, Python 3.11+, Java, FastQC 0.13.0
+(0.12.1 compatibility retained), MultiQC >=1.25,<2, optional fastp 0.23–1.x and
+SeqKit 2.6–2.x. Exact-count sampling requires verified SeqKit 2.14+. Frontend
+builds require Node.js 22+. Tools are external installations, never auto-installed.
 
-Features: server-side paired FASTQ selection; native visualizations/tables for
-12 FastQC modules where reported; three QC modes; aggregation from saved results;
-version detection; logs/cancellation; isolated official report previews and downloads; native multi-sample analytics; JSON persistence; bounded history/directory updates; manual/lane sample metadata; configured output roots; delivery/yield contracts; auditable data-release review and reference bundles; and opt-in offline screening with explicitly configured references.
+Features: server-side FASTQ browsing and manual/lane metadata; FastQC-only,
+combined and existing-report MultiQC; native module charts/tables and within-run
+comparisons; isolated official previews/downloads; fastp and focused SeqKit
+processing; synchronized paired filtering/ID extraction and reproducible exact
+sampling; registered derived FASTQ reuse; bounded history/SSE updates; read-only
+integrity checks; configured output roots and persistent JSON results.
 
-Known limits: one analysis at a time; directory snapshots cap 200,000 names and
-expire after five idle minutes; cold directory indexing is O(n) and can still
-incur filesystem metadata reads; native MultiQC summaries cover observed 1.x
-General Statistics schemas; QC inputs for aggregation use an explicit FastQC / fastp-JSON allowlist; optional Kraken2 screening requires an existing executable and explicit offline reference, with preliminary assignments rather than a contamination verdict; K-mer
-availability follows FastQC configuration. RSS enforcement is sampled; the
-scheduler/cgroup remains the hard boundary. The current full ECharts bundle emits
-a Vite size warning. Site and browser claims must match the recorded acceptance.
+Project catalogs, facility delivery/release review, retention administration and
+Kraken2 screening are intentionally absent. Old scientific manifests and registered
+artifacts remain readable; see [preservation and legacy export](CORE-FIRST.md).
+
+Known limits: one analysis at a time; bounded directory/import snapshots; observed
+MultiQC 1.x General Statistics schemas; an explicit FastQC/fastp import allowlist;
+FastQC-configured K-mer availability; and sandboxed report features documented in
+[REPORT-VIEWER.md](REPORT-VIEWER.md). RSS enforcement is sampled, with cgroups as
+the hard boundary. The full ECharts bundle still emits a Vite size warning.
+Large FASTQ/shared-storage performance is not accepted. List exact tested tool
+versions and browsers from the candidate CI, rather than extrapolating ranges.
+
+The existing OOD adapter is optional. A site may validate it using [OOD.md](OOD.md)
+and issue #4, but its unverified HTTPS/PBS/shared-storage behavior must remain
+explicitly separate from standalone acceptance. No scheduler job submission is
+provided by the application.
 
 ## Versioning, packaging and publication
 
@@ -69,5 +85,7 @@ Only after blockers are resolved:
    or downgrade the saved schema blindly; verify the previous build can read a
    copied/snapshotted result store before reusing the production output directory.
 
-Issue #7 remains open while required actual-site/large-input gates lack evidence. Automated real-browser acceptance does not replace those site observations.
+Issue #7 tracks standalone candidate review, version alignment and eventual
+publication. Issues #4 and #5 separately track site deployment and large-input
+observations; they do not establish or silently broaden standalone release claims.
 No release tag or publication is authorized by an unverified checklist.

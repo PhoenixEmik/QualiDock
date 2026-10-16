@@ -1,7 +1,6 @@
 """Stable file identities and collision-free FastQC artifact plans."""
 from collections import Counter
 import hashlib
-from pathlib import Path
 from .files import FASTQ
 
 

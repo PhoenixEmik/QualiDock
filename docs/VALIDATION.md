@@ -1,54 +1,94 @@
-# Validation and release gate
+# Validation and standalone release acceptance
 
-This repository is an MVP development implementation, not a validated v0.1.0 release.
+QualiDock remains `0.1.0.dev0`; no release is tagged or published. This is the
+current acceptance record. Development-phase documents describe historical
+implementation environments and do not override this record.
 
-## Issue follow-up verification — 2026-10-15
+## Accepted automated evidence — 2026-10-16
 
-[Current core scope and preservation](CORE-FIRST.md) supersede the earlier missing-MultiQC/Linux-validation limitations below. Real MultiQC 1.25.1, 1.35 and latest-supported 1.x now pass combined and existing-result workflows. Native Linux cgroup/process checks pass under 1 CPU / 1 GiB. Directory browsing is covered by regression tests and a local 100,000-name benchmark. Actual site, large-input and browser acceptance remain pending.
+[CI 38913214520](https://github.com/PhoenixEmik/QualiDock/actions/runs/38913214520)
+at `02e1524` passed every job, including the paired-processing enhancement:
 
-## Phase 2 verification — 2026-10-15
+| Check | Accepted evidence |
+| --- | --- |
+| Backend | 261 passed; 27 missing-tool cases run in separately provisioned jobs |
+| Frontend | 142 tests; TypeScript/Vite production build |
+| Actual processing | 45 tests, no skips; FastQC 0.13.0, MultiQC 1.35, fastp 0.23.4, SeqKit 2.14.0 |
+| Actual QC/imports | Seven tests per MultiQC 1.25.1, 1.35 and latest-supported 1.x target (resolved to 1.35) |
+| Chromium | Nine native processing/reuse tests and 36 retained interaction/security/history/chart tests |
+| Linux resource/process | Non-root, 1 CPU / 1 GiB cgroup; affinity, RSS termination, cancellation, queue recovery, guardian and restart |
 
-See [Phase 2 implementation and validation](PHASE2.md) for the current module coverage, actual FastQC 0.13.0 checks, MultiQC execution tests, backward-compatible persistence fields, and remaining real-MultiQC/Linux/browser/HPC acceptance work. The older record below describes the initial implementation environment.
+Local full genuine-tool verification at the same processing implementation:
+**288 backend tests passed, no skips**, with FastQC 0.13.0, MultiQC 1.35,
+fastp 1.4.0 and SeqKit 2.14.0 (macOS arm64). The later `9d7aa49` refinement
+records selector identity on failed operations and clarifies UI labels; acceptance
+for the cleanup candidate must use its own complete CI rather than assuming that
+an older green build certifies new code.
 
-## Local verification record — 2026-10-14
+The processing tests compare actual FASTQ records, source checksums, normalized
+mate identifiers/order, counts, seed reproducibility and independent reservoir
+indices. They cover malformed inputs, partial failures, cancellation, output path
+security, restart and derived reuse. No Q20/Q30 percentages are inferred from
+FastQC aggregate quality statistics. See [PROCESSING.md](PROCESSING.md).
 
-- **29 backend tests passed** on Python 3.13 in the managed macOS workspace. QC orchestration used real fixture subprocesses. The macOS RSS sampler was replaced in tests because the sandbox denies `ps`; separate tests exercise Linux `/proc` parsing and the over-budget termination response.
-- OOD ERB templates rendered, submission YAML parsed, CPU/memory values matched the requested PBS allocation, invalid PBS tokens were rejected, and rendered launch scripts passed `bash -n`.
-- Python sources compiled successfully. On the follow-up local-run request, the real frontend dependencies were downloaded through permitted `curl` calls, verified against lockfile integrity hashes, and installed with `npm ci --offline`. The full TypeScript and Vite production build **passed**, including the real ECharts dependency. A reproducible `frontend/package-lock.json` is now present.
-- FastAPI served the production HTML and all referenced JS/CSS assets successfully through TestClient. Earlier temporary UI-check stubs were discarded; the production build contains real ECharts.
-- Browser QA was unavailable: no browser providers were connected, and the sandbox rejected binding the local server port.
-- The real-tool smoke test stopped with a clear missing-FastQC message. Neither FastQC nor MultiQC was available. Generic dependency-manager network access was blocked, although permitted `curl` downloads enabled the frontend installation. Standalone Linux and HPC deployment tests were not run.
-- Git metadata could not be initialized in this workspace because `.git` writes are denied. The initial development commit was subsequently pushed from an isolated checkout; no release was created.
+Chromium runs the production build with genuine QC reports under standalone and
+the two retained URL-prefix layouts. It checks opaque-origin report isolation,
+authentication, source mappings, native plots, downloads, exports, polling/SSE
+recovery, history, reruns, derived reuse and narrow layouts. These are local HTTP
+integration tests, not evidence of an actual OOD/HTTPS installation. See
+[REPORT-VIEWER.md](REPORT-VIEWER.md), [HISTORY.md](HISTORY.md) and the CI artifacts.
 
-## Automated coverage
+Earlier accepted baselines remain meaningful: the [core-first simplification
+CI 38899079194](https://github.com/PhoenixEmik/QualiDock/actions/runs/38899079194)
+at `1914146` passed 42 Chromium cases and the then-current core suites;
+[LINUX-VALIDATION.md](LINUX-VALIDATION.md) preserves the original cgroup/process
+observations; [BROWSING.md](BROWSING.md) and [HISTORY.md](HISTORY.md) preserve
+explicitly scoped directory/history benchmarks. None establish large-FASTQ or
+NFS/Lustre throughput.
 
-### UI simplification verification
+## Standalone release candidate gates — issue #7
 
-The sidebar now contains Workspace and Analyses. Workspace opens directly on the Samples/Files explorer; analysis setup is reached from its New analysis button or the current selection. Job information, logs, actual parsed QC metrics, and report downloads are nested under individual analyses. The UI shows recorded job states and stages, without a percentage estimate.
+- [x] Genuine FastQC/MultiQC/fastp/SeqKit workflows and exact native data checks.
+- [x] Authentication, path containment, downloads and HTML sandbox regressions.
+- [x] Linux cancellation, resource enforcement, guardian and restart evidence.
+- [x] Chromium interaction, responsive layout and derived reuse evidence.
+- [ ] All relevant CI jobs pass at the exact final release candidate.
+- [ ] Review licenses, installation, upgrade/rollback and scoped limitations.
+- [ ] Align release versions and publish only under a separate release instruction.
 
-- Eleven frontend tests cover confirmed pairs, incomplete and ambiguous pairs, unrecognized filenames, separate directories, searching either mate, partial selection across views, pagination, report selection, and missing inputs.
-- Server-side React render checks verified sample disclosures, mixed selection states, accessible analysis tab/panel associations, actual stage/log output, empty metrics behavior, and download URLs under the proxy prefix. These checks do not replace live interaction or visual QA.
-- The TypeScript/Vite production build passed with the real ECharts dependency. All 29 existing backend tests passed, and backend source files were verified unchanged from the initial published commit.
-- No browser provider was connected for live visual or interaction QA. Responsive CSS, native keyboard controls, directory focus handling, and arrow/Home/End navigation between analysis detail tabs are implemented; browser verification remains outstanding.
+Release notes must list the browsers and tool versions actually tested. Current
+CI supports Chromium; previous Chromium acceptance is not Firefox acceptance.
+A compatible version range is not a claim that every version was tested.
 
-Further work should prioritize real FastQC/MultiQC end-to-end execution on standalone Linux and HPC systems.
+## Separate, unaccepted deployment/performance claims
 
-### Backend coverage
+- **Issue #4:** the retained optional OOD adapter still requires site-specific
+  HTTPS proxy, session, installed-module and shared-storage acceptance. It is not
+  a prerequisite for a standalone-only release. No OOD/PBS changes belong to this
+  cleanup.
+- **Issue #5:** representative large FASTQs and NFS/Lustre measurements are still
+  pending. Small fixtures validate scientific behavior, not throughput or
+  large-file resource recommendations. Use [BENCHMARKING.md](BENCHMARKING.md).
 
-Backend tests execute fixture QC tools as actual child processes through LocalExecutor. They cover file pairing, missing mates, traversal, escaped symlinks, authentication/cookie/CSRF boundaries, unauthorized downloads, opaque HTML attachments, all three modes, partial and failed execution, exact parsed quality statistics, immutable original FASTQ inputs, cancellation, process-group cleanup, resource validation, persistent restart recovery, exclusive output ownership, artifact substitution, malformed metrics, ZIP non-extraction, and proxy prefixes.
+Project/release administration, controlled delivery and retention workflows were
+removed intentionally. Issues #24/#25 are abandoned scope, not missing standalone
+features. Historical analyses, QC artifacts and source/derived FASTQs remain
+preserved; the offline catalog export is documented in [CORE-FIRST.md](CORE-FIRST.md).
 
-The managed macOS development sandbox denies `ps`, so its backend tests replace only the RSS sampler with deterministic readings. Linux tests use the native `/proc` sampler. Fixture QC executables validate orchestration, not FastQC/MultiQC's scientific behavior. Real-tool acceptance is a separate smoke script and CI job.
+## Historical environment records
 
-## Required before release
+The original [Phase 2 record](PHASE2.md) retains its 2026-10-15 result of 82 backend
+tests, one missing-MultiQC skip, 36 frontend tests and actual FastQC 0.13.0 fixture
+provenance. Its missing-tool/browser/site limitations describe that environment,
+not the current accepted standalone behavior.
 
-- [x] Frontend TypeScript and Vite production build with the real ECharts dependency.
-- [ ] Browser QA of Workspace, analysis setup, Analyses, all analysis detail sections, authentication, live SSE, downloads, and mobile layout.
-- [x] Linux backend suite with real process and resource monitoring; see [evidence](LINUX-VALIDATION.md).
-- [x] Real FastQC 0.13.0 + MultiQC end-to-end smoke on standalone Linux; fixed 1.25.1/1.35 and latest-1.x CI targets pass.
-- [x] Native chart points compared to actual FastQC output, including grouped bases and quartiles, with ECharts rendering tests. Live browser QA remains separate.
-- [ ] HPC site configuration and end-to-end acceptance under the actual OOD reverse proxy.
-- [ ] Large-file cancellation, memory-limit failure, graceful shutdown, and abrupt-session interruption on Linux/PBS.
-- [ ] Historical reports restored after an OOD restart from persistent storage.
-- [ ] Traversal, symlink escape, unauthenticated download, and command-injection checks in both deployment environments.
-
-FastQC's documented per-base chart uses a median, interquartile box, 10th/90th percentile whiskers and mean line; QualiDock preserves those values rather than inferring new quality statistics. See [the official FastQC interpretation](https://www.bioinformatics.babraham.ac.uk/projects/fastqc/Help/3%20Analysis%20Modules/2%20Per%20Base%20Sequence%20Quality.html). MultiQC runs with an explicit output directory and JSON data output, following [its CLI documentation](https://docs.seqera.io/multiqc/getting_started/running_multiqc).
+On 2026-10-14, the initial bootstrap ran 29 backend orchestration tests on Python
+3.13 with fixture executables, compiled Python and rendered the existing OOD
+ERB/YAML/shell templates. Frontend dependencies were verified against lockfile
+integrity hashes and the real ECharts TypeScript/Vite build passed. TestClient
+served its HTML/JS/CSS. There was no connected browser or usable local server bind,
+no real FastQC/MultiQC installation, and no Linux/site execution. The macOS test
+fixture substituted only the denied RSS sampler; orchestration fixtures did not
+validate the scientific engines. The smoke test reported missing FastQC clearly.
+That bootstrap record was never a claim of release acceptance. Subsequent genuine
+tool, Linux and browser evidence above supersedes those environment limitations.

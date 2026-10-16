@@ -1,4 +1,9 @@
-# Phase 2: QC engines and reporting
+# Historical Phase 2 implementation record — 2026-10-15
+
+This records the original Phase 2 scope and environment. It is not the current
+feature list or release checklist. See [VALIDATION.md](VALIDATION.md) for accepted
+evidence and pending claims, [QC-IMPORTS.md](QC-IMPORTS.md) for current imports,
+and [PROCESSING.md](PROCESSING.md) for retained processing contracts.
 
 ## Implementation
 
@@ -114,36 +119,6 @@ npm run build --prefix frontend
   --input-root backend/tests/fixtures/fastqc-0.13.0
 ```
 
-For FastQC alone, add `--mode fastqc`. The real combined test must pass with an
-installed compatible MultiQC before Phase 2's complete end-to-end acceptance is
-claimed. No additional cosmetic work is required to proceed with that validation.
-
-## File inventory
-
-Modified:
-
-- `backend/qualidock/metrics.py`, `manager.py`, `app.py`: parsing, existing execution
-  workflow, persistence metadata, runtime detection API, saved-run aggregation.
-- `frontend/src/AnalysisDetail.tsx`, `App.tsx`, `NewAnalysisForm.tsx`,
-  `QualityChart.tsx`, `types.ts`, `styles.css`: module views, collapsible details,
-  directory setup, versions, existing-result aggregation, structured summary.
-- `backend/tests/conftest.py`, `test_workspace.py`: explicit version-aware
-  orchestration fixtures and compatible failure tests; actual-tool tests are
-  separate from these fixtures.
-- `scripts/smoke-real-qc.py`, `.github/workflows/ci.yml`: actual-tool checks,
-  executable configuration, FastQC-only option, FastQC 0.13.0 CI.
-- `README.md`, `docs/OOD.md`, `docs/SECURITY.md`, `docs/VALIDATION.md`,
-  `deploy/ood/template/before.sh.erb`: usage, validation record, and tool versions.
-
-Added:
-
-- `backend/qualidock/tools.py`, `reports.py`: bounded runtime detection and report
-  discovery using the existing filesystem policy.
-- `frontend/src/qc.ts`, `chartOptions.ts`, `QcModule.tsx`: reported-data adapters,
-  ECharts options, and module tables using existing components and styles.
-- `backend/tests/test_metrics.py`, `test_engines.py`, `test_real_tools.py`,
-  `frontend/tests/qc.test.ts`: parser, execution, persistence, real tools, and chart
-  checks.
-- `backend/tests/fixtures/fastqc-0.13.0/`: two small compressed FASTQ inputs, their
-  actual data/summary outputs, limits configuration, and provenance README.
-- `docs/PHASE2.md`: this implementation and validation record.
+For FastQC alone, add `--mode fastqc`. Subsequent combined-tool and browser
+acceptance supersedes the original environment limitations above; consult the
+current validation record rather than treating this historical checklist as open.
