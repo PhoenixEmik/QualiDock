@@ -66,12 +66,12 @@ under `backend/qualidock` and TypeScript/TSX/CSS under `frontend/src`:
 | Measure | Before | After |
 | --- | ---: | ---: |
 | Production files | 104 | 72 |
-| Production lines | 24,402 | 14,526 |
+| Production lines | 24,402 | 14,525 |
 | `App.tsx` lines | 1,492 | 988 |
 | `app.py` lines | 444 | 311 |
 | `manager.py` lines | 648 | 624 |
 
-Production diff: **807 added, 10,683 removed**, net **9,876 fewer lines (40.5%)**.
+Production diff: **806 added, 10,683 removed**, net **9,877 fewer lines (40.5%)**.
 The calculation includes both `ResultsList.tsx` and its former App implementation;
 relocation is not counted as a net saving. Across the repository: five files added,
 31 modified and 98 deleted, including intentionally obsolete tests and fixtures.
@@ -119,14 +119,26 @@ has no SeqKit). The missing-file error path and measured scan regression also pa
 in a focused genuine-tool run. Frontend: **140 passed**, TypeScript/Vite build
 passes; the existing ECharts bundle-size warning remains.
 
-At `db21a90`, Linux CI passed backend (236 passed / 24 missing-tool skips), frontend,
-1 CPU / 1 GiB resource validation, MultiQC 1.25.1 / 1.35 / latest 1.x, **17 genuine
-processing cases without skips** and seven genuine QC/import/integrity cases.
-The initial browser reuse case reached its new draft correctly but its test used
-an exact accessible name that omitted the workflow button's description. The test
-now targets the actual accessible name, and explicitly expands optional controls
-before inspecting them; no assertion was disabled. Final browser evidence is
-recorded after the correcting commit's CI completes.
+Final production-code [CI 38899079194](https://github.com/PhoenixEmik/QualiDock/actions/runs/38899079194)
+at `1914146` is fully green: Linux backend (236 passed / 24 missing-tool skips),
+frontend 140 tests and build, 1 CPU / 1 GiB resource validation, actual MultiQC
+1.25.1 / 1.35 / latest 1.x, **17 genuine processing tests without skips**, seven
+genuine QC/import/integrity tests, and **42 Chromium browser tests** (six native
+processing/reuse plus 36 retained regressions). The provisioned jobs execute the
+missing local-tool cases; skips are not counted as scientific validation.
+
+An initial browser reuse test omitted descriptive text from a button's accessible
+name. Its locator was corrected, and optional controls are explicitly expanded
+before inspection. The full subsequent browser run passed; no supported-feature
+assertions were disabled. Browser validation uses standalone and both existing
+URL-prefix layouts, without a Firefox job or new deployment work. Screenshots and
+measured I/O JSON are in that run's artifacts. A reviewed result screenshot is also
+available locally under `validation/core-first/processing-comparison.png` (ignored,
+not added to the source distribution).
+
+The final follow-up commit changes this validation document only. It uses a
+`[skip ci]` message because the complete production/test tree above has already
+passed; no code, test or CI configuration changes are excluded from validation.
 
 One measured local genuine fixture run (400 reads per mate; fastp without optional
 FastQC): 109,308 source-validation bytes, 99,971 output-validation bytes, four full
