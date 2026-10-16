@@ -146,7 +146,7 @@ def open_run(page, workspace, name):
     # A new query forces a document navigation, including after server restart;
     # changing only the fragment would leave the previous React session mounted.
     page.goto(workspace.base + "?browser-test=" + secrets.token_hex(4) + "#token=" + workspace.settings.token)
-    page.get_by_role("button", name="Analyses", exact=True).click()
+    page.get_by_role("button", name="Results", exact=True).click()
     page.get_by_role("button", name="Open " + name, exact=True).click()
     page.get_by_role("tab", name="Reports", exact=True).click()
     page.locator(".report-preview[aria-busy=false] iframe").wait_for()
@@ -251,7 +251,7 @@ def test_multiqc_temporary_state_never_exposes_parent_storage_or_cookies(workspa
         assert not any(cookie["name"] == "preview_only" for cookie in context.cookies())
         assert frame.locator("body").evaluate("""async () => {try{await fetch('/api/config',{credentials:'include'});return false}catch(_){return true}}""")
         page.reload()
-        page.get_by_role("button", name="Analyses", exact=True).click()
+        page.get_by_role("button", name="Results", exact=True).click()
         page.get_by_role("button", name="Open Browser combined", exact=True).click()
         page.get_by_role("tab", name="Reports", exact=True).click()
         page.locator(".report-preview[aria-busy=false] iframe").wait_for()

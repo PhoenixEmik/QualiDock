@@ -20,7 +20,7 @@ def test_bounded_history_pagination_polling_reconnect_and_selected_detail(worksp
         page.on('request',lambda request:requests.append((request.method,request.url)))
         page.route('**/api/events?format=invalidation',lambda route:route.abort())
         page.goto(workspace.base+'?test-history='+secrets.token_hex(4)+'#token='+workspace.settings.token)
-        page.get_by_role('navigation',name='Main navigation').get_by_role('button',name='Analyses',exact=True).click()
+        page.get_by_role('navigation',name='Main navigation').get_by_role('button',name='Results',exact=True).click()
         table=page.get_by_role('region',name='Analysis list',exact=True)
         expect(table.locator('tbody tr')).to_have_count(25)
         expect(page.get_by_text('Updates polling every 5s',exact=True)).to_be_visible()
@@ -53,7 +53,7 @@ def test_bounded_history_pagination_polling_reconnect_and_selected_detail(worksp
         Path('validation/history-browser'+workspace.settings.prefix.replace('/','-')+'.json').write_text(json.dumps(measured,indent=2)+'\n')
         assert measured['summary']['bytes']<measured['legacy']['bytes']/10
         page.set_viewport_size({'width':390,'height':844})
-        page.get_by_role('navigation',name='Main navigation').get_by_role('button',name='Analyses',exact=True).click()
+        page.get_by_role('navigation',name='Main navigation').get_by_role('button',name='Results',exact=True).click()
         page.screenshot(path='validation/native-history-mobile'+workspace.settings.prefix.replace('/','-')+'.png',full_page=True)
         overflow=page.evaluate("""() => [...document.querySelectorAll('body *')].filter(el=>el.getBoundingClientRect().right>innerWidth+1).map(el=>({tag:el.tagName,cls:el.className,right:el.getBoundingClientRect().right,width:el.getBoundingClientRect().width})).slice(0,30)""")
         print('Mobile history overflow diagnostics:',json.dumps(overflow))

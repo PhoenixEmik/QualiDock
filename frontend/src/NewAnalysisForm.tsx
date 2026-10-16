@@ -276,9 +276,9 @@ export default function NewAnalysisForm({
               {Object.values(config.tool_details || {})
                 .filter(
                   (tool) =>
-                    (tool.name === "fastqc"
-                      ? mode !== "multiqc"
-                      : mode !== "fastqc") && tool.error,
+                    ((tool.name === "fastqc" && mode !== "multiqc") ||
+                      (tool.name === "multiqc" && mode !== "fastqc")) &&
+                    tool.error,
                 )
                 .map((tool) => tool.error)
                 .join(" ") ||

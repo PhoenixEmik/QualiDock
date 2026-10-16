@@ -379,11 +379,6 @@ export default function AnalysisDetail({
         aria-labelledby="detail-tab-metrics"
         tabIndex={0}
       >
-        {tab === "metrics" &&
-          analyticsView === "Before / After" &&
-          currentRun.processing && (
-            <ProcessingResults run={currentRun} samples={samples} />
-          )}
         {tab === "metrics" && (
           <>
             <div
@@ -407,6 +402,9 @@ export default function AnalysisDetail({
                 </button>
               ))}
             </div>
+            {analyticsView === "Before / After" && currentRun.processing && (
+              <ProcessingResults run={currentRun} samples={samples} />
+            )}
             {analyticsView === "Overview" && (
               <AnalyticsSummary
                 run={currentRun}

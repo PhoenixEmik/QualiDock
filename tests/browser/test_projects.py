@@ -286,7 +286,7 @@ def test_project_browse_first_requires_only_name_and_bulk_selects_fastqs(workspa
         page.screenshot(path='validation/native-project-browse-first' + workspace.settings.prefix.replace('/', '-') + '.png', full_page=True)
         # Rerun is a separate existing workflow, not an accidental new intake.
         page.get_by_role('button', name='Browse & select FASTQs', exact=True).click()
-        page.get_by_role('button', name='Analyses', exact=True).click()
+        page.get_by_role('button', name='Results', exact=True).click()
         page.get_by_role('button', name='Rerun Browser FastQC', exact=True).click()
         expect(page.get_by_role('heading', name='New analysis', exact=True)).to_be_visible()
         expect(page.get_by_role('region', name='Add FASTQs to project', exact=True)).not_to_be_visible()
