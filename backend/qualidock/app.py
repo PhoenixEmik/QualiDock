@@ -43,8 +43,18 @@ class SampleGroup(BaseModel):
     source: Literal["auto", "confirmed", "manual"] = "auto"
 
 
+class DatasetReference(BaseModel):
+    run_id: str = Field(pattern=r'^[a-f0-9]{32}$')
+    dataset_id: str = Field(min_length=1, max_length=128)
+
+
+class ReuseRequest(BaseModel):
+    dataset_ids: list[str] = Field(min_length=1, max_length=500)
+
+
 class SampleConfigurationRequest(BaseModel):
     paths: list[str] = Field(min_length=1, max_length=500)
+    input_datasets: list[DatasetReference] = Field(default_factory=list, max_length=500)
 
 
 class RenameRequest(BaseModel):
@@ -64,6 +74,7 @@ class AnalysisRequest(BaseModel):
     sample_groups: list[SampleGroup] | None = Field(default=None, max_length=500)
     output_root: str | None = Field(default=None, max_length=4096)
     processing_options: dict | None = None
+    input_datasets: list[DatasetReference] | None = Field(default=None, max_length=500)
     rerun_of: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
 
 
@@ -179,7 +190,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return await manager.create(body.name, body.mode, body.paths, body.threads,
                                     input_pairing=[record.model_dump(exclude_unset=True) for record in body.input_pairing] if body.input_pairing is not None else None,
                                     sample_groups=[group.model_dump() for group in body.sample_groups] if body.sample_groups is not None else None,
-                                    output_root=body.output_root, rerun_of=body.rerun_of, processing_options=body.processing_options)
+                                    output_root=body.output_root, rerun_of=body.rerun_of, processing_options=body.processing_options,
+                                    input_datasets=[record.model_dump() for record in body.input_datasets] if body.input_datasets is not None else None)
 
     @app.get("/api/output-locations")
     async def output_locations():
@@ -187,7 +199,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/api/sample-configuration")
     async def sample_configuration(body: SampleConfigurationRequest):
-        return await asyncio.to_thread(manager.sample_configuration, body.paths)
+        return await asyncio.to_thread(manager.sample_configuration, body.paths, input_datasets=[r.model_dump() for r in body.input_datasets])
 
     @app.patch("/api/runs/{run_id}")
     async def rename_run(run_id: str, body: RenameRequest):
@@ -196,6 +208,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/runs/{run_id}/configuration")
     async def run_configuration(run_id: str):
         return await asyncio.to_thread(manager.configuration, run_id)
+
+    @app.get('/api/runs/{run_id}/datasets')
+    async def derived_inputs(run_id: str):
+        from .datasets import draft
+        return await asyncio.to_thread(draft, manager, run_id)
+
+    @app.post('/api/runs/{run_id}/reuse')
+    async def reuse_inputs(run_id: str, body: ReuseRequest):
+        from .datasets import draft
+        return await asyncio.to_thread(draft, manager, run_id, body.dataset_ids)
 
     @app.post("/api/runs/{run_id}/multiqc", status_code=201)
     async def aggregate(run_id: str):

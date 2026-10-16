@@ -62,14 +62,14 @@ def required(mode, value):
 
 
 def units(run):
-    """Use persisted mutual pairs; lanes are never merged. SeqKit outputs stay file-level."""
+    """Use persisted mutual pairs; lanes are never merged. Only fastp and validated fraction sampling preserve pairs."""
     relationships = {row['path']: row for row in run.get('input_pairing', [])}
     result, seen = [], set()
     for path in run['inputs']:
         if path in seen: continue
         member = relationships.get(path, {})
         paths = [path]
-        if run['mode'] == 'fastp' and member.get('paired'):
+        if run['mode'] in {'fastp', 'seqkit-sample'} and member.get('paired'):
             mate = relationships.get(member.get('mate'), {})
             if mate.get('mate') != path or mate.get('read') == member.get('read'):
                 raise ValueError('Conflicting paired-end metadata')
@@ -143,7 +143,7 @@ async def execute(manager, run, metrics, errors):
     directory = manager.directory(run['id'])
     value = run['processing']['options']
     paths = await asyncio.to_thread(manager.checked_inputs, run)
-    pair_rows = [{'id': row['pair_key'], 'r1': row['path'], 'r2': row['mate']} for row in run['input_pairing'] if row.get('paired') and row['read'] == 'R1'] if run['mode'] == 'fastp' else []
+    pair_rows = [{'id': row['pair_key'], 'r1': row['path'], 'r2': row['mate']} for row in run['input_pairing'] if row.get('paired') and row['read'] == 'R1'] if run['mode'] in {'fastp', 'seqkit-sample'} else []
     manager.update(run, stage='Validating source FASTQs')
     validation = await validate(manager, run, paths, pair_rows, 'source')
     if validation is None: return
@@ -174,10 +174,13 @@ async def execute(manager, run, metrics, errors):
             ids = manager.stores.subdirectory(run['id'], 'processing/private', exist_ok=True) / 'identifiers.txt'
             if run['mode'] == 'seqkit-extract': ids.write_text('\n'.join(value['identifiers']) + '\n')
             tool = 'fastp' if run['mode'] == 'fastp' else 'seqkit'
-            argv = fastp_command(run['tools'][tool]['executable'], source, outputs, destination, run['threads'], value) if tool == 'fastp' else seqkit_command(run['tools'][tool]['executable'], run['mode'], source[0], outputs[0], run['threads'], value, ids)
-            code = await manager.command(run, tool, argv, directory)
-            if run['id'] in manager.cancelled: return
-            if code: raise ValueError(f'{tool} exited with code {code}; see analysis log')
+            commands = [fastp_command(run['tools'][tool]['executable'], source, outputs, destination, run['threads'], value)] if tool == 'fastp' else [seqkit_command(run['tools'][tool]['executable'], run['mode'], path, output, run['threads'], value, ids) for path, output in zip(source, outputs)]
+            # Identical seed/fraction on synchronized sources; publication still
+            # requires a full output identifier/order check, not equal counts alone.
+            for argv in commands:
+                code = await manager.command(run, tool, argv, directory)
+                if run['id'] in manager.cancelled: return
+                if code: raise ValueError(f'{tool} exited with code {code}; see analysis log')
             await asyncio.to_thread(manager.checked_inputs, run)
             for path in outputs: local_file(directory, str(path.relative_to(directory)))
             if tool == 'fastp':

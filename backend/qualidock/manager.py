@@ -19,7 +19,7 @@ from .metrics import parse_report, parse_multiqc
 from .import_formats import fastp_metadata, source_mappings
 from .reports import discover, metadata
 from .tools import detect_tool
-from . import processing
+from . import processing, datasets
 from .store import ResultStores, now, save_json
 from .sample_metadata import validate_configuration
 from .outcomes import plan, batches, stop, counts
@@ -135,7 +135,7 @@ class RunManager:
             return FileAccess([fastqc])
         return self.files
 
-    async def create(self, name: str, mode: str, raw_paths: list[str], threads: int, source_run_id=None, *, input_pairing=None, sample_groups=None, output_root=None, rerun_of=None, processing_options=None):
+    async def create(self, name: str, mode: str, raw_paths: list[str], threads: int, source_run_id=None, *, input_pairing=None, sample_groups=None, output_root=None, rerun_of=None, processing_options=None, input_datasets=None):
         if mode not in {'both', 'fastqc', 'multiqc', *processing.MODES}:
             raise ValueError('Invalid analysis mode')
         operation_options = processing.options(mode, processing_options)
@@ -152,8 +152,15 @@ class RunManager:
             previous = self.runs[rerun_of]
             if previous.get('source_run_id') and mode == 'multiqc' and raw_paths == previous['inputs']:
                 source_run_id = previous['source_run_id']
+            if raw_paths == previous['inputs'] and input_datasets is None:
+                input_datasets = previous.get('input_datasets')
         access = self.input_access(source_run_id)
-        paths = list(dict.fromkeys(access.resolve(p) for p in raw_paths))
+        if mode == 'multiqc' and input_datasets:
+            raise ValueError('Derived FASTQs are inputs for QC or processing, not existing-report imports')
+        derived = datasets.registered(self, input_datasets)
+        paths = list(dict.fromkeys(datasets.resolve(self, p, derived) if not source_run_id else access.resolve(p) for p in raw_paths))
+        if set(derived) - set(map(str, paths)):
+            raise ValueError('Derived dataset references must belong to the selected inputs')
         if not paths or len(paths) > 500:
             raise ValueError("Select between 1 and 500 inputs")
         report_inputs = []
@@ -170,7 +177,7 @@ class RunManager:
         else:
             if any(not p.is_file() or not FASTQ.search(p.name) for p in paths):
                 raise ValueError("FastQC requires .fastq, .fq, .fastq.gz, or .fq.gz files")
-            configuration = await asyncio.to_thread(self.sample_configuration, paths, supplied_pairing, sample_groups)
+            configuration = await asyncio.to_thread(self.sample_configuration, paths, supplied_pairing, sample_groups, input_datasets)
             input_pairing = configuration['input_pairing'] if not configuration.get('pairing_note') or supplied_pairing is not None else []
             normalized_groups = configuration['sample_groups']
             pairing_note = configuration.get('pairing_note')
@@ -201,7 +208,8 @@ class RunManager:
                "state": "queued", "stage": "Waiting for resources", "created_at": now(), "updated_at": now(),
                "started_at": None, "finished_at": None, "threads": threads, "inputs": [str(p) for p in paths],
                "input_metadata": [{**metadata(p), "kind": "directory" if p.is_dir() else "file", "device": p.stat().st_dev, "inode": p.stat().st_ino} for p in paths],
-               "input_pairing": input_pairing, "sample_groups": normalized_groups, "sample_input_paths": sample_input_paths,
+               "input_pairing": input_pairing, "sample_groups": normalized_groups, "input_datasets": deepcopy(input_datasets or []),
+               "input_provenance": list(derived.values()), "sample_input_paths": sample_input_paths,
                "input_outcomes": plan(paths) if mode not in {'multiqc', *processing.MODES} else [], "report_input_map": {},
                "output_root": str(directory.parent), "output_directory": str(directory), "rerun_of": rerun_of,
                "pairing_note": pairing_note,
@@ -223,21 +231,24 @@ class RunManager:
         with path.open('rb') as stream:
             stream.read(0)
 
-    def sample_configuration(self, raw_paths, pairing=None, groups=None):
-        paths = [self.files.resolve(str(path)) for path in raw_paths]
+    def sample_configuration(self, raw_paths, pairing=None, groups=None, input_datasets=None):
+        derived = datasets.registered(self, input_datasets)
+        paths = [datasets.resolve(self, str(path), derived) for path in raw_paths]
+        if set(derived) - set(map(str, paths)):
+            raise ValueError('Derived references must be selected')
         if not paths or len(paths) > 500 or len(set(paths)) != len(paths):
             raise ValueError('Select 1–500 distinct FASTQ files')
         for path in paths:
             self.readable_fastq(path)
         note = None
         try:
-            automatic = self.files.pairing(paths)
+            automatic = self.files.pairing([p for p in paths if str(p) not in derived]) + datasets.pairing(derived)
         except (OSError, ValueError):
             automatic = [{'path': str(path), 'name': path.name, 'paired': False, 'read': None, 'mate': None, 'pair_key': None} for path in paths]
             note = 'Automatic pairing unavailable. Review manual assignments or analyze reads individually.'
         allowed = {str(path) for path in paths}
         for record in automatic:
-            record['source'] = 'auto'
+            if record['path'] not in derived: record['source'] = 'auto'
             if record.get('mate') not in allowed:
                 record.update(paired=False, mate=None, pair_key=None)
         # Normalize only file references, never reinterpret user relationship metadata.
@@ -246,13 +257,17 @@ class RunManager:
             for record in pairing:
                 if isinstance(record, dict):
                     for key in ('path', 'mate'):
-                        if record.get(key): record[key] = str(self.files.resolve(record[key]))
+                        if record.get(key): record[key] = str(datasets.resolve(self, record[key], derived))
         if groups is not None:
             groups = deepcopy(groups)
             for group in groups:
                 if isinstance(group, dict) and isinstance(group.get('files'), list):
-                    group['files'] = [str(self.files.resolve(path)) for path in group['files']]
-        result = validate_configuration(paths, automatic, pairing, groups)
+                    group['files'] = [str(datasets.resolve(self, path, derived)) for path in group['files']]
+        detected_groups = None
+        if derived:
+            ordinary = [p for p in paths if str(p) not in derived]
+            detected_groups = (validate_configuration(ordinary, [r for r in automatic if r['path'] not in derived])['sample_groups'] if ordinary else []) + datasets.groups(self, derived)
+        result = validate_configuration(paths, automatic, pairing, groups, detected_groups=detected_groups)
         result['pairing_note'] = note
         return result
 
@@ -267,7 +282,8 @@ class RunManager:
     def configuration(self, run_id):
         run = self.runs[run_id]
         access = self.input_access(run.get('source_run_id'))
-        paths = [access.resolve(path) for path in run['inputs']]
+        derived = datasets.registered(self, run.get('input_datasets'))
+        paths = [datasets.resolve(self, path, derived) if not run.get('source_run_id') else access.resolve(path) for path in run['inputs']]
         entries = []
         for path in paths:
             if run['mode'] != 'multiqc': self.readable_fastq(path)
@@ -278,13 +294,14 @@ class RunManager:
         return {'name': (run['name'] + ' · rerun')[:120], 'mode': run['mode'], 'paths': [str(path) for path in paths], 'entries': entries,
                 'threads': min(run.get('threads', 1), self.settings.max_threads), 'input_pairing': run.get('input_pairing') or None,
                 'sample_groups': run.get('sample_groups') or None, 'output_root': str(self.directory(run_id).parent), 'rerun_of': run_id,
-                'processing_options': deepcopy(run.get('processing', {}).get('options'))}
+                'processing_options': deepcopy(run.get('processing', {}).get('options')), 'input_datasets': [{'run_id': row['run_id'], 'dataset_id': row['dataset_id'], 'path': path} for path, row in derived.items()]}
 
     def checked_inputs(self, run):
         paths = []
         access = self.input_access(run.get("source_run_id"))
+        derived = datasets.registered(self, run.get('input_datasets'))
         for metadata in run["input_metadata"]:
-            path = access.resolve(metadata["path"])
+            path = datasets.resolve(self, metadata['path'], derived) if not run.get('source_run_id') else access.resolve(metadata['path'])
             if metadata.get("kind") == "directory":
                 if not path.is_dir():
                     raise ValueError("Input directory is unavailable")
@@ -557,8 +574,8 @@ class RunManager:
                     unit_id = Path(relative).parts[1]
                     if not any(unit['id'] == unit_id and unit['state'] == 'completed' for unit in run.get('processing', {}).get('units', [])):
                         continue
-                if relative.startswith('release-exports/') and relative not in registered:
-                    continue  # Incomplete/orphan ZIPs never become registered downloads.
+                if '/' in relative and Path(relative).parts[0] not in {'fastqc','multiqc','inputs','integrity','processing'} and relative not in registered:
+                    continue  # Historical namespaces remain read-only registered artifacts.
                 reports.append({"path": relative, "size": path.stat().st_size})
         self.update(run, reports=reports)
 

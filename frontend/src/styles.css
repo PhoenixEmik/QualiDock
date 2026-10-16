@@ -948,20 +948,7 @@ dd {
   gap: 18px;
   flex-wrap: wrap;
 }
-.filter-tabs {
-  display: flex;
-  gap: 18px;
-}
-.filter-tabs button {
-  font-size: 12px;
-  color: var(--text-secondary);
-  padding: 13px 0;
-  border-bottom: 2px solid transparent;
-}
-.filter-tabs button.active {
-  color: var(--accent);
-  border-color: var(--accent);
-}
+
 .jobs-table .job-name {
   display: flex;
   align-items: center;
@@ -1735,13 +1722,7 @@ dd {
     padding-bottom: 12px;
     gap: 10px;
   }
-  .filter-tabs {
-    flex-wrap: wrap;
-    gap: 14px;
-  }
-  .filter-tabs button {
-    font-size: 11px;
-  }
+
   .explorer-toolbar > div {
     width: 100%;
   }
@@ -2583,9 +2564,6 @@ section[aria-label="Analysis jobs"] > .table-scroll {
 }
 @media (max-width: 640px) {
   .jobs-toolbar > label {
-    flex-wrap: wrap;
-  }
-  .jobs-toolbar .filter-tabs {
     flex-wrap: wrap;
   }
 }

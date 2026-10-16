@@ -44,7 +44,6 @@ const detailTabs = [
   { id: "reports" as const, label: "Reports" },
 ];
 interface Props {
-  initialReportId?: string;
   currentRun: Run;
   samples: Sample[];
   multiqc?: MultiQCSummary;
@@ -60,6 +59,7 @@ interface Props {
   cancel: (id: string) => Promise<void>;
   reselect: (run: Run) => Promise<void>;
   refresh?: () => void;
+  reuse: (run: Run, ids: string[]) => Promise<void>;
 }
 export default function AnalysisDetail({
   currentRun,
@@ -76,15 +76,11 @@ export default function AnalysisDetail({
   cancelling,
   cancel,
   reselect,
+  reuse,
   refresh = () => {},
-  initialReportId = "",
 }: Props) {
   const [analyticsView, setAnalyticsView] = useState(
-    currentRun.processing
-      ? "Before / After"
-      : initialReportId
-        ? "Sample Details"
-        : "Overview",
+    currentRun.processing ? "Before / After" : "Overview",
   );
   const entities = useMemo(
     () => analyticsSamples(currentRun, samples, multiqc),
@@ -107,7 +103,7 @@ export default function AnalysisDetail({
   const select = (ids: Set<string>) =>
     setSelection({ run: currentRun.id, ids });
   const [detailsOpen, setDetailsOpen] = useState(true);
-  const [sampleId, setSampleId] = useState(initialReportId);
+  const [sampleId, setSampleId] = useState("");
   const [metric, setMetric] = useState("Per base sequence quality");
   const currentSample =
     samples.find((sample) => sample.id === sampleId) || samples[0];
@@ -301,6 +297,24 @@ export default function AnalysisDetail({
         ))}
         <AnalysisGroups run={currentRun} samples={samples} />
         <FileOutcomes run={currentRun} />
+        {!!currentRun.input_provenance?.length && (
+          <details className="analysis-inputs">
+            <summary>
+              Source datasets ({currentRun.input_provenance.length})
+            </summary>
+            <ul>
+              {currentRun.input_provenance.map((source) => (
+                <li key={`${source.run_id}:${source.dataset_id}`}>
+                  <strong>
+                    Analysis {source.run_id} · {source.dataset_id}
+                  </strong>
+                  <p className="mono">{source.absolute_path}</p>
+                  <p className="mono">SHA-256: {source.sha256}</p>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
         {!currentRun.processing && (
           <IntegrityReview run={currentRun} refresh={refresh} />
         )}
@@ -389,7 +403,12 @@ export default function AnalysisDetail({
               ))}
             </div>
             {analyticsView === "Before / After" && currentRun.processing && (
-              <ProcessingResults run={currentRun} samples={samples} />
+              <ProcessingResults
+                reuse={(ids) => reuse(currentRun, ids)}
+                busy={busy}
+                run={currentRun}
+                samples={samples}
+              />
             )}
             {analyticsView === "Overview" && (
               <AnalyticsSummary

@@ -31,7 +31,18 @@ export interface HistoryPage {
   overall_total: number;
   revision: number;
 }
+export interface DatasetReference {
+  run_id: string;
+  dataset_id: string;
+  path?: string;
+}
 export interface Run {
+  input_datasets?: DatasetReference[];
+  input_provenance?: (DerivedDataset & {
+    run_id: string;
+    dataset_id: string;
+    absolute_path: string;
+  })[];
   id: string;
   name: string;
   mode:
@@ -191,13 +202,14 @@ export interface OutputLocation {
   error: string | null;
 }
 export interface RerunConfiguration extends SampleConfiguration {
+  input_datasets?: DatasetReference[];
   name: string;
   mode: Run["mode"];
   paths: string[];
   entries: Entry[];
   threads: number;
   output_root: string;
-  rerun_of: string;
+  rerun_of: string | null;
   processing_options?: ProcessingOptions;
 }
 export interface InputPairing {

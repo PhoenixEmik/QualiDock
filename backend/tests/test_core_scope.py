@@ -53,3 +53,23 @@ def test_export_is_lossless_readonly_and_exclusive(tmp_path):
     Path(str(database)+'-wal').touch()
     with pytest.raises(ValueError,match='sidecars'): legacy.export(database,tmp_path/'transaction.json')
     assert database.read_bytes()==before
+
+
+def test_old_catalog_cannot_block_restart_and_completed_manifest_is_unchanged(setup):
+    from fastapi.testclient import TestClient
+    from qualidock.app import create_app
+    settings,root=setup
+    settings.output.mkdir()
+    catalog=settings.output/'projects.sqlite3';catalog.write_bytes(b'unknown obsolete schema preserved')
+    with TestClient(create_app(settings)) as client:
+        client.headers.update({'Authorization':f'Bearer {settings.token}','X-QualiDock-Request':'1'})
+        run=wait(client,start(client,root,mode='fastqc')['id'])
+    manifest=settings.output/run['id']/'manifest.json'
+    value=json.loads(manifest.read_text());value['obsolete_administrative_metadata']={'retain':'original evidence'}
+    manifest.write_text(json.dumps(value));before=manifest.read_bytes()
+    with TestClient(create_app(settings)) as client:
+        client.headers.update({'Authorization':f'Bearer {settings.token}'})
+        restored=client.get('/api/runs/'+run['id']).json()
+        assert restored['state']=='completed' and restored['obsolete_administrative_metadata']==value['obsolete_administrative_metadata']
+        assert client.get('/api/runs/'+run['id']+'/download',params={'path':'manifest.json'}).content==before
+    assert manifest.read_bytes()==before and catalog.read_bytes()==b'unknown obsolete schema preserved'

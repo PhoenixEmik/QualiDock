@@ -7,6 +7,7 @@ import {
   downloadDataset,
   processingModes,
   publishedDatasets,
+  selectedReferences,
 } from "../src/processing.ts";
 test("processing modes and defaults stay independent from QC", () => {
   assert.ok(processingModes.every(isProcessing));
@@ -179,4 +180,23 @@ test("same-basename manual pair labels expose declared read identities", () => {
   assert.equal(new Set(labels).size, 2);
   assert.match(labels[0], / · R1 · /);
   assert.match(labels[1], / · R2 · /);
+});
+
+test("only selected exact derived identities are sent; paths never grant siblings", () => {
+  const references = [
+    { run_id: "a", dataset_id: "r1", path: "/results/processed_R1.fastq.gz" },
+    { run_id: "a", dataset_id: "r2", path: "/results/processed_R2.fastq.gz" },
+  ];
+  assert.deepEqual(
+    selectedReferences(references, new Set([references[0].path])),
+    [{ run_id: "a", dataset_id: "r1" }],
+  );
+  assert.deepEqual(
+    selectedReferences(
+      references,
+      new Set(["/results/../results/processed_R1.fastq.gz"]),
+    ),
+    [],
+  );
+  assert.deepEqual(selectedReferences(references, new Set()), []);
 });

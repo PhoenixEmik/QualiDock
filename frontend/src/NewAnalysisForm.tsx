@@ -85,27 +85,26 @@ export default function NewAnalysisForm({
           />
           <div className="field-label">QC workflow</div>
           <div className="mode-options" role="group" aria-label="QC workflow">
-            {(["both", "fastqc", "multiqc"] as const)
-              .map((value) => (
-                <button
-                  key={value}
-                  className={`mode-option ${mode === value ? "chosen" : ""}`}
-                  aria-pressed={mode === value}
-                  disabled={busy}
-                  onClick={() => setMode(value)}
-                >
-                  <span className="radio-dot" />
-                  <strong>{modeLabel(value)}</strong>
-                  <small>
-                    {value === "both"
-                      ? "Individual read QC and a combined report"
-                      : value === "fastqc"
-                        ? "Individual read quality assessment"
-                        : "Combine existing FastQC or fastp JSON reports"}
-                  </small>
-                  {mode === value && <Check size={15} />}
-                </button>
-              ))}
+            {(["both", "fastqc", "multiqc"] as const).map((value) => (
+              <button
+                key={value}
+                className={`mode-option ${mode === value ? "chosen" : ""}`}
+                aria-pressed={mode === value}
+                disabled={busy}
+                onClick={() => setMode(value)}
+              >
+                <span className="radio-dot" />
+                <strong>{modeLabel(value)}</strong>
+                <small>
+                  {value === "both"
+                    ? "Individual read QC and a combined report"
+                    : value === "fastqc"
+                      ? "Individual read quality assessment"
+                      : "Combine existing FastQC or fastp JSON reports"}
+                </small>
+                {mode === value && <Check size={15} />}
+              </button>
+            ))}
           </div>
         </section>
         <section className="form-section">
@@ -183,11 +182,14 @@ export default function NewAnalysisForm({
         {mode !== "multiqc" &&
           configuredPaths.length > 0 &&
           (sampleConfiguration ? (
-            <SampleEditor
-              value={sampleConfiguration}
-              change={setSampleConfiguration}
-              busy={busy}
-            />
+            <details className="processing-advanced">
+              <summary>Review read relationships (optional)</summary>
+              <SampleEditor
+                value={sampleConfiguration}
+                change={setSampleConfiguration}
+                busy={busy}
+              />
+            </details>
           ) : (
             <button
               className="button"
@@ -197,40 +199,43 @@ export default function NewAnalysisForm({
               Review sample relationships
             </button>
           ))}
-        <OutputDirectory
-          config={config}
-          value={outputRoot}
-          change={setOutputRoot}
-          busy={busy}
-        />
-        <section className="form-section">
-          <div className="form-heading">
-            <span>03</span>
-            <h2>Execution resources</h2>
-          </div>
-          <div className="resource-field">
-            <div>
-              <label htmlFor="threads">CPU threads</label>
-              <p>Limited to your session’s available resources.</p>
+        <details className="processing-advanced">
+          <summary>Output and resource settings (optional)</summary>
+          <OutputDirectory
+            config={config}
+            value={outputRoot}
+            change={setOutputRoot}
+            busy={busy}
+          />
+          <section className="form-section">
+            <div className="form-heading">
+              <span>03</span>
+              <h2>Execution resources</h2>
             </div>
-            <select
-              id="threads"
-              disabled={busy}
-              value={threads}
-              onChange={(e) => setThreads(Number(e.target.value))}
-            >
-              {Array.from({ length: config?.max_threads || 1 }, (_, i) => (
-                <option key={i + 1} value={i + 1}>
-                  {i + 1} {i === 0 ? "thread" : "threads"}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="inline-note">
-            <Server size={14} />
-            Runs locally on this host. Analyses execute one at a time.
-          </div>
-        </section>
+            <div className="resource-field">
+              <div>
+                <label htmlFor="threads">CPU threads</label>
+                <p>Limited to your session’s available resources.</p>
+              </div>
+              <select
+                id="threads"
+                disabled={busy}
+                value={threads}
+                onChange={(e) => setThreads(Number(e.target.value))}
+              >
+                {Array.from({ length: config?.max_threads || 1 }, (_, i) => (
+                  <option key={i + 1} value={i + 1}>
+                    {i + 1} {i === 0 ? "thread" : "threads"}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="inline-note">
+              <Server size={14} />
+              Runs locally on this host. Analyses execute one at a time.
+            </div>
+          </section>
+        </details>
       </div>
       <aside className="analysis-summary">
         <div className="summary-label">RUN SUMMARY</div>

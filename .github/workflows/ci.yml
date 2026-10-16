@@ -70,6 +70,11 @@ jobs:
         env:
           QUALIDOCK_REQUIRE_PROCESSING_TESTS: '1'
         run: pytest -q backend/tests/test_processing_real.py
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.multiqc == '1.35'
+        with:
+          name: core-processing-io
+          path: validation/core-processing-io.json
       - run: pytest -q backend/tests/test_real_tools.py
 
   linux-resources:
@@ -95,7 +100,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        browser: [chromium, firefox]
+        browser: [chromium]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

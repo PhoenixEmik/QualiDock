@@ -23,13 +23,18 @@ const summaryMetrics = [
 export default function ProcessingResults({
   run,
   samples,
+  reuse,
+  busy,
 }: {
   run: Run;
   samples: Sample[];
+  reuse: (ids: string[]) => Promise<void>;
+  busy: boolean;
 }) {
   const [unitId, setUnitId] = useState(""),
     [read, setRead] = useState(0),
     [metric, setMetric] = useState(metrics[0]);
+  const [chosen, setChosen] = useState<Set<string> | null>(null);
   const processing = run.processing;
   const datasets = publishedDatasets(run);
   const published = ["completed", "partial"].includes(run.state);
@@ -240,6 +245,35 @@ export default function ProcessingResults({
         </>
       )}
       <h3>Derived FASTQ datasets</h3>
+      {!!datasets.length && (
+        <div className="processing-selection">
+          <button
+            className="button small"
+            onClick={() => setChosen(new Set(datasets.map((d) => d.id)))}
+          >
+            Select all outputs
+          </button>
+          <button className="button small" onClick={() => setChosen(new Set())}>
+            Clear output selection
+          </button>
+          <button
+            className="button primary small"
+            disabled={busy || chosen?.size === 0}
+            onClick={() =>
+              void reuse(
+                datasets
+                  .filter((d) => chosen === null || chosen.has(d.id))
+                  .map((d) => d.id),
+              )
+            }
+          >
+            Use as input
+          </button>
+          <span className="inline-note">
+            Choose QC or processing next. Files stay in this result directory.
+          </span>
+        </div>
+      )}
       {!datasets.length ? (
         <p>
           No published derived FASTQs.{" "}
@@ -266,7 +300,22 @@ export default function ProcessingResults({
                 <tr key={entry.id}>
                   <td title={entry.source}>{entry.source.split("/").pop()}</td>
                   <td title={entry.path}>
-                    {entry.unit_id} · {entry.read || "independent read file"}
+                    <label>
+                      <input
+                        type="checkbox"
+                        aria-label={`Use ${entry.path}`}
+                        checked={chosen === null || chosen.has(entry.id)}
+                        onChange={(event) => {
+                          const next = new Set(
+                            chosen || datasets.map((d) => d.id),
+                          );
+                          if (event.target.checked) next.add(entry.id);
+                          else next.delete(entry.id);
+                          setChosen(next);
+                        }}
+                      />{" "}
+                      {entry.unit_id} · {entry.read || "independent read file"}
+                    </label>
                   </td>
                   <td>{entry.records.toLocaleString()}</td>
                   <td>{entry.bases.toLocaleString()}</td>

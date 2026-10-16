@@ -4,19 +4,16 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  ChevronRight,
   Dna,
   FileBarChart2,
   Files,
   LoaderCircle,
   LogOut,
   Plus,
-  Search,
   ShieldCheck,
-  Square,
   X,
 } from "lucide-react";
-import { api, AuthError, date, modeLabel, url } from "./api";
+import { api, AuthError, date, url } from "./api";
 import type {
   Config,
   DetailTab,
@@ -28,16 +25,16 @@ import type {
   View,
   SampleConfiguration,
   RerunConfiguration,
-  RunSummary,
-  HistoryPage,
   ProcessingOptions,
+  DatasetReference,
 } from "./types";
-import { Empty, State } from "./Feedback";
+import { Empty } from "./Feedback";
 import FileExplorer from "./FileExplorer";
 import AnalysisDetail from "./AnalysisDetail";
+import ResultsList from "./ResultsList";
 import NewAnalysisForm from "./NewAnalysisForm";
 import ProcessingForm from "./ProcessingForm";
-import { defaults, isProcessing, processingModes } from "./processing";
+import { defaults, isProcessing, selectedReferences } from "./processing";
 import { reconcileConfig } from "./sampleConfig";
 import { resolveEntries, listingUrl, type ExplorerMode } from "./explorer";
 
@@ -49,13 +46,6 @@ const nav = [
   { id: "processing" as const, label: "Read Processing", icon: Dna },
   { id: "analyses" as const, label: "Results", icon: Activity },
 ];
-const filters = [
-  { id: "all", label: "All" },
-  { id: "active", label: "Active" },
-  { id: "completed", label: "Completed" },
-  { id: "issues", label: "Needs attention" },
-  { id: "cancelled", label: "Cancelled" },
-];
 
 export default function App() {
   const [authenticated, setAuthenticated] = useState(false);
@@ -63,14 +53,8 @@ export default function App() {
   const [token, setToken] = useState("");
   const [config, setConfig] = useState<Config | null>(null);
   const [view, setView] = useState<View>("workspace");
-  const [initialReportId, setInitialReportId] = useState("");
-  const [runs, setRuns] = useState<RunSummary[]>([]);
   const [currentRun, setCurrentRun] = useState<Run | null>(null);
   const [revision, setRevision] = useState(0);
-  const [historyOffset, setHistoryOffset] = useState(0);
-  const [historyTotal, setHistoryTotal] = useState(0);
-  const [historyAll, setHistoryAll] = useState(0);
-  const [historyLoading, setHistoryLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [listing, setListing] = useState<Listing | null>(null);
   const listingRef = useRef<Listing | null>(null);
@@ -93,18 +77,13 @@ export default function App() {
   const [sampleConfiguration, setSampleConfiguration] =
     useState<SampleConfiguration | null>(null);
   const [outputRoot, setOutputRoot] = useState("");
+  const [inputDatasets, setInputDatasets] = useState<DatasetReference[]>([]);
   const [rerunOf, setRerunOf] = useState<string | null>(null);
-  const [analysisMode, setAnalysisMode] = useState("all");
-  const [analysisSort, setAnalysisSort] = useState("created-desc");
-  const [renameId, setRenameId] = useState("");
-  const [renameName, setRenameName] = useState("");
   const [mode, setMode] = useState<Run["mode"]>("both");
   const [threads, setThreads] = useState(1);
   const [processingOptions, setProcessingOptions] = useState<ProcessingOptions>(
     defaults("fastp"),
   );
-  const [jobFilter, setJobFilter] = useState("all");
-  const [analysisSearch, setAnalysisSearch] = useState("");
   const [cancellingId, setCancellingId] = useState("");
   const [updates, setUpdates] = useState<"connecting" | "live" | "polling">(
     "connecting",
@@ -119,10 +98,10 @@ export default function App() {
     if (err instanceof AuthError) {
       setAuthenticated(false);
       setConfig(null);
-      setRuns([]);
       setCurrentRun(null);
       setSamples([]);
       setSelected(new Map());
+      setInputDatasets([]);
       setListing(null);
       listingRef.current = null;
       setRunId("");
@@ -245,49 +224,6 @@ export default function App() {
       if (reconnect) clearTimeout(reconnect);
     };
   }, [authenticated, fail]);
-  useEffect(() => {
-    setHistoryOffset(0);
-  }, [analysisSearch, jobFilter, analysisMode, analysisSort]);
-  useEffect(() => {
-    if (!authenticated || view !== "analyses") return;
-    let cancelled = false;
-    setHistoryLoading(true);
-    const query = new URLSearchParams({
-      offset: String(historyOffset),
-      limit: "25",
-      search: analysisSearch,
-      state: jobFilter,
-      mode: analysisMode,
-      order: analysisSort,
-    });
-    void api<HistoryPage>(`api/history?${query}`)
-      .then((page) => {
-        if (cancelled) return;
-        setRuns(page.items);
-        setHistoryTotal(page.total);
-        setHistoryAll(page.overall_total);
-        setHistoryOffset(page.offset);
-      })
-      .catch((err) => {
-        if (!cancelled) fail(err);
-      })
-      .finally(() => {
-        if (!cancelled) setHistoryLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    authenticated,
-    view,
-    revision,
-    historyOffset,
-    analysisSearch,
-    jobFilter,
-    analysisMode,
-    analysisSort,
-    fail,
-  ]);
   useEffect(() => {
     if (!authenticated || !runId || view !== "analysis") return;
     let cancelled = false;
@@ -445,7 +381,10 @@ export default function App() {
       setSampleConfiguration(
         await api<SampleConfiguration>("api/sample-configuration", {
           method: "POST",
-          body: JSON.stringify({ paths }),
+          body: JSON.stringify({
+            paths,
+            input_datasets: selectedReferences(inputDatasets, new Set(paths)),
+          }),
         }),
       );
       return true;
@@ -471,7 +410,6 @@ export default function App() {
     open("new");
   };
   const showRun = (run: Pick<Run, "id">) => {
-    setInitialReportId("");
     setRunId(run.id);
     setCurrentRun("inputs" in run ? (run as Run) : null);
     setDetailLoading(true);
@@ -506,6 +444,10 @@ export default function App() {
         threads,
         output_root: outputRoot || null,
         rerun_of: rerunOf,
+        input_datasets: selectedReferences(
+          inputDatasets,
+          new Set(selected.keys()),
+        ),
         ...(mode !== "multiqc" && sampleConfiguration
           ? {
               input_pairing: reconcileConfig(
@@ -564,6 +506,60 @@ export default function App() {
       setCancellingId("");
     }
   };
+  const applyDraft = (draft: RerunConfiguration) => {
+    setInputDatasets(draft.input_datasets || []);
+    setSelected(
+      new Map(
+        draft.entries
+          .filter(
+            (entry) =>
+              !(draft.mode === "multiqc" && entry.kind === "directory"),
+          )
+          .map((entry) => [entry.path, entry]),
+      ),
+    );
+    setName(draft.name);
+    setMode(draft.mode);
+    if (isProcessing(draft.mode))
+      setProcessingOptions(draft.processing_options || defaults(draft.mode));
+    setMultiqcDirectory(
+      draft.mode === "multiqc" &&
+        draft.entries.length === 1 &&
+        draft.entries[0].kind === "directory"
+        ? draft.paths[0]
+        : "",
+    );
+    setThreads(draft.threads);
+    setOutputRoot(draft.output_root);
+    setRerunOf(draft.rerun_of);
+    setSampleConfiguration(
+      draft.input_pairing && draft.sample_groups
+        ? {
+            input_pairing: draft.input_pairing,
+            sample_groups: draft.sample_groups,
+          }
+        : null,
+    );
+    open(isProcessing(draft.mode) ? "processing" : "new");
+  };
+  const reuse = async (run: Run, ids: string[]) => {
+    setBusy(true);
+    setError("");
+    try {
+      const draft = await api<RerunConfiguration>(`api/runs/${run.id}/reuse`, {
+        method: "POST",
+        body: JSON.stringify({ dataset_ids: ids }),
+      });
+      applyDraft(draft);
+      setNotice(
+        "Processed FASTQs selected. Choose QC or Read Processing; no files were copied.",
+      );
+    } catch (err) {
+      fail(err);
+    } finally {
+      setBusy(false);
+    }
+  };
   const reselect = async (run: Pick<Run, "id">) => {
     setBusy(true);
     setError("");
@@ -571,64 +567,7 @@ export default function App() {
       const draft = await api<RerunConfiguration>(
         `api/runs/${run.id}/configuration`,
       );
-      setSelected(
-        new Map(
-          draft.entries
-            .filter(
-              (entry) =>
-                !(draft.mode === "multiqc" && entry.kind === "directory"),
-            )
-            .map((entry) => [entry.path, entry]),
-        ),
-      );
-      setName(draft.name);
-      setMode(draft.mode);
-      if (isProcessing(draft.mode))
-        setProcessingOptions(draft.processing_options || defaults(draft.mode));
-      setMultiqcDirectory(
-        draft.mode === "multiqc" &&
-          draft.entries.length === 1 &&
-          draft.entries[0].kind === "directory"
-          ? draft.paths[0]
-          : "",
-      );
-      setThreads(draft.threads);
-      setOutputRoot(draft.output_root);
-      setRerunOf(draft.rerun_of);
-      setSampleConfiguration(
-        draft.input_pairing && draft.sample_groups
-          ? {
-              input_pairing: draft.input_pairing,
-              sample_groups: draft.sample_groups,
-            }
-          : null,
-      );
-      open(isProcessing(draft.mode) ? "processing" : "new");
-    } catch (err) {
-      fail(err);
-    } finally {
-      setBusy(false);
-    }
-  };
-  const filteredRuns = runs;
-  const rename = async () => {
-    setBusy(true);
-    setError("");
-    try {
-      const updated = await api<Run>(`api/runs/${renameId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name: renameName }),
-      });
-      setRuns((old) =>
-        old.map((run) =>
-          run.id === updated.id
-            ? { ...run, name: updated.name, updated_at: updated.updated_at }
-            : run,
-        ),
-      );
-      setRevision((value) => value + 1);
-      setRenameId("");
-      setNotice("Analysis renamed.");
+      applyDraft(draft);
     } catch (err) {
       fail(err);
     } finally {
@@ -739,7 +678,7 @@ export default function App() {
               className={`nav-item ${primaryView === item.id ? "selected" : ""}`}
               onClick={() => {
                 if (item.id === "processing") {
-                              setRerunOf(null);
+                  setRerunOf(null);
                   if (!isProcessing(mode)) {
                     setMode("fastp");
                     setProcessingOptions(defaults("fastp"));
@@ -798,7 +737,6 @@ export default function App() {
                 setConfig(null);
                 setSelected(new Map());
                 setSamples([]);
-                setRuns([]);
                 setRunId("");
                 setListing(null);
                 listingRef.current = null;
@@ -879,9 +817,7 @@ export default function App() {
             </div>
           )}
           {view === "workspace" && (
-            <div
-              className="workspace-files"
-            >
+            <div className="workspace-files">
               <FileExplorer
                 listing={listing}
                 roots={config?.roots || []}
@@ -949,7 +885,7 @@ export default function App() {
               setSamples={setSampleConfiguration}
               prepare={prepareSamples}
               browse={() => {
-                          open("workspace");
+                open("workspace");
               }}
               submit={submit}
             />
@@ -987,298 +923,21 @@ export default function App() {
             />
           )}
           {view === "analyses" && (
-            <section aria-label="Analysis jobs">
-              {renameId && (
-                <form
-                  className="rename-analysis"
-                  aria-label="Rename analysis"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    void rename();
-                  }}
-                >
-                  <label>
-                    Analysis display name{" "}
-                    <input
-                      autoFocus
-                      maxLength={120}
-                      value={renameName}
-                      onChange={(e) => setRenameName(e.target.value)}
-                    />
-                  </label>
-                  <button
-                    className="button small"
-                    type="submit"
-                    disabled={busy || !renameName.trim()}
-                  >
-                    Save name
-                  </button>
-                  <button
-                    className="button small"
-                    type="button"
-                    onClick={() => setRenameId("")}
-                  >
-                    Cancel rename
-                  </button>
-                </form>
-              )}
-              {historyAll > 0 && (
-                <div className="jobs-toolbar">
-                  <div
-                    className="filter-tabs"
-                    role="group"
-                    aria-label="Filter analysis states"
-                  >
-                    {filters.map((filter) => (
-                      <button
-                        key={filter.id}
-                        className={jobFilter === filter.id ? "active" : ""}
-                        aria-pressed={jobFilter === filter.id}
-                        onClick={() => setJobFilter(filter.id)}
-                      >
-                        {filter.label}
-                      </button>
-                    ))}
-                  </div>
-                  <label>
-                    Workflow{" "}
-                    <select
-                      aria-label="Filter analysis workflow"
-                      value={analysisMode}
-                      onChange={(e) => setAnalysisMode(e.target.value)}
-                    >
-                      <option value="all">All workflows</option>
-                      <option value="fastqc">FastQC only</option>
-                      <option value="both">FastQC + MultiQC</option>
-                      <option value="multiqc">MultiQC only</option>
-                      {processingModes.map((mode) => (
-                        <option key={mode} value={mode}>
-                          {modeLabel(mode)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Sort{" "}
-                    <select
-                      aria-label="Sort analyses"
-                      value={analysisSort}
-                      onChange={(e) => setAnalysisSort(e.target.value)}
-                    >
-                      <option value="created-desc">Newest created</option>
-                      <option value="created-asc">Oldest created</option>
-                      <option value="finished-desc">Newest completed</option>
-                      <option value="finished-asc">Oldest completed</option>
-                    </select>
-                  </label>
-                  <label>
-                    State{" "}
-                    <select
-                      aria-label="Filter exact analysis state"
-                      value={jobFilter}
-                      onChange={(e) => setJobFilter(e.target.value)}
-                    >
-                      {[
-                        "all",
-                        "active",
-                        "issues",
-                        "queued",
-                        "running",
-                        "completed",
-                        "failed",
-                        "partial",
-                        "cancelled",
-                        "interrupted",
-                      ].map((state) => (
-                        <option key={state} value={state}>
-                          {state}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="search-box">
-                    <Search size={15} />
-                    <input
-                      aria-label="Search analyses"
-                      maxLength={120}
-                      placeholder="Search analyses…"
-                      value={analysisSearch}
-                      onChange={(event) =>
-                        setAnalysisSearch(event.target.value)
-                      }
-                    />
-                  </label>
-                </div>
-              )}
-              {filteredRuns.length > 0 ? (
-                <div
-                  className="table-scroll"
-                  tabIndex={0}
-                  role="region"
-                  aria-label="Analysis list"
-                >
-                  <table className="jobs-table">
-                    <thead>
-                      <tr>
-                        <th>Analysis</th>
-                        <th>Status</th>
-                        <th>Workflow</th>
-                        <th>Files</th>
-                        <th>Created</th>
-                        <th>Finished</th>
-                        <th>
-                          <span className="sr-only">Actions</span>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredRuns.map((run) => (
-                        <tr key={run.id}>
-                          <td>
-                            <button
-                              className="job-name"
-                              onClick={() => showRun(run)}
-                            >
-                              <FileBarChart2 size={18} />
-                              <span>
-                                <strong>{run.name}</strong>
-                                <small>{run.stage}</small>
-                              </span>
-                            </button>
-                          </td>
-                          <td>
-                            <State value={run.state} />
-                          </td>
-                          <td>{modeLabel(run.mode)}</td>
-                          <td>{run.input_count}</td>
-                          <td className="subtle">{date(run.created_at)}</td>
-                          <td className="subtle">
-                            {run.finished_at ? date(run.finished_at) : "—"}
-                          </td>
-                          <td>
-                            <div className="row-actions">
-                              <button
-                                className="text-button"
-                                onClick={() => {
-                                  setRenameId(run.id);
-                                  setRenameName(run.name);
-                                }}
-                                aria-label={`Rename ${run.name}`}
-                              >
-                                Rename
-                              </button>
-                              {!active(run) && (
-                                <button
-                                  className="text-button"
-                                  onClick={() => void reselect(run)}
-                                  aria-label={`Rerun ${run.name}`}
-                                >
-                                  Rerun
-                                </button>
-                              )}
-                              {active(run) && (
-                                <button
-                                  className="text-button danger"
-                                  disabled={!!cancellingId}
-                                  onClick={() => void cancel(run.id)}
-                                  aria-label={`Cancel ${run.name}`}
-                                >
-                                  <Square size={12} />
-                                  {cancellingId === run.id
-                                    ? "Cancelling…"
-                                    : "Cancel"}
-                                </button>
-                              )}
-                              <button
-                                className="icon-button"
-                                aria-label={`Open ${run.name}`}
-                                onClick={() => showRun(run)}
-                              >
-                                <ChevronRight size={16} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <Empty
-                  icon={Activity}
-                  title={
-                    historyLoading
-                      ? "Loading analyses…"
-                      : historyAll
-                        ? "No matching analyses"
-                        : "No analyses yet"
-                  }
-                  action={
-                    historyAll ? (
-                      <button
-                        className="button"
-                        onClick={() => {
-                          setJobFilter("all");
-                          setAnalysisSearch("");
-                          setAnalysisMode("all");
-                        }}
-                      >
-                        Clear filters
-                      </button>
-                    ) : (
-                      <button
-                        className="button"
-                        onClick={() => open("workspace")}
-                      >
-                        Choose input files
-                        <ArrowRight size={14} />
-                      </button>
-                    )
-                  }
-                >
-                  {historyAll
-                    ? "Try another status or analysis name."
-                    : "Start from the Workspace to select files and configure a QC run."}
-                </Empty>
-              )}
-              {historyTotal > 0 && (
-                <div
-                  className="analytics-actions"
-                  aria-label="Analysis history pages"
-                >
-                  <span>
-                    {historyOffset + 1}–
-                    {Math.min(historyOffset + 25, historyTotal)} of{" "}
-                    {historyTotal} analyses
-                  </span>
-                  <button
-                    className="button small"
-                    disabled={historyLoading || !historyOffset}
-                    onClick={() =>
-                      setHistoryOffset((value) => Math.max(0, value - 25))
-                    }
-                  >
-                    Previous analyses
-                  </button>
-                  <button
-                    className="button small"
-                    disabled={
-                      historyLoading || historyOffset + 25 >= historyTotal
-                    }
-                    onClick={() => setHistoryOffset((value) => value + 25)}
-                  >
-                    Next analyses
-                  </button>
-                </div>
-              )}
-            </section>
+            <ResultsList
+              revision={revision}
+              showRun={showRun}
+              reselect={reselect}
+              cancel={cancel}
+              cancellingId={cancellingId}
+              browse={() => open("workspace")}
+              fail={fail}
+            />
           )}
           {view === "analysis" &&
             (currentRun ? (
               <AnalysisDetail
                 key={currentRun.id}
                 currentRun={currentRun}
-                initialReportId={initialReportId}
                 refresh={() => setRevision((value) => value + 1)}
                 samples={samples}
                 multiqc={multiqc}
@@ -1293,6 +952,7 @@ export default function App() {
                 cancelling={cancellingId === currentRun.id}
                 cancel={cancel}
                 reselect={reselect}
+                reuse={reuse}
               />
             ) : (
               <Empty

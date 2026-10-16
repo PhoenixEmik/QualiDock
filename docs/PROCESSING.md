@@ -1,139 +1,106 @@
-# FASTQ processing architecture
+# Core FASTQ processing
 
-The next phase prioritizes native fastp and focused SeqKit operations. Projects,
-release review and cross-run analytics remain available, optional features.
-Issues #24–#25 (delivery expansion) are deferred; no new delivery engine is part
-of this phase.
+FastQC, MultiQC, fastp and SeqKit use the same RunManager queue, LocalExecutor,
+resource slot, cancellation, locked output roots, atomic manifests and artifact
+registry. There is no project catalog dependency or separate processing engine.
+The four primary views are Workspace, Quality Control, Read Processing and Results.
 
-## Architecture review
+## Workflow and derived reuse
 
-RunManager already owns the queue, one shared resource slot, LocalExecutor,
-process-group cancellation, source snapshots, output-root locks, atomic JSON
-manifests and registered report downloads. Those remain the execution and
-persistence boundary. No new database or execution engine is needed.
+Select FASTQs in Workspace, choose QC or Read Processing, and run. Tool settings
+have defaults; advanced parameters are optional. fastp writes separate derived
+FASTQs, JSON and HTML, with optional before/after FastQC and combined MultiQC.
+Results show reported counts, bases, Q20/Q30 fractions and filtering statistics;
+these fractions come from fastp, never from FastQC per-base means.
 
-FastQC batching and result parsing previously lived inside its main execution
-method. They are extracted once, so processing stages can reuse the same code.
-Processing stages retain the existing per-input collision namespaces, including
-manual pairs with identical basenames in different directories. Tool detection
-now has explicit probe/version specifications instead of treating
-all tools other than FastQC/Kraken2 as MultiQC.
+In a processing result, select all outputs, a verified pair or individual files,
+and choose **Use as input**. The normal setup opens with those files selected.
+Choose FastQC or Read Processing to continue. No FASTQ is copied. A selected
+single mate remains unpaired; unrelated units and lanes are never merged.
 
-Processing adapters declare validated options and derived outputs, call the
-existing manager command method, and run within its slot. Source FASTQ files
-remain read-only. Each operation gets a unique, owned run directory. Derived
-FASTQs are separate registered datasets, not files discovered indiscriminately.
-Incomplete/cancelled outputs are not published as successful datasets.
+- `GET /api/runs/{id}/datasets` discovers published outputs as a validated draft.
+- `POST /api/runs/{id}/reuse` with `{"dataset_ids":["u0001:1","u0001:2"]}`
+  prepares a selected draft without executing tools.
+- `POST /api/runs` and `/api/sample-configuration` accept optional
+  `input_datasets: [{run_id, dataset_id}]` alongside exact input paths.
+- Saved manifests add optional `input_datasets` and `input_provenance`. The
+  latter retains source analysis/dataset, original source path, checksum, file
+  snapshot, counts, lane and chunk. Following source IDs recovers the chain.
+  Old manifests need no migration. Rerun restores and revalidates these references.
 
-Existing QC modes, manifests, report IDs and secure HTML previews are preserved.
-Processing setup requires no project or release records. Startup retains the
-existing catalog compatibility guard and result-store ownership locks.
+Only exact registered derived FASTQs from completed/partial analyses are allowed.
+The existing artifact validator checks the owned result directory, canonical path,
+symlink containment and saved size/mtime/device/inode. References are revalidated
+when creating, preparing, queuing and executing. Output roots never become general
+browse roots. Unregistered siblings and incomplete/cancelled outputs remain denied.
+This is provenance between operations, not a workflow orchestration system.
 
-## Running operations
+## Tool contracts
 
-Select FASTQs in Workspace, then open **Read Processing**. fastp defaults to
-adapter detection/trimming, quality filtering (Q15, at most 40% unqualified bases),
-minimum length 15 bp, gzip output and FastQC before/after. The optional advanced
-section controls these thresholds, threads, output root and combined MultiQC.
-Only Phred+33 input is supported for native fastp in this phase. QualiDock disables
-poly-G trimming, duplication estimation, deduplication, merging and base correction;
-these are not hidden processing steps. Quality filtering also applies fastp's
-5-N-base limit per read. Disabling quality filtering disables the N-base filter
-as well; length filtering remains active.
+fastp accepts single reads or persisted mutual R1/R2 pairs. Every unit has an
+independent destination. Adapter trimming and quality/N-base filtering are enabled
+by default. Minimum length, quality threshold, permitted low-quality fraction,
+threads and gzip output are configurable. The wrapper explicitly selects Phred+33,
+N-base limit 5, no automatic poly-G trimming, and no duplication estimation; it
+never merges, corrects or deduplicates reads. Disabling quality filtering also
+disables fastp's N-base filter. The defaults and exact argv are persisted.
 
-Each confirmed pair is processed together. Single/unassigned reads are processed
-individually. Pair ID/order verification uses the existing full FASTQ scanner,
-not filename similarity. Lanes/chunks stay separate. Integrity scanning happens
-in a cancellable subprocess under the same resource slot; the server does not
-load source FASTQs in memory. The existing scanner's 1 MiB line / 4 MiB read limits
-apply. Source and output structure/checksums are preserved as processing provenance.
+SeqKit supports `stats --tabular`, seeded fraction `sample`, `seq` length filtering
+and `grep` literal-ID extraction. Confirmed paired-end **fraction sampling** uses
+identical seed/fraction on fully synchronized input files and requires full output
+identifier/order validation. Matching counts alone cannot publish paired datasets.
+The same seed is reproducible with the same inputs and tool version. The fraction
+is a probability, not an exact number of reads. This follows [SeqKit's documented
+paired sampling contract](https://bioinf.shenwei.me/seqkit/usage/#sample).
 
-SeqKit supports per-file `stats --tabular`, seeded fraction `sample`, minimum/
-maximum length `seq`, and literal identifier `grep --pattern-file`. Sampling is
-probabilistic, not an exact requested count. SeqKit filtering/extraction is per
-file: derived outputs are deliberately **not** declared synchronized pairs.
-Even matching names or equal counts do not establish mate synchronization.
-No reads are concatenated, reordered by QualiDock, or silently repaired.
+Length filtering and identifier extraction still operate independently per file
+and explicitly publish unpaired outputs. Pair-preserving filtering and exact-number
+sampling are not implemented: these require separate validated semantics, rather
+than silently applying independent filters or treating approximate counts as exact.
+Statistics is read-only and produces no derived FASTQ. No reads are concatenated
+or automatically repaired.
 
-## Configuration and API
+Tools are optional external installations, detected on PATH or with
+`QUALIDOCK_FASTQC`, `QUALIDOCK_MULTIQC`, `QUALIDOCK_FASTP`, `QUALIDOCK_SEQKIT`.
+Detection supports FastQC 0.12.1–0.13.x, MultiQC 1.25–1.x, fastp 0.23–1.x and
+SeqKit 2.6–2.x. Probes never install tools. Acceptance targets use actual FastQC
+0.13.0, MultiQC 1.25.1/1.35/latest 1.x, fastp 1.4.0 locally/0.23.4 in CI and
+SeqKit 2.14.0 in CI; a compatibility range does not imply every version was tested.
 
-Tools must already exist on PATH or be configured using `QUALIDOCK_FASTP` and
-`QUALIDOCK_SEQKIT`. Detection supports fastp 0.23–1.x (`--version`) and SeqKit
-2.6–2.x (`version`). Tested versions are recorded in validation evidence; the
-compatibility window is not a claim that every release has been exercised.
-The application never installs tools. No new Python or JavaScript dependency is
-required. CI provisioning is explicit in `scripts/setup-processing-ci.sh`.
+## Validation and I/O
 
-Existing `POST /api/runs` adds modes `fastp`, `seqkit-stats`, `seqkit-sample`,
-`seqkit-filter`, `seqkit-extract`, with optional `processing_options`. Unknown
-option keys, invalid ranges, non-FASTQ paths and unsupported tools are rejected.
-FastQC/MultiQC modes retain their contracts. Processing runs add optional JSON
-fields `processing` and `derived_datasets`; there is no manifest/database migration.
-The existing rerun configuration endpoint restores processing options and inputs.
-The history mode filter accepts processing modes, with the same pagination.
+Full structural validation and SHA-256 calculation share one streaming pass per
+input/output. Input snapshots are cheaply checked before/after commands. Output
+validation includes gzip CRC, read/base totals and full ordered mate identifiers.
+fastp's before/after totals must match scanned records and bases before publication.
+A failed unit cannot publish apparently successful FASTQs; successful independent
+units survive a partial failure. Cancellation/restart clears unpublished outputs.
 
-Output selection reuses configured `QUALIDOCK_OUTPUT_ROOTS` and exclusive store
-locks. A run never accepts an arbitrary output filename or overwrites a source.
-Derived files use stable per-unit namespaces. Only successfully processed and fully
-validated files become registered datasets. They download through the existing
-authenticated, attachment-only endpoint with containment and saved-file snapshot
-checks. Private work configs, incomplete reports and unregistered FASTQs are not
-downloadable. Cancellation/restart interruption clears dataset publication; stopped
-files remain on disk for diagnosis, not as successful results. No automatic cleanup
-or destructive deletion is introduced.
+Each file therefore receives one source validation scan, the external processing
+operation, and one output validation scan. Optional raw/post FastQC adds external
+reads; tools may perform their own additional passes. Chart changes and exports
+use persisted reports and never rescan FASTQs. Disabling optional before/after QC
+avoids those executions. There is no separate redundant checksum-only pass.
 
-## Native before/after comparison
+Full validation is deliberately retained when reusing a derived FASTQ. A mutable
+shared file's size/mtime/inode alone cannot prove its bytes are unchanged. Reusing
+old checksums as fresh checksums would weaken correctness. Future scan reuse should
+require a trustworthy immutability/evidence contract; quick scans remain partial,
+not substitutes for full validation. Genuine-fixture measurements record actual
+scanner bytes, wall/CPU time and memory semantics in CI; external-tool I/O counters
+and NFS/Lustre throughput are not guessed from file sizes.
 
-QC Metrics opens a compact Before / After view for processing runs. Choose one
-input unit and one read. Totals, bases, GC, Q20/Q30 and filtering/trimming data come
-from official fastp JSON. Paired totals count both mates' reads; they are not read
-pairs. Retained/removed percentages use the explicit reported before/after counts;
-a zero denominator is unavailable. Q20/Q30 rates are never inferred from FastQC.
+## Tests and limits
 
-Raw/processed FastQC modules are shown side by side with their own original bin
-labels. No interpolation, expanded positions, pooled quartiles or synthetic GC
-reference is used. Existing Raw Data/CSV/TSV controls and official reports remain
-available. Native multi-sample analytics and R1/R2 comparisons remain accessible;
-processing stage labels and declared dataset provenance distinguish the two stages.
-The optional MultiQC report receives successful FastQC ZIPs and fastp JSON via an
-explicit list, with directory namespaces and verified structured source mappings.
-A MultiQC failure preserves successful fastp output and marks the run partial.
+`pytest backend/tests/test_processing_real.py` runs actual tools, including source
+immutability, single/paired inputs, partial failures, derived chaining outside input
+roots, restart/rerun, collision namespaces, paired sampling and malformed IDs.
+CI provisions missing tools explicitly; its strict environment makes missing tools
+an error. Browser coverage uses Chromium and real processing, reports, downloads,
+reuse after restart and narrow layouts. Local missing-SeqKit cases are reported as
+skips, not as successful executions.
 
-Official HTML stays sandboxed; fastp reports requiring external JavaScript may be
-limited in the isolated preview. Original downloads remain the fidelity fallback.
-No CSP or authentication protection is weakened for processing.
-
-## Validation
-
-`pytest -q backend/tests/test_processing.py backend/tests/test_processing_real.py`
-checks parameter/path boundaries, actual fastp/SeqKit behavior, source checksums,
-raw/processed numerical fidelity, malformed/mismatched mates, partial failures,
-cancellation, restart and attachment authorization. Actual-tool tests skip absent
-tools locally; `QUALIDOCK_REQUIRE_PROCESSING_TESTS=1` makes missing tools fatal in
-acceptance jobs. CI also runs the existing QC, report/security, project/release,
-resource and browser regressions. Synthetic malformed data is clearly test-only;
-production code never fabricates metrics.
-
-
-## Known limits and follow-up
-
-- Processing is scoped to files in one analysis. Existing project, release and
-  cross-run features remain available; this phase adds no delivery/approval work.
-- Full source/output validation adds sequential disk reads and checksum work.
-  It stays outside the web process and is cancellable, but is not a throughput
-  benchmark for very large sequencing runs or remote filesystems.
-- fastp supports explicit Phred+33 input only. This phase does not add UMI handling,
-  deduplication, correction, mate repair or lane concatenation.
-- SeqKit outputs remain independent file datasets. Pair-preserving filtering and
-  exact-count paired subsampling would require a separate, tested feature.
-- Existing asset bundle size warning remains. No new chart library or component
-  framework is introduced; bundle splitting can be addressed independently.
-
-Future work should prioritize measured throughput and a browse-first action for
-starting a new operation from a registered derived dataset. Current before/after
-FastQC runs already consume registered processing outputs internally without
-copying inputs or granting general filesystem access to output roots.
-
-Tool behavior references: [fastp options](https://github.com/OpenGene/fastp),
-[fastp filtering implementation](https://github.com/OpenGene/fastp/blob/v1.4.0/src/filter.cpp),
-and [SeqKit usage](https://bioinf.shenwei.me/seqkit/usage/).
+Before/after charts reuse the existing exact FastQC modules and Raw Data exports;
+incompatible bins remain on separate axes. Q20/Q30 are unavailable unless actually
+reported. Official HTML remains sandboxed. Current ECharts bundle-size warnings
+remain; no new library, database or global state framework was added.

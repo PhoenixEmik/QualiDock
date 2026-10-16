@@ -13,7 +13,7 @@ def test_select_fastqs_process_compare_download_and_restart(workspace,browser):
     page=browser.new_page(viewport={'width':1480,'height':1000})
     page.goto(workspace.base+'?processing='+secrets.token_hex(4)+'#token='+workspace.settings.token)
     nav=page.get_by_role('navigation',name='Main navigation')
-    for label in ('Workspace','QC & Analysis','Read Processing','Results'):
+    for label in ('Workspace','Quality Control','Read Processing','Results'):
         playwright.expect(nav.get_by_role('button',name=label,exact=True)).to_be_visible()
     # The existing browser is used directly, without a separate form for paths.
     page.get_by_role('button',name='Files',exact=True).click()
@@ -70,6 +70,26 @@ def test_select_fastqs_process_compare_download_and_restart(workspace,browser):
     page.wait_for_function("() => [...document.querySelectorAll('.processing-charts .quality-chart canvas')].every(canvas => Math.abs(canvas.getBoundingClientRect().width-canvas.closest('.quality-chart').getBoundingClientRect().width)<2)")
     page.wait_for_function('() => document.documentElement.scrollWidth<=innerWidth+1',timeout=5000)
     page.screenshot(path=str(directory/f'native-processing-mobile{suffix}.png'),full_page=True)
+    # Reuse registered outputs after restart through the UI, without a path field.
+    page.set_viewport_size({'width':1480,'height':1000})
+    result=page.get_by_role('region',name='Processing results')
+    result.get_by_role('button',name='Clear output selection',exact=True).click()
+    playwright.expect(result.get_by_role('button',name='Use as input',exact=True)).to_be_disabled()
+    result.get_by_role('button',name='Select all outputs',exact=True).click()
+    with page.expect_response(lambda r:r.request.method=='POST' and r.url.endswith('/reuse')) as reused:
+        result.get_by_role('button',name='Use as input',exact=True).click()
+    assert reused.value.status==200,reused.value.text()
+    draft=reused.value.json()
+    assert len(draft['input_datasets'])==2 and all(r['paired'] for r in draft['input_pairing'])
+    page.get_by_role('button',name='FastQC only',exact=True).click()
+    with page.expect_response(lambda r:r.request.method=='POST' and r.url.endswith('/api/runs')) as created:
+        page.get_by_role('button',name='Run analysis',exact=True).click()
+    with workspace.api() as api: downstream=workspace.finish(api,created.value.json())
+    assert downstream['state']=='completed' and downstream['inputs']==draft['paths']
+    assert {r['run_id'] for r in downstream['input_datasets']}=={run['id']}
+    assert {r['sha256'] for r in downstream['input_provenance']}=={d['sha256'] for d in run['derived_datasets']}
+    assert not list((workspace.settings.output/downstream['id']/'inputs').glob('*.fastq*'))
+    playwright.expect(page.locator('.analysis-detail-heading .state')).to_have_text('completed',timeout=20000)
     page.close()
 
 
@@ -97,5 +117,6 @@ def test_seqkit_statistics_and_subsampling_from_shared_selection(workspace,brows
     with page.expect_response(lambda response:response.request.method=='POST' and response.url.endswith('/api/runs')) as created:
         page.get_by_role('button',name='Run processing',exact=True).click()
     with workspace.api() as api:sampled=workspace.finish(api,created.value.json())
-    assert len(sampled['derived_datasets'])==2 and all(not entry['paired'] for entry in sampled['derived_datasets'])
+    assert len(sampled['derived_datasets'])==2 and all(entry['paired'] for entry in sampled['derived_datasets'])
+    assert sampled['processing']['units'][0]['output_validation']['pairs'][0]['state']=='passed'
     page.close()

@@ -14,6 +14,7 @@ from .store import now, save_json
 ACTIVE = {"queued", "running"}
 from .outcomes import plan
 from .files import PathViolation
+from . import datasets
 
 
 def interrupted(run):
@@ -45,12 +46,13 @@ class ValidationJobs:
         metrics = manager.directory(run['id']) / 'metrics.json'
         if metrics.is_file() and not metrics.is_symlink():
             samples = json.loads(metrics.read_text()).get('samples', [])
+        derived = datasets.registered(manager, source.get("input_datasets"))
         files = []
         for entry in plan([Path(path) for path in paths]):
             entry = {key: entry[key] for key in ('id', 'path', 'name')}
             original = snapshots.get(entry['path'])
             try:
-                path = manager.files.resolve(entry['path'])
+                path = datasets.resolve(manager, entry['path'], derived)
                 if str(path) != entry['path']:
                     raise ValueError('Source path now resolves to another location')
                 manager.readable_fastq(path)

@@ -87,7 +87,9 @@ export default function ProcessingForm({
         <p>
           {fastp
             ? "Trim adapters and filter reads with fastp. Each confirmed pair or single read is processed separately."
-            : "Run a focused SeqKit utility on each selected file. Derived reads remain independent files; mates are not silently repaired or relabeled as synchronized pairs."}
+            : mode === "seqkit-sample"
+              ? "Reproducible fraction sampling. Confirmed mates use the same seed and must pass full identifier/order checks before paired outputs are published."
+              : "Run a focused SeqKit utility on each selected file. Filtering and extraction produce independent files; no mate synchronization is claimed."}
         </p>
         <div className="processing-selection">
           <strong>{files.length} FASTQ files selected</strong>

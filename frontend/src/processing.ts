@@ -1,4 +1,4 @@
-import type { Run, ProcessingOptions } from "./types.ts";
+import type { Run, ProcessingOptions, DatasetReference } from "./types.ts";
 export const isProcessing = (mode: string) =>
   mode === "fastp" || mode.startsWith("seqkit-");
 export const processingModes = [
@@ -58,3 +58,11 @@ export const publishedDatasets = (
   ["completed", "partial"].includes(run.state)
     ? run.derived_datasets || []
     : [];
+
+export const selectedReferences = (
+  references: DatasetReference[],
+  paths: Set<string>,
+) =>
+  references
+    .filter((ref) => !!ref.path && paths.has(ref.path))
+    .map(({ run_id, dataset_id }) => ({ run_id, dataset_id }));

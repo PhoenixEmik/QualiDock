@@ -41,7 +41,7 @@ def auto_groups(records):
     return list(groups.values())
 
 
-def validate_configuration(paths, automatic, pairing=None, groups=None):
+def validate_configuration(paths, automatic, pairing=None, groups=None, *, detected_groups=None):
     """Validate a complete, explicit assignment against current canonical inputs."""
     allowed = {str(path) for path in paths}
     by_path = {record['path']: record for record in automatic}
@@ -86,7 +86,7 @@ def validate_configuration(paths, automatic, pairing=None, groups=None):
             raise ValueError('Conflicting or incomplete read pair assignment')
         if any(members[0][field] != members[1][field] for field in ('source', 'lane', 'chunk')):
             raise ValueError('Both reads must agree on pair provenance, lane and chunk')
-    groups = auto_groups(result) if groups is None else groups
+    groups = (detected_groups if detected_groups is not None else auto_groups(result)) if groups is None else groups
     if not isinstance(groups, list) or len(groups) > 500:
         raise ValueError('Invalid sample groups')
     normalized_groups, members, identifiers = [], set(), set()
@@ -104,7 +104,7 @@ def validate_configuration(paths, automatic, pairing=None, groups=None):
         if source not in SOURCES:
             raise ValueError('Invalid sample grouping provenance')
         if source in {'auto', 'confirmed'}:
-            expected = next((candidate for candidate in auto_groups(automatic) if candidate['id'] == group['id']), None)
+            expected = next((candidate for candidate in (detected_groups if detected_groups is not None else auto_groups(automatic)) if candidate['id'] == group['id']), None)
             if not expected or set(expected['files']) != set(files) or expected['display_name'] != name.strip():
                 raise ValueError('Automatic/confirmed sample groups must match detection; use manual provenance for changes')
         normalized_groups.append({"id": group['id'], "display_name": name.strip(), "files": files, "source": source})
