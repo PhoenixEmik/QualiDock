@@ -101,6 +101,7 @@ test("count charts have explicit units and bounded initial zoom for 100 syntheti
     id: `synthetic-${i}`,
     value: i,
     unit: "reads",
+    context: { ...point.context, sequencing_run_id: `synthetic-run-${i}` },
   }));
   const options = cohortPlot({
     ...result,
@@ -110,6 +111,8 @@ test("count charts have explicit units and bounded initial zoom for 100 syntheti
   assert.equal(options.yAxis.max, undefined);
   assert.equal(options.yAxis.name, "reads");
   assert.equal(options.dataZoom[0].end, 16);
+  assert.equal(options.series.length, 100);
+  assert.ok(options.series.every((series: any) => series.barGap === "-100%"));
   assert.equal(options.series[0].data.length, 100);
   assert.equal(cohortMetrics.length, 9);
 });

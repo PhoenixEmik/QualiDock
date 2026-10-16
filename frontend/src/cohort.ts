@@ -128,6 +128,9 @@ export function cohortPlot(
         point.context.sequencing_run_id === run ? point.value : null,
       ),
       barMaxWidth: 36,
+      // Sparse run series never share a category; reuse its full bar slot even
+      // for cohorts with many runs instead of allocating hundreds of empty slots.
+      barGap: "-100%",
     };
   });
   const description = `Cross-run ${result.metric.name}; exact source values and denominators available in the provenance table and CSV/TSV`;
