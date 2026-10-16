@@ -2625,3 +2625,28 @@ tr.row-selected:hover {
   border: 1px solid var(--border-strong);
   border-radius: 4px;
 }
+
+/* History controls and its wide table must shrink within narrow workspaces. */
+section[aria-label="Analysis jobs"] {
+  min-width: 0;
+  max-width: 100%;
+}
+section[aria-label="Analysis jobs"] > .table-scroll {
+  max-width: 100%;
+}
+.jobs-toolbar > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.jobs-toolbar select {
+  min-width: 0;
+  max-width: 100%;
+}
+@media (max-width: 640px) {
+  .jobs-toolbar > label {
+    flex-wrap: wrap;
+  }
+  .jobs-toolbar .filter-tabs {
+    flex-wrap: wrap;
+  }
+}

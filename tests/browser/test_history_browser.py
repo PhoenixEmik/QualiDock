@@ -54,4 +54,7 @@ def test_bounded_history_pagination_polling_reconnect_and_selected_detail(worksp
         assert measured['summary']['bytes']<measured['legacy']['bytes']/10
         page.set_viewport_size({'width':390,'height':844})
         page.get_by_role('navigation',name='Main navigation').get_by_role('button',name='Analyses',exact=True).click()
+        page.screenshot(path='validation/native-history-mobile'+workspace.settings.prefix.replace('/','-')+'.png',full_page=True)
+        overflow=page.evaluate("""() => [...document.querySelectorAll('body *')].filter(el=>el.getBoundingClientRect().right>innerWidth+1).map(el=>({tag:el.tagName,cls:el.className,right:el.getBoundingClientRect().right,width:el.getBoundingClientRect().width})).slice(0,30)""")
+        print('Mobile history overflow diagnostics:',json.dumps(overflow))
         page.wait_for_function('() => document.documentElement.scrollWidth <= innerWidth',timeout=3000)
