@@ -35,6 +35,7 @@ import { Empty, State } from "./Feedback";
 import FileExplorer from "./FileExplorer";
 import AnalysisDetail from "./AnalysisDetail";
 import NewAnalysisForm from "./NewAnalysisForm";
+import ProjectWorkspace from "./ProjectWorkspace";
 import { reconcileConfig } from "./sampleConfig";
 import { resolveEntries, listingUrl, type ExplorerMode } from "./explorer";
 
@@ -58,6 +59,11 @@ export default function App() {
   const [token, setToken] = useState("");
   const [config, setConfig] = useState<Config | null>(null);
   const [view, setView] = useState<View>("workspace");
+  const [workspacePanel, setWorkspacePanel] = useState<"files" | "projects">(
+    "files",
+  );
+  const [projectId, setProjectId] = useState("");
+  const [initialReportId, setInitialReportId] = useState("");
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [currentRun, setCurrentRun] = useState<Run | null>(null);
   const [revision, setRevision] = useState(0);
@@ -118,6 +124,8 @@ export default function App() {
       listingRef.current = null;
       setRunId("");
       setView("workspace");
+      setProjectId("");
+      setWorkspacePanel("files");
     }
     setError(
       err instanceof Error ? err.message : "The request failed. Try again.",
@@ -462,6 +470,7 @@ export default function App() {
     open("new");
   };
   const showRun = (run: Pick<Run, "id">) => {
+    setInitialReportId("");
     setRunId(run.id);
     setCurrentRun("inputs" in run ? (run as Run) : null);
     setDetailLoading(true);
@@ -807,7 +816,9 @@ export default function App() {
               </h1>
               <p>
                 {view === "workspace"
-                  ? "Browse FASTQ files, check sample pairs, and start a QC analysis."
+                  ? workspacePanel === "projects"
+                    ? "Organize declared samples, sequencing runs, and linked QC evidence."
+                    : "Browse FASTQ files, check sample pairs, and start a QC analysis."
                   : view === "analyses"
                     ? "Manage QC runs and open their logs, metrics, and reports."
                     : view === "new"
@@ -837,7 +848,69 @@ export default function App() {
             </div>
           )}
           {view === "workspace" && (
-            <>
+            <div
+              className="detail-tabs"
+              role="tablist"
+              aria-label="Workspace sections"
+            >
+              {(["files", "projects"] as const).map((panel, index) => (
+                <button
+                  key={panel}
+                  id={`workspace-${panel}-tab`}
+                  role="tab"
+                  className={workspacePanel === panel ? "active" : ""}
+                  aria-selected={workspacePanel === panel}
+                  tabIndex={workspacePanel === panel ? 0 : -1}
+                  aria-controls={`workspace-${panel}-panel`}
+                  onClick={() => setWorkspacePanel(panel)}
+                  onKeyDown={(event) => {
+                    if (
+                      !["ArrowLeft", "ArrowRight", "Home", "End"].includes(
+                        event.key,
+                      )
+                    )
+                      return;
+                    event.preventDefault();
+                    const next =
+                      event.key === "Home"
+                        ? "files"
+                        : event.key === "End"
+                          ? "projects"
+                          : index === 0
+                            ? "projects"
+                            : "files";
+                    setWorkspacePanel(next);
+                    document.getElementById(`workspace-${next}-tab`)?.focus();
+                  }}
+                >
+                  {panel === "files" ? "Files" : "Projects"}
+                </button>
+              ))}
+            </div>
+          )}
+          {view === "workspace" && workspacePanel === "projects" && (
+            <div
+              role="tabpanel"
+              id="workspace-projects-panel"
+              aria-labelledby="workspace-projects-tab"
+            >
+              <ProjectWorkspace
+                projectId={projectId}
+                selectProject={setProjectId}
+                openAnalysis={(id, tab, reportId) => {
+                  showRun({ id });
+                  setDetailTab(tab);
+                  setInitialReportId(reportId ?? "");
+                }}
+              />
+            </div>
+          )}
+          {view === "workspace" && workspacePanel === "files" && (
+            <div
+              role="tabpanel"
+              id="workspace-files-panel"
+              aria-labelledby="workspace-files-tab"
+            >
               <FileExplorer
                 listing={listing}
                 roots={config?.roots || []}
@@ -875,7 +948,7 @@ export default function App() {
                   </button>
                 </div>
               )}
-            </>
+            </div>
           )}
           {view === "new" && (
             <NewAnalysisForm
@@ -1191,6 +1264,7 @@ export default function App() {
               <AnalysisDetail
                 key={currentRun.id}
                 currentRun={currentRun}
+                initialReportId={initialReportId}
                 refresh={() => setRevision((value) => value + 1)}
                 samples={samples}
                 multiqc={multiqc}

@@ -1606,6 +1606,83 @@ dd {
   color: var(--accent);
   font-weight: 600;
 }
+.project-workspace {
+  min-width: 0;
+  max-width: 100%;
+}
+.project-workspace section {
+  min-width: 0;
+}
+.project-workspace h2,
+.project-workspace h3 {
+  margin: 14px 0;
+}
+.project-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0;
+}
+.project-actions .field-label {
+  margin-bottom: 0;
+}
+.project-actions label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.project-fields {
+  border: 0;
+  padding: 14px 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+.project-fields .wide-input {
+  margin: 8px 0 0;
+}
+.project-wide {
+  grid-column: 1 / -1;
+}
+.project-workspace .table-scroll {
+  max-width: 100%;
+  margin: 14px 0;
+}
+.project-workspace table {
+  min-width: 660px;
+}
+.project-workspace td {
+  vertical-align: top;
+}
+.project-workspace td small {
+  display: block;
+  color: var(--text-secondary);
+  margin-top: 5px;
+  overflow-wrap: anywhere;
+}
+.project-label {
+  max-width: 320px;
+  overflow-wrap: anywhere;
+}
+.project-hash {
+  overflow-wrap: anywhere;
+}
+.project-workspace textarea {
+  min-height: 80px;
+}
+@media (max-width: 720px) {
+  .project-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .project-actions input,
+  .project-actions select {
+    max-width: 100%;
+    min-width: 0;
+  }
+}
 .job-information {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

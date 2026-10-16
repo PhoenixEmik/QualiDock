@@ -44,6 +44,7 @@ const detailTabs = [
   { id: "reports" as const, label: "Reports" },
 ];
 interface Props {
+  initialReportId?: string;
   currentRun: Run;
   samples: Sample[];
   multiqc?: MultiQCSummary;
@@ -76,8 +77,11 @@ export default function AnalysisDetail({
   cancel,
   reselect,
   refresh = () => {},
+  initialReportId = "",
 }: Props) {
-  const [analyticsView, setAnalyticsView] = useState("Overview");
+  const [analyticsView, setAnalyticsView] = useState(
+    initialReportId ? "Sample Details" : "Overview",
+  );
   const entities = useMemo(
     () => analyticsSamples(currentRun, samples, multiqc),
     [currentRun, samples, multiqc],
@@ -99,7 +103,7 @@ export default function AnalysisDetail({
   const select = (ids: Set<string>) =>
     setSelection({ run: currentRun.id, ids });
   const [detailsOpen, setDetailsOpen] = useState(true);
-  const [sampleId, setSampleId] = useState("");
+  const [sampleId, setSampleId] = useState(initialReportId);
   const [metric, setMetric] = useState("Per base sequence quality");
   const currentSample =
     samples.find((sample) => sample.id === sampleId) || samples[0];

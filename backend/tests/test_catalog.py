@@ -14,6 +14,7 @@ import pytest
 
 from qualidock.app import create_app
 from qualidock.manager import RunManager
+from qualidock.catalog import SCHEMA_VERSION
 from test_workspace import start, wait
 from test_release_review import prepare, evaluation, action
 
@@ -138,7 +139,7 @@ def test_legacy_installation_and_schema_upgrade_rollback_are_non_destructive(set
     assert manifest.read_bytes() == raw
     db_path = settings.output / 'projects.sqlite3'
     with sqlite3.connect(db_path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 1
+        assert db.execute('PRAGMA user_version').fetchone()[0] == SCHEMA_VERSION
         db.execute('PRAGMA user_version=99')
     pending = json.loads(raw)
     pending['state'] = 'queued'
@@ -151,7 +152,7 @@ def test_legacy_installation_and_schema_upgrade_rollback_are_non_destructive(set
     assert not manager.stores.locks and db_path.read_bytes() == before
     assert manifest.read_bytes() == pending_bytes
     with sqlite3.connect(db_path) as db:
-        db.execute('PRAGMA user_version=1')
+        db.execute(f'PRAGMA user_version={SCHEMA_VERSION}')
     with TestClient(create_app(settings), headers=headers(settings)) as client:
         assert client.get('/api/projects').json()['total'] == 1
         assert client.get('/api/runs/' + legacy_id).json()['state'] == 'interrupted'

@@ -27,16 +27,37 @@ class CaptureEvidence(BaseModel):
     sample_ids: list[str] | None = Field(default=None, min_length=1, max_length=500)
 
 
+class SampleImport(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    format: str = Field(pattern=r'^(csv|json)$')
+    content: str = Field(max_length=1024 * 1024)
+    fingerprint: str | None = Field(default=None, pattern=r'^[a-f0-9]{64}$')
+
+
+class AssignFiles(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    assignments: list[dict] = Field(min_length=1, max_length=500)
+
+
+class CorrectAssignment(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    revision: int = Field(strict=True, ge=1)
+    assignment: dict = Field(max_length=9)
+    reason: str = Field(min_length=1, max_length=2000)
+
+
 def project_router(manager):
     router = APIRouter(prefix='/api')
     catalog = manager.catalog
+    from .project_management import ProjectManagement
+    management = ProjectManagement(catalog)
 
     async def call(method, *args, **kwargs):
         try:
             return await asyncio.to_thread(method, *args, **kwargs)
         except CatalogConflict as exc:
             raise HTTPException(409, str(exc)) from exc
-        except sqlite3.OperationalError as exc:
+        except (sqlite3.OperationalError, OSError) as exc:
             raise HTTPException(503, 'Project storage is unavailable, busy or not writable; check its owner, permissions and filesystem') from exc
 
     def kind(collection):
@@ -67,8 +88,8 @@ def project_router(manager):
         return await call(catalog.edit, project_id, body.revision, body.fields)
 
     @router.get('/projects/{project_id}/associations')
-    async def associations(project_id: str, offset: int = 0, limit: int = 100):
-        return await call(catalog.associations, project_id, offset, limit)
+    async def associations(project_id: str, offset: int = 0, limit: int = 100, sample_id: str | None = None, sequencing_run_id: str | None = None):
+        return await call(catalog.associations, project_id, offset, limit, sample_id, sequencing_run_id)
 
     @router.get('/projects/{project_id}/analyses')
     async def analyses(project_id: str, offset: int = 0, limit: int = 25):
@@ -89,6 +110,22 @@ def project_router(manager):
     @router.get('/projects/{project_id}/evidence')
     async def evidence_page(project_id: str, offset: int = 0, limit: int = 25):
         return await call(catalog.evidence_page, project_id, offset, limit)
+
+    @router.post('/projects/{project_id}/samples/import')
+    async def import_samples(project_id: str, body: SampleImport):
+        return await call(management.import_samples, project_id, body.content, body.format, body.fingerprint)
+
+    @router.get('/projects/{project_id}/analyses/{link_id}/inventory')
+    async def inventory(project_id: str, link_id: str):
+        return await call(management.inventory, project_id, link_id)
+
+    @router.post('/projects/{project_id}/analyses/{link_id}/assignments')
+    async def assign(project_id: str, link_id: str, body: AssignFiles):
+        return await call(management.add_assignments, project_id, link_id, body.assignments)
+
+    @router.patch('/projects/{project_id}/associations/{association_id}')
+    async def correct(project_id: str, association_id: str, body: CorrectAssignment):
+        return await call(management.revise_assignment, project_id, association_id, body.revision, body.assignment, body.reason)
 
     @router.get('/projects/{project_id}/{collection}')
     async def entities(project_id: str, collection: str, search: str = '', offset: int = 0, limit: int = 25, status: str = 'active'):

@@ -18,7 +18,7 @@ from .files import PathViolation
 from .manager import now
 from .release_policy import digest
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 KINDS = {'project': 'prj', 'sample': 'smp', 'sequencing_run': 'seq'}
 COMMON = {'display_name', 'declared_identifier', 'notes', 'status'}
 FIELDS = {
@@ -151,6 +151,16 @@ class ProjectCatalog:
                 PRAGMA user_version=1;
                 COMMIT;
                 ''')
+                version = 1
+            if version == 1:
+                db.executescript('''
+                BEGIN IMMEDIATE;
+                ALTER TABLE associations ADD COLUMN revision INTEGER NOT NULL DEFAULT 1;
+                CREATE INDEX events_project ON events(project_id,sequence);
+                CREATE INDEX events_entity ON events(entity_id,sequence);
+                PRAGMA user_version=2;
+                COMMIT;
+                ''')
         info = self.path.stat()
         self.identity = (info.st_dev, info.st_ino)
 
@@ -207,8 +217,8 @@ class ProjectCatalog:
             where = 'kind=? AND project_id IS ?'
             args = [kind, project_id]
             escaped = search.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
-            where += " AND fields LIKE ? ESCAPE '\\'"
-            args.append('%' + escaped + '%')
+            where += " AND (fields LIKE ? ESCAPE '\\' OR id LIKE ? ESCAPE '\\')"
+            args.extend(['%' + escaped + '%', '%' + escaped + '%'])
             if status != 'all':
                 # Avoid a dependency on optional SQLite JSON extensions.
                 where += ' AND fields LIKE ?'
@@ -225,13 +235,20 @@ class ProjectCatalog:
             counts['associations'] = db.execute('SELECT COUNT(*) FROM associations WHERE project_id=?', (project_id,)).fetchone()[0]
             return {**project, 'counts': counts, 'qc_readiness': 'unknown', 'release_readiness': 'unknown'}
 
-    def associations(self, project_id, offset=0, limit=100):
+    def associations(self, project_id, offset=0, limit=100, sample_id=None, sequencing_run_id=None):
         if offset < 0 or not 1 <= limit <= 100:
             raise ValueError('Invalid association pagination')
         with self.transaction() as db:
             self.entity(db, project_id, 'project')
-            total = db.execute('SELECT COUNT(*) FROM associations WHERE project_id=?', (project_id,)).fetchone()[0]
-            rows = db.execute('SELECT * FROM associations WHERE project_id=? ORDER BY created_at,id LIMIT ? OFFSET ?', (project_id, limit, offset)).fetchall()
+            where = 'a.project_id=?'
+            args = [project_id]
+            for key, value, kind in [('sample_id', sample_id, 'sample'), ('sequencing_run_id', sequencing_run_id, 'sequencing_run')]:
+                if value is not None:
+                    self.entity(db, value, kind, project_id)
+                    where += ' AND a.' + key + '=?'
+                    args.append(value)
+            total = db.execute('SELECT COUNT(*) FROM associations a WHERE ' + where, args).fetchone()[0]
+            rows = db.execute('SELECT a.*,l.analysis_id FROM associations a JOIN analysis_links l ON l.id=a.analysis_link_id WHERE ' + where + ' ORDER BY a.created_at,a.id LIMIT ? OFFSET ?', [*args, limit, offset]).fetchall()
             return {'items': [{**dict(row), **{key: json.loads(row[key]) for key in ('declared', 'observed', 'actor')}} for row in rows], 'total': total, 'offset': offset, 'limit': limit}
 
     def links(self, project_id, offset=0, limit=25):
@@ -247,8 +264,8 @@ class ProjectCatalog:
                 items.append({**dict(row), 'actor': json.loads(row['actor']), 'analysis': {key: run.get(key) for key in ('id', 'name', 'mode', 'state', 'created_at', 'finished_at')} if run else None})
             return {'items': items, 'total': total, 'offset': offset, 'limit': limit}
 
-    def attach(self, project_id, analysis_id, assignments):
-        run = self.manager.runs[analysis_id]
+    def prepare_assignments(self, analysis_id, assignments):
+        self.manager.runs[analysis_id]
         self.manager.directory(analysis_id)  # Reuse result-store authorization.
         if not isinstance(assignments, list) or len(assignments) > 500:
             raise ValueError('At most 500 explicit file associations are supported')
@@ -282,6 +299,26 @@ class ProjectCatalog:
                 raise ValueError('Identity associations must be explicitly user-confirmed or user-assigned')
             observed = {key: file.get(key) for key in ('file_id', 'filename', 'report_id', 'source_snapshot', 'qc_snapshot_matches', 'integrity_state', 'sha256')}
             normalized.append((assignment, declared, observed))
+        return normalized
+
+    def write_assignments(self, db, project_id, link_id, normalized):
+        stamp = now()
+        actor = encoded(self.manager.delivery.actor())
+        for assignment, declared, observed in normalized:
+            for key, kind in [('sample_id', 'sample'), ('sequencing_run_id', 'sequencing_run')]:
+                entity = self.entity(db, assignment[key], kind, project_id)
+                if entity['declared']['status'] != 'active':
+                    raise ValueError('Restore archived samples/runs before assigning files')
+            if db.execute('SELECT id FROM associations WHERE analysis_link_id=? AND file_id=?', (link_id, assignment['file_id'])).fetchone():
+                raise CatalogConflict('File already has an association; use a reasoned revision to correct it')
+            association_id = 'asc_' + uuid.uuid4().hex
+            db.execute('INSERT INTO associations(id,project_id,sample_id,sequencing_run_id,analysis_link_id,file_id,declared,observed,created_at,actor) VALUES(?,?,?,?,?,?,?,?,?,?)',
+                       (association_id, project_id, assignment['sample_id'], assignment['sequencing_run_id'], link_id, assignment['file_id'], encoded(declared), encoded(observed), stamp, actor))
+            self.event(db, project_id, association_id, 'association_created', {'analysis_link_id': link_id, 'file_id': assignment['file_id'], 'sample_id': assignment['sample_id'], 'sequencing_run_id': assignment['sequencing_run_id'], 'declared': declared, 'revision': 1})
+
+    def attach(self, project_id, analysis_id, assignments):
+        run = self.manager.runs[analysis_id]
+        normalized = self.prepare_assignments(analysis_id, assignments)
         with self.transaction(True) as db:
             project = self.entity(db, project_id, 'project')
             if project['declared']['status'] == 'archived':
@@ -289,16 +326,11 @@ class ProjectCatalog:
             old = db.execute('SELECT * FROM analysis_links WHERE analysis_id=?', (analysis_id,)).fetchone()
             if old:
                 raise CatalogConflict('Analysis is already linked; historical relationships cannot be silently reassigned')
-            for assignment, _, _ in normalized:
-                self.entity(db, assignment.get('sample_id'), 'sample', project_id)
-                self.entity(db, assignment.get('sequencing_run_id'), 'sequencing_run', project_id)
             link_id = 'lnk_' + uuid.uuid4().hex
             stamp = now()
             actor = encoded(self.manager.delivery.actor())
             db.execute('INSERT INTO analysis_links VALUES(?,?,?,?,?)', (link_id, project_id, analysis_id, stamp, actor))
-            for assignment, declared, observed in normalized:
-                db.execute('INSERT INTO associations VALUES(?,?,?,?,?,?,?,?,?,?)',
-                           ('asc_' + uuid.uuid4().hex, project_id, assignment['sample_id'], assignment['sequencing_run_id'], link_id, assignment['file_id'], encoded(declared), encoded(observed), stamp, actor))
+            self.write_assignments(db, project_id, link_id, normalized)
             self.event(db, project_id, link_id, 'analysis_linked', {'analysis_id': analysis_id, 'associations': len(normalized)})
             return {'id': link_id, 'project_id': project_id, 'analysis_id': run['id'], 'created_at': stamp, 'association_count': len(normalized)}
 
@@ -309,7 +341,7 @@ class ProjectCatalog:
             if row is None:
                 raise ValueError('Unknown project analysis link')
             analysis_id = row['analysis_id']
-            associations = [dict(row) for row in db.execute('SELECT id,sample_id,sequencing_run_id,file_id,declared FROM associations WHERE analysis_link_id=? ORDER BY id', (link_id,))]
+            associations = [dict(row) for row in db.execute('SELECT id,sample_id,sequencing_run_id,file_id,declared,revision FROM associations WHERE analysis_link_id=? ORDER BY id', (link_id,))]
             declared_entities = {entity_id: self.entity(db, entity_id) for association in associations for entity_id in (association['sample_id'], association['sequencing_run_id'])}
         run = deepcopy(self.manager.runs[analysis_id])
         if run['state'] in {'running', 'queued'}:
@@ -334,7 +366,8 @@ class ProjectCatalog:
             snapshot['release'] = {key: evaluation[key] for key in ('evaluator_version', 'fingerprint', 'sample_ids', 'file_ids', 'readiness', 'review_state', 'decision', 'active_waivers', 'policy')}
         fingerprint = digest(snapshot)
         with self.transaction(True) as db:
-            if revision != self.manager.revision or any(self.entity(db, entity_id)['revision'] != entity['revision'] for entity_id, entity in declared_entities.items()):
+            current_associations = {row['id']: row['revision'] for row in db.execute('SELECT id,revision FROM associations WHERE analysis_link_id=?', (link_id,))}
+            if revision != self.manager.revision or current_associations != {row['id']: row['revision'] for row in associations} or any(self.entity(db, entity_id)['revision'] != entity['revision'] for entity_id, entity in declared_entities.items()):
                 raise CatalogConflict('QC or declared metadata changed during evidence capture; retry with current evidence')
             old = db.execute('SELECT id FROM evidence WHERE analysis_link_id=? AND sha256=?', (link_id, fingerprint)).fetchone()
             if old:

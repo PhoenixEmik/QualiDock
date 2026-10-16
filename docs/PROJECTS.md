@@ -38,7 +38,9 @@ configured result stores can still contain QC artifacts. An ephemeral session
 directory is unsuitable for the default persistent registry. See the official
 [SQLite locking description](https://www.sqlite.org/lockingv3.html).
 
-Schema version 1 initializes installations with no project registry. Existing
+Schema version 1 introduced the registry. Version 2 adds only an optimistic
+association revision column and audit lookup indexes in an atomic migration;
+existing IDs, snapshots and scientific files remain unchanged. Existing
 v1/v2 analysis manifests and release manifests are not migrated or rewritten.
 `PRAGMA user_version` gates future migrations. Unknown/newer versions are refused
 without rewriting the database or QC results; do not manually lower the version.
@@ -47,11 +49,12 @@ project metadata. Preserve the database for a later compatible upgrade.
 
 Metadata edits require the currently displayed `revision`; stale updates return
 409. Archive/restore is the supported removal lifecycle (`status`); destructive
-DELETE endpoints are intentionally absent. Relationships are append-only in this
-initial registry: an attached analysis cannot silently move projects or change
-sample assignments. Check the explicit assignment preview before attaching;
-correcting a historical association requires a separately audited revision
-workflow rather than rewriting the original evidence.
+DELETE endpoints are intentionally absent. An attached analysis cannot silently
+move projects. Unresolved files can be explicitly assigned later. Corrections
+require the association's current revision and a reason; one transaction appends
+the complete previous/current record to audit events and updates the current
+projection. Historical evidence remains unchanged. A correction cannot change
+the association's source file ID.
 
 ## Scientific provenance
 
@@ -65,7 +68,7 @@ release decisions produce another snapshot; historical captures remain intact.
 Concurrent metadata/QC changes cause a 409 and require recapture.
 
 Project counts are record counts, never a fabricated QC completion percentage.
-Project QC/release readiness initially remains `unknown`; review must drill into
+Project QC/release readiness remains `unknown`; review must drill into
 the actual analysis. A saved approval is historical evidence and does not itself
 prove present source freshness, successful transfer or biological identity.
 Evidence and audit tables reject UPDATE/DELETE. This prevents application-level
@@ -137,3 +140,50 @@ approval/evidence capture. An actual FastQC 0.13.0 integration verifies saved
 metrics hashes, official HTML download bytes, restart and unchanged source hashes.
 The existing frontend/build/browser suites remain regression gates. CI evidence
 and the next issue's status are recorded in [NEXT-PHASE.md](NEXT-PHASE.md).
+
+
+## Project Workspace (#21)
+
+Open **Workspace → Projects**. Main navigation remains Workspace/Analyses; Files
+retains the explorer and standalone New analysis workflow. Create/search/edit/archive
+projects, then manage paginated Samples and Sequencing runs. Repeated labels show
+stable IDs. Assay/library/expected yield and platform/date/stage fields are declared,
+not independently observed. Blank yield is unknown; zero is retained. Expectations
+do not create release rules or combine yield across runs.
+
+Import UTF-8 CSV/JSON sample metadata (1 MiB, 500 rows). Preview precedes atomic
+commit; duplicate submissions reuse the initial import, and stale previews conflict.
+Existing/ambiguous identifiers require explicit resolution, never auto-upserts or
+filename-based matching. SHA-256 covers submitted UTF-8 text, not a differently
+encoded original file. Audit records include actual Unix actor and source format.
+
+Under **Analyses & evidence**, attach an existing unassigned analysis, then use
+**Assign / inspect files** to confirm explicit file subsets against sample/run IDs.
+Search identity pickers for records beyond the initial 100 matches. Leave ambiguity
+unresolved. Corrections require a reason and preserve previous/current records.
+Samples/runs drill into associated lane/read results; analysis buttons open existing
+Overview, native QC or isolated Reports. Metadata operations do not execute QC,
+copy FASTQs or change source manifests/reports.
+
+Capture QC-only metadata or an evaluated existing analysis-local release scope.
+Snapshots display captured status/time, not derived current project approval.
+Analysis approval applies to the original file/group scope; capturing it alongside
+project declarations does not certify a new biological identity. Open the source
+review to inspect current evidence. Keyboard tabs, responsive scrollable tables and
+loading/error/empty states use existing styles and authentication.
+
+Additional authenticated endpoints:
+
+- `POST /api/projects/{id}/samples/import`: `format`, `content`, optional preview
+  `fingerprint` (omit to preview; include to commit).
+- `GET /api/projects/{id}/analyses/{link_id}/inventory`: bounded original identities
+  and associations, omitting absolute source paths.
+- `POST /api/projects/{id}/analyses/{link_id}/assignments`.
+- `PATCH /api/projects/{id}/associations/{association_id}`: `revision`, full
+  `assignment`, mandatory `reason`.
+- Association listings accept explicit `sample_id` / `sequencing_run_id` filters.
+
+Schema v1 backups migrate on startup. Before using an older project-aware version
+that cannot read v2, restore a matching full backup. Do not lower `user_version`.
+QC-only pre-registry versions still read unchanged manifests but cannot show
+project relationships. No deployment/scheduler changes are included.

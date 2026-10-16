@@ -60,7 +60,8 @@ an estimate or reservation of all space a tool might need.
 
 Every configured store is held under an exclusive Unix lock for the session. All
 accessible run manifests are scanned at startup; there is no database or secondary
-index to become stale. Duplicate run IDs across stores fail startup. A session
+index to become stale for QC discovery. The later [project registry](PROJECTS.md)
+adds separate SQLite domain metadata; QC manifests remain authoritative. Duplicate run IDs across stores fail startup. A session
 owns its entire configured set, so independent simultaneous sessions need disjoint
 store sets. Keep configured roots in subsequent launches to discover their histories.
 Unavailable/unwritable roots at startup produce a startup error; runtime changes

@@ -1,5 +1,5 @@
 import type { ScreeningRecord } from "./screening";
-import type { ReleaseExport } from "./release";
+import type { ReleaseExport, ReviewEvent } from "./release";
 export type View = "workspace" | "new" | "analyses" | "analysis";
 export type DetailTab = "overview" | "metrics" | "reports";
 export type RunState =
@@ -69,6 +69,7 @@ export interface Run {
   integrity?: IntegrityResult;
   screening?: ScreeningRecord;
   release_export?: ReleaseExport;
+  release_reviews?: ReviewEvent[];
   report_input_map?: Record<
     string,
     { path?: string; source_report?: string; id: string; multiqc_name?: string }

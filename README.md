@@ -136,6 +136,8 @@ Versioned per-analysis release contracts, reasoned review/waivers and cancellabl
 Optional offline Kraken2 screening can attach preliminary per-read-file taxonomic evidence using explicitly configured local references. It never installs/downloads tools or uploads reads at runtime. See [Offline screening](docs/OFFLINE-SCREENING.md) for setup, provenance, coverage definitions and scientific limitations.
 
 The next phase adds a private persistent [project/sample/sequencing-run registry](docs/PROJECTS.md)
-alongside existing analysis manifests. Its initial API keeps legacy analyses
-unassigned until explicitly linked. See [per-issue implementation status](docs/NEXT-PHASE.md)
+alongside existing analysis manifests. **Workspace → Projects** provides declared
+sample/run metadata, CSV/JSON import previews and explicit file associations with
+audited corrections. Legacy analyses remain unassigned until explicitly linked;
+existing QC and Reports open directly from a project. See [per-issue implementation status](docs/NEXT-PHASE.md)
 for project UI, batch workflows, cohort analytics and controlled delivery progress.
