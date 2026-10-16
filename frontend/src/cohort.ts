@@ -114,14 +114,24 @@ export function cohortPlot(
   const runs = [
     ...new Set(points.map((point) => point.context.sequencing_run_id)),
   ];
+  const labels = new Map(
+    runs.map((run) => [
+      run,
+      `${points.find((point) => point.context.sequencing_run_id === run)!.context.run_name} · ${run.slice(-8)}`,
+    ]),
+  );
   const series = runs.map((run, index) => {
     const members = points.filter(
       (point) => point.context.sequencing_run_id === run,
     );
-    const name = `${members[0].context.run_name} · ${run.slice(-8)}`;
+    const shortLabel = labels.get(run)!;
+    const label =
+      [...labels.values()].filter((value) => value === shortLabel).length > 1
+        ? `${members[0].context.run_name} · ${run}`
+        : shortLabel;
     return {
-      name,
-      label: name,
+      name: run,
+      label,
       type: "bar" as const,
       color: overlayColors[index % overlayColors.length],
       data: points.map((point) =>
@@ -138,7 +148,13 @@ export function cohortPlot(
     animation: false,
     aria: { enabled: true, label: { description } },
     grid: { left: 80, right: 24, top: 30, bottom: 150 },
-    legend: { type: "scroll", bottom: 0, textStyle: { color: "#475467" } },
+    legend: {
+      type: "scroll",
+      bottom: 0,
+      textStyle: { color: "#475467" },
+      formatter: (name: string) =>
+        series.find((entry) => entry.name === name)?.label ?? name,
+    },
     xAxis: {
       type: "category",
       data: points.map(pointLabel),

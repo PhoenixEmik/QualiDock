@@ -123,3 +123,30 @@ test("shared checkbox selection supports bounded cross-project selection and ded
     /at most 5/,
   );
 });
+
+// Display names and UUID suffixes are not scientific observation identities.
+test("run legend identities stay distinct even when display names and UUID suffixes collide", () => {
+  const first = {
+    ...point,
+    context: {
+      ...point.context,
+      sequencing_run_id: "seq_aaaaaaaaaaaaaaaaaaaaaaaadeadbeef",
+    },
+  };
+  const second = {
+    ...point,
+    id: "file-b",
+    context: {
+      ...point.context,
+      sequencing_run_id: "seq_bbbbbbbbbbbbbbbbbbbbbbbbdeadbeef",
+    },
+  };
+  const view = cohortPlot({ ...result, points: [first, second] });
+  assert.notEqual(view.series[0].name, view.series[1].name);
+  assert.notEqual(view.series[0].label, view.series[1].label);
+  assert.equal(view.series[0].name, first.context.sequencing_run_id);
+  assert.equal(
+    (view.options.legend as any).formatter(view.series[0].name),
+    view.series[0].label,
+  );
+});
