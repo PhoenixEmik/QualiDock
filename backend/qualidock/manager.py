@@ -196,6 +196,7 @@ class RunManager:
                 raise ValueError(f"QC tool is unavailable: {Path(executable).name}. Install it or configure its executable path.")
             if info and not info["compatible"]:
                 raise ValueError(info["error"])
+        processing.check_features(mode, operation_options, self.tool_info)
         if self.closing or len([r for r in self.runs.values() if r["state"] in ACTIVE]) >= 20:
             raise ValueError("Session is stopping or the analysis queue is full")
         run_id = uuid.uuid4().hex
@@ -389,6 +390,7 @@ class RunManager:
                         if not tools[name]["compatible"]:
                             raise ValueError(tools[name]["error"])
                 if run.get('processing'):
+                    processing.check_features(run['mode'], run['processing']['options'], tools)
                     await processing.execute(self, run, metrics, errors)
                     if run_id not in self.cancelled:
                         completed = any(unit['state'] == 'completed' for unit in run['processing']['units'])

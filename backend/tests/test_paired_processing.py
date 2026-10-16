@@ -149,3 +149,71 @@ def test_wrapped_records_and_literal_special_identifiers_are_preserved(tmp_path)
         result=run(client,paths,{'preserve_pairs':True,'identifiers':['x.+[a]/2']},mode='seqkit-extract')
         assert result['state']=='completed',result.get('error')
         assert all(output(config,result,mate)==content[mate][0] for mate in (0,1))
+
+
+def test_exact_command_and_capability_validation():
+    from qualidock.processing import options,seqkit_command,check_features
+    value=options('seqkit-sample',{'count':7,'seed':73})
+    argv=seqkit_command('/tools/seqkit','seqkit-sample',Path('/input x.fastq.gz'),Path('/output.fastq.gz'),1,value,Path('/ids'))
+    assert argv[:2]==['/tools/seqkit','sample2'] and '--two-pass' in argv and '--proportion' not in argv
+    assert argv[argv.index('--number')+1]=='7' and argv[argv.index('--rand-seed')+1]=='73'
+    assert argv[-1]=='/input x.fastq.gz'
+    for bad in (0,-1,True,1.5,9007199254740992):
+        with pytest.raises(ValueError):options('seqkit-sample',{'count':bad})
+    with pytest.raises(ValueError):options('seqkit-filter',{'count':3})
+    with pytest.raises(ValueError,match='2.14'):check_features('seqkit-sample',value,{'seqkit':{'version':'2.12.0'}})
+    check_features('seqkit-sample',value,{'seqkit':{'version':'2.14.0'}})
+
+
+# Every test below invokes the genuine externally provisioned SeqKit binary.
+import json
+import os
+import shutil
+SEQKIT=shutil.which(os.environ.get('QUALIDOCK_SEQKIT','seqkit'))
+
+
+@pytest.mark.skipif(not SEQKIT,reason='Actual SeqKit 2.14 required')
+@pytest.mark.parametrize('paired_input',[False,True])
+def test_exact_count_matches_independent_reservoir_indices(tmp_path,paired_input):
+    from dataclasses import replace
+    config=replace(settings(tmp_path),seqkit=SEQKIT)
+    paths=sorted(FIXTURE.resolve().glob('*.fastq.gz'))[:2 if paired_input else 1]
+    original={p:hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+    records=[]
+    for p in paths:
+        lines=gzip.decompress(p.read_bytes()).splitlines(keepends=True)
+        records.append([b''.join(lines[n:n+4]) for n in range(0,len(lines),4)])
+    expected=json.loads((Path(__file__).parent/'fixtures/paired-processing/exact-sampling.json').read_text())
+    with authenticated(config) as client:
+        for case in expected:
+            result=run(client,paths,{'count':case['count'],'seed':case['seed']},mode='seqkit-sample')
+            assert result['state']=='completed',result.get('error')
+            assert all(output(config,result,m)==b''.join(records[m][i] for i in case['indices']) for m in range(len(paths)))
+            selected=result['processing']['units'][0]['selection']
+            assert selected['retained_records']==case['count'] and selected['removed_records']==400-case['count']
+            assert selected['record_unit']==('read_pairs' if paired_input else 'reads')
+            assert all(d['paired']==paired_input for d in result['derived_datasets'])
+        again=run(client,paths,{'count':7,'seed':73},mode='seqkit-sample')
+        assert all(output(config,again,m)==b''.join(records[m][i] for i in expected[1]['indices']) for m in range(len(paths)))
+        full=run(client,paths,{'count':400},mode='seqkit-sample')
+        assert full['state']=='completed' and all(output(config,full,m)==b''.join(records[m]) for m in range(len(paths)))
+        over=run(client,paths,{'count':401},mode='seqkit-sample')
+        assert over['state']=='failed' and not over['derived_datasets']
+        assert 'only 400' in over['error'] and not any(e['tool']=='seqkit' for e in over['executions'])
+    assert original=={p:hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+
+
+@pytest.mark.skipif(not SEQKIT,reason='Actual SeqKit 2.14 required')
+def test_exact_count_partial_failure_and_empty_input(tmp_path):
+    from dataclasses import replace
+    config=replace(settings(tmp_path),seqkit=SEQKIT)
+    paths,content=paired(tmp_path,compressed=False)
+    single=tmp_path/'independent.fastq';single.write_bytes(content[0][0])
+    with authenticated(config) as client:
+        result=run(client,[*paths,single],{'count':2},mode='seqkit-sample')
+        assert result['state']=='partial' and len(result['derived_datasets'])==2
+        assert all(d['paired'] and d['records']==2 for d in result['derived_datasets'])
+        assert 'only 1' in result['error']
+        single.write_bytes(b'')
+        empty=run(client,[single],{'count':1},mode='seqkit-sample')
+        assert empty['state']=='failed' and not empty['derived_datasets'] and 'only 0' in empty['error']

@@ -33,6 +33,7 @@ class SeqkitOptions(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
     gzip: bool = True
     preserve_pairs: bool = False
+    count: int | None = Field(default=None, ge=1, le=9007199254740991)
     fraction: float = Field(default=0.1, gt=0, le=1, allow_inf_nan=False)
     seed: int = Field(default=11, ge=0, le=2147483647)
     min_length: int = Field(default=15, ge=1, le=1000000)
@@ -46,6 +47,8 @@ def options(mode, supplied):
         return None
     value = (FastpOptions if mode == 'fastp' else SeqkitOptions).model_validate(supplied or {}).model_dump()
     if mode.startswith('seqkit-'):
+        if mode != 'seqkit-sample' and value['count'] is not None:
+            raise ValueError('An exact count requires the sampling operation')
         if value['max_length'] is not None and value['max_length'] < value['min_length']:
             raise ValueError('Maximum length must be at least minimum length')
         if mode == 'seqkit-extract' and not value['identifiers']:
@@ -62,6 +65,13 @@ def required(mode, value, operation_units=None):
     if mode in {'seqkit-filter', 'seqkit-extract'} and value.get('preserve_pairs') and operation_units and all(len(unit['inputs']) == 2 for unit in operation_units):
         return []
     return ['seqkit']
+
+
+def check_features(mode, value, tools):
+    if mode == 'seqkit-sample' and value.get('count') is not None:
+        version = tuple(int(part) for part in (tools.get('seqkit', {}).get('version') or '0').split('.'))
+        if version < (2, 14):
+            raise ValueError('Exact-count sampling requires verified SeqKit 2.14 or newer (sample2 --two-pass); fraction sampling remains available')
 
 
 def units(run, value=None):
@@ -131,9 +141,12 @@ def fastp_command(executable, inputs, outputs, destination, threads, value):
 
 
 def seqkit_command(executable, mode, source, output, threads, value, ids):
-    argv = [executable, mode.removeprefix('seqkit-').replace('filter', 'seq').replace('extract', 'grep'), '--threads', str(threads)]
+    exact = mode == 'seqkit-sample' and value.get('count') is not None
+    command = 'sample2' if exact else mode.removeprefix('seqkit-').replace('filter', 'seq').replace('extract', 'grep')
+    argv = [executable, command, '--threads', str(threads)]
     if mode == 'seqkit-stats': argv += ['--tabular']
-    elif mode == 'seqkit-sample': argv += ['--proportion', str(value['fraction']), '--rand-seed', str(value['seed'])]
+    elif mode == 'seqkit-sample':
+        argv += (['--number', str(value['count']), '--two-pass'] if exact else ['--proportion', str(value['fraction'])]) + ['--rand-seed', str(value['seed'])]
     elif mode == 'seqkit-filter':
         argv += ['--min-len', str(value['min_length'])]
         if value['max_length'] is not None: argv += ['--max-len', str(value['max_length'])]
@@ -160,6 +173,9 @@ async def execute(manager, run, metrics, errors):
         try:
             if any(valid[path]['state'] != 'passed' for path in unit['inputs']):
                 raise ValueError('Input FASTQ validation failed: ' + '; '.join(valid[path]['error'] or 'Incomplete scan' for path in unit['inputs'] if valid[path]['state'] != 'passed'))
+            if run['mode'] == 'seqkit-sample' and value.get('count') is not None and value['count'] > valid[unit['inputs'][0]]['records_scanned']:
+                kind = 'read pairs' if len(unit['inputs']) == 2 else 'reads'
+                raise ValueError(f"Requested {value['count']} {kind}; only {valid[unit['inputs'][0]]['records_scanned']} are available. No clamping or replacement is performed.")
             if unit['inputs'][0] in failed_pairs: raise ValueError(failed_pairs[unit['inputs'][0]])
             await asyncio.to_thread(manager.checked_inputs, run)
             unit.update(state='running')
@@ -217,6 +233,15 @@ async def execute(manager, run, metrics, errors):
                 if checked is None: return
                 if checked['result'] != 'passed': raise ValueError('Derived FASTQ validation failed; outputs are not published')
                 unit['output_validation'] = checked
+                if run['mode'] == 'seqkit-sample' and value.get('count') is not None:
+                    if any(row['records_scanned'] != value['count'] for row in checked['files']):
+                        raise ValueError('SeqKit output does not contain the exact requested count')
+                    observed = checked['files'][0]['records_scanned']
+                    unit['selection'] = {'processor': 'SeqKit sample2 --two-pass', 'version': run['tools']['seqkit']['version'],
+                                         'operation': 'exact-count', 'record_unit': 'read_pairs' if len(outputs) == 2 else 'reads',
+                                         'input_records': valid[unit['inputs'][0]]['records_scanned'], 'retained_records': observed,
+                                         'removed_records': valid[unit['inputs'][0]]['records_scanned']-observed, 'seed': value['seed']}
+                    save_json(destination / 'selection.json', unit['selection'])
                 if synchronized and any(row['records_scanned'] != unit['selection']['retained_records'] for row in checked['files']):
                     raise ValueError('Selection output counts differ from validated records')
                 if tool == 'fastp' and any(sum(row[scanned] for row in checked['files']) != unit['fastp']['summary']['after_filtering'][reported] for scanned, reported in [('records_scanned','total_reads'),('bases_scanned','total_bases')]):

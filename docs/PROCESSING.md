@@ -68,8 +68,24 @@ per requested ID. Duplicate requests are collapsed. If a requested normalized ID
 occurs repeatedly in the source, extraction fails as ambiguous and publishes
 nothing. Missing IDs are listed in `selection.json` and surfaced as warnings;
 matched records are retained (including a valid empty result when all are missing).
-Independent-file extraction remains unchanged. Exact-count sampling is not yet
-implemented.
+Independent-file extraction remains unchanged.
+
+Sampling accepts either `fraction` or an optional positive integer `count` (the
+count selects exact mode). Exact mode uses verified SeqKit 2.14+ `sample2 --number N
+--two-pass --rand-seed S`. Its reservoir stores N record indices, never complete
+FASTQs, and emits selected positions in input order. The same seed/validated mate
+order selects the same pair positions. The output validator must count exactly N
+records per mate. Counts are per processing unit: reads for single-end files,
+read pairs for confirmed pairs, never a pooled number across lanes or samples.
+Requests larger than a unit's validated input count fail that unit without
+clamping or replacement; other independent units may complete. Zero/negative,
+non-integer and unsafe JavaScript integer counts are rejected.
+
+SeqKit's older `sample --number` is not used: its result can be approximate and
+is not uniform fixed-size sampling. Exact mode is gated at request and execution
+time; older compatible installations still support fraction sampling. Independent
+Go reference indices and actual FASTQ content comparisons verify the pinned 2.14
+sampler. Go is only used to reproduce the test reference, not at runtime.
 Statistics is read-only and produces no derived FASTQ. No reads are concatenated
 or automatically repaired.
 
