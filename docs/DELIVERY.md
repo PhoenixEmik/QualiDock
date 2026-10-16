@@ -17,7 +17,7 @@ The downloadable identity template contains the **currently selected** file IDs/
 - **Reads:** individual FASTQ records; R1 + R2 are two reads, not one pair. Available from saved FastQC counts only while captured input metadata still matches, or from a current full integrity scan.
 - **Read pairs:** sum of synchronized mate record counts only when every contributing file is covered by a full, current, successful pair validation with matching identifier order. An unmatched/unknown mate makes the sample pair quantity unavailable.
 - **Bases:** actual lengths summed by full scan, or records × an explicitly fixed FastQC-reported integer length. A range such as `35-151` cannot establish base totals.
-- **Q20/Q30:** actual qualifying quality characters and the actual counted-quality-base denominator, using an explicitly known quality encoding from FastQC. Never derived from mean per-base Phred values. Empty inputs have zero counts and unavailable percentages.
+- **Q20/Q30:** actual qualifying quality characters and the actual counted-quality-base denominator, using an explicitly known quality encoding from FastQC whose captured input snapshot is verified. Historical scans without that association retain structural/count evidence but do not assert Q20/Q30. Never derived from mean per-base Phred values. Empty inputs have zero counts and unavailable percentages.
 
 Only additive counts are summed across unique physical input references within each saved sample group. No distributions, lane quality profiles or unrelated biological samples are merged. File inventory retains lane/read-level observations. If one contributing value is unavailable, its sample total is unavailable rather than an understated partial total.
 

@@ -54,3 +54,13 @@ pagination, retained filters, selected details, forced SSE failure, polling upda
 and reconnection. These use explicitly synthetic history metadata plus existing
 genuine FastQC reports, never fabricated scientific metrics. CI publishes
 `validation/history-browser*.json` alongside its existing browser artifacts.
+
+A passing Chromium run at [`1ca0b54`](https://github.com/PhoenixEmik/QualiDock/actions/runs/38845374536) measured the actual browser on 41 records (35 deliberately synthetic histories × 250 input references, plus genuine test runs):
+
+| Browser path | Legacy bytes / JSON parse | Summary bytes / JSON parse | Legacy / summary request time |
+|---|---|---|---|
+| Standalone | 410,586 / 1.8 ms | 8,076 / 0.2 ms | 16.9 / 43.7 ms |
+| `/node/compute/8765` | 410,587 / 1.9 ms | 8,076 / 0.2 ms | 35.4 / 44.0 ms |
+| `/rnode/compute/8765` | 410,586 / 2.1 ms | 8,076 / 0.2 ms | 17.8 / 3.9 ms |
+
+These are individual hosted-runner observations, not medians or a claim that every smaller response has lower network latency. Transmission fell roughly 51-fold and JSON decoding roughly nine-fold in this case. The real browser also verified bounded 25-row rendering, pagination/filtering, polling/reconnection, selected detail and 390-pixel containment. The synthetic 300-record API medians above use a different, larger history shape and are not directly comparable to these network timings.

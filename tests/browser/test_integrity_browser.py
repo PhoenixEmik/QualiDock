@@ -111,3 +111,41 @@ def test_imported_fastp_native_statistics_without_fake_fastqc(workspace,browser)
   expect(page.get_by_role('region',name='MultiQC General Statistics',exact=True)).to_contain_text('HG001.fastp.json')
   page.get_by_role('button',name='Sample Details',exact=True).click()
   expect(page.get_by_text('No FastQC module data',exact=True)).to_be_visible()
+
+
+def test_optional_offline_screening_uses_real_tool_and_preserved_native_evidence(workspace,browser):
+ import os
+ import pytest
+ if not os.environ.get('QUALIDOCK_REQUIRE_SCREENING_TESTS'):
+  pytest.skip('Optional real-screening browser acceptance requires the explicitly provisioned offline fixture')
+ with workspace.api() as client:
+  detected=client.get('api/screening').json()
+  assert detected['tool']['compatible'] and detected['tool']['version']=='2.17.1'
+ with browser.new_context(viewport={'width':1440,'height':1100}) as context:
+  page=context.new_page();open_run(page,workspace,'Browser FastQC')
+  page.get_by_role('tab',name='Overview & logs',exact=True).click()
+  page.get_by_text('Delivery manifest & yield',exact=True).click()
+  page.get_by_text('Optional offline screening · Not evaluated',exact=True).click()
+  panel=page.get_by_role('region',name='Optional offline screening',exact=True)
+  panel.get_by_label('Offline screening reference',exact=True).select_option('official-viral-test')
+  panel.get_by_label('Screening assay context',exact=True).fill('Offline fixture evidence only; limited viral reference')
+  panel.get_by_label('Expected screening taxonomy IDs',exact=True).fill('4932')
+  panel.get_by_role('button',name='Start offline screening',exact=True).click()
+  expect(panel.get_by_text('Screening: completed',exact=False)).to_be_visible(timeout=30000)
+  expect(panel.get_by_role('table',name='Kraken2 taxonomic assignments',exact=True)).to_be_visible()
+  expect(panel).to_contain_text('Not explicitly listed')
+  expect(panel).to_contain_text('400 / 400')
+  with page.expect_download() as download:
+   panel.get_by_role('button',name='Export screening TSV',exact=True).click()
+  from pathlib import Path
+  assert 'Clade read records' in Path(download.value.path()).read_text()
+  with workspace.api() as client:
+   selected=panel.get_by_label('Screening read-file evidence',exact=True).input_value()
+   official=client.get(f"api/runs/{workspace.fastqc['id']}/screening-metrics",params={'file_id':selected}).json()
+  taxon=official['rows'][0]
+  panel.get_by_label('Search screening taxon',exact=True).fill(taxon['taxid'])
+  expect(panel.get_by_role('table',name='Kraken2 taxonomic assignments',exact=True)).to_contain_text(taxon['name'].strip())
+  Path('validation').mkdir(exist_ok=True)
+  page.screenshot(path='validation/native-screening'+workspace.settings.prefix.replace('/','-')+'.png',full_page=True)
+  page.set_viewport_size({'width':390,'height':844})
+  page.wait_for_function('() => document.documentElement.scrollWidth <= innerWidth',timeout=3000)

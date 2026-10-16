@@ -3,7 +3,7 @@ import hashlib
 import json
 from .delivery import reconcile
 
-CHECKS={'integrity','expected_delivery','quantity','demultiplex'}
+CHECKS={'integrity','expected_delivery','quantity','demultiplex','screening'}
 STATUSES={'pass','warn','fail'}
 
 
@@ -77,13 +77,16 @@ def evaluate(run,data,metrics,sample_ids,source_fingerprint):
     add('fastqc_information','Official FastQC classifications (informational)','warning' if any(row['status'] in {'warn','fail'} for row in classifications) else 'pass' if classifications else 'not_evaluated',
         'Module-specific WARN/FAIL does not automatically reject a sample; protocol context and the explicit assay policy govern review.',evidence=classifications)
     checks[-1]['mandatory']=False
-    add('screening_information','Offline contamination screening','not_evaluated','No screening tool/database was run. FastQC overrepresented sequences do not establish contamination or sample identity.')
-    checks[-1]['mandatory']=False
+    screening=data.get('screening') or {}
+    screened={entry['id']:entry for entry in screening.get('files',[])}
+    covered=screening.get('state')=='completed' and len(screening.get('database_files',[]))==3 and all(screened.get(file['file_id'],{}).get('state')=='completed' and screened[file['file_id']].get('coverage')=='full' and screened[file['file_id']].get('source_snapshot')==file['source_snapshot'] for file in selected)
+    add('screening','Offline screening evidence available','pass' if covered else 'not_evaluated','Checks tool/database provenance and current selected-file record coverage only. This is not contamination clearance or a biological identity verdict; missing screening does not block core work unless explicitly required.',
+        evidence={'state':screening.get('state','not_evaluated'),'tool_version':screening.get('tool',{}).get('version'),'database':screening.get('database'),'database_files':screening.get('database_files',[])})
     for rule in definition.get('fastqc_rules',[]) if definition else []:
         states=[next((module['status'] for module in samples.get(file['report_id'],{}).get('modules',[]) if module['name']==rule['module'] and module.get('available') is not False),None) if file['qc_snapshot_matches'] is True else None for file in selected]
         state='not_evaluated' if any(status not in STATUSES for status in states) else 'pass' if all(status in rule['allowed_statuses'] for status in states) else 'fail'
         add('fastqc:'+rule['module'],'Policy: '+rule['module'],state,'Explicit permitted original statuses: '+', '.join(rule['allowed_statuses']),source_statuses=[{'file_id':file['file_id'],'status':status} for file,status in zip(selected,states)])
-    fingerprint=digest({'analysis_id':run['id'],'name':run['name'],'sample_ids':sorted(sample_ids),'policy':policy,'delivery_revision':run.get('delivery_revision',0),
+    fingerprint=digest({'evaluator_version':'1.1','analysis_id':run['id'],'name':run['name'],'sample_ids':sorted(sample_ids),'policy':policy,'delivery_revision':run.get('delivery_revision',0),
                         'integrity_task':scan.get('task_id'),'files':selected,'checks':checks,'source_fingerprint':source_fingerprint})
     events=run.get('release_reviews',[])
     active=[event for event in events if event['fingerprint']==fingerprint]
@@ -95,6 +98,6 @@ def evaluate(run,data,metrics,sample_ids,source_fingerprint):
     historical=[event for event in events if event['action']!='waive']
     review_state={'approve':'approved','needs_review':'review_required','block':'blocked'}[decision['action']] if decision else 'stale' if historical else 'pending'
     if review_state=='approved' and readiness!='ready':review_state='stale'
-    return {'schema_version':1,'analysis_id':run['id'],'sample_ids':sorted(sample_ids),'file_ids':[file['file_id'] for file in selected],
+    return {'schema_version':1,'evaluator_version':'1.1','analysis_id':run['id'],'sample_ids':sorted(sample_ids),'file_ids':[file['file_id'] for file in selected],
             'fingerprint':fingerprint,'policy':policy,'readiness':readiness,'review_state':review_state,'checks':checks,'decision':decision,
             'active_waivers':list(waivers.values()),'history':events,'files':selected}

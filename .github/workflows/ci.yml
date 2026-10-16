@@ -63,6 +63,13 @@ jobs:
       - run: python scripts/create-example-data.py --reads 1000
       - run: python scripts/smoke-real-qc.py
       - run: pytest -q backend/tests/test_real_tools.py
+      - name: Prepare genuine offline screening validation
+        if: matrix.multiqc == '1.35'
+        run: bash scripts/setup-screening-ci.sh
+      - name: Actual optional Kraken2 and experimental reads
+        if: matrix.multiqc == '1.35'
+        run: pytest -q backend/tests/test_screening_real.py
+
   linux-resources:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -108,6 +115,8 @@ jobs:
           echo /tmp/FastQC >> "$GITHUB_PATH"
       - run: npm ci && npm run build
         working-directory: frontend
+      - name: Build the explicit offline screening test fixture
+        run: bash scripts/setup-screening-ci.sh
       - name: Real reports, opaque-origin isolation, proxy paths and restart
         env:
           QUALIDOCK_BROWSER: ${{ matrix.browser }}

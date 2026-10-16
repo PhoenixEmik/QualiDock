@@ -46,6 +46,9 @@ def test_approved_reproducible_reference_zip_checksums_original_reports_and_rest
     names=archive.namelist();assert all(not name.startswith('/') and '..' not in Path(name).parts for name in names)
     manifest=json.loads(archive.read('manifest.json'));review=json.loads(archive.read('release-review.json'))
     assert manifest['release_status']=='approved' and review['review_state']=='approved'
+    provenance=json.loads(archive.read('provenance.json'))
+    assert provenance['qc_executions'][0]['tool']=='fastqc' and provenance['qc_executions'][0]['exit_code']==0
+    assert provenance['integrity_execution']['exit_code']==0 and provenance['exporter']['python']
     assert str(root) not in archive.read('manifest.json').decode() and str(root) not in archive.read('release-review.json').decode()
     assert manifest['yields'][0]['totals']['read_pairs']==1
     for line in archive.read('checksums.sha256').decode().splitlines():

@@ -36,15 +36,15 @@ async def detect_tool(name: str, executable: str) -> dict:
             await process.wait()
             return b"".join(chunks).decode("utf-8", errors="replace").strip()
         response = await asyncio.wait_for(output(), timeout=PROBE_TIMEOUT)
-        match = re.search(r"(?i)\b" + re.escape(name) + r"(?:,?\s+(?:version|v))?\s*([0-9]+(?:\.[0-9]+){1,2})\b", response)
+        match = re.search(r"(?i)\b" + (r"kraken(?:2)?" if name == "kraken2" else re.escape(name)) + r"(?:,?\s+(?:version|v))?\s*([0-9]+(?:\.[0-9]+){1,2})\b", response)
         if process.returncode or not match:
             raise ValueError(f"Cannot detect {name} version (exit {process.returncode}): {response[:300]}")
         result["version"] = match[1]
         version = tuple(int(part) for part in match[1].split("."))
         version = (*version, *([0] * (3 - len(version))))
-        result["compatible"] = (0, 12, 1) <= version < (0, 14, 0) if name == "fastqc" else (1, 25, 0) <= version < (2, 0, 0)
+        result["compatible"] = (0, 12, 1) <= version < (0, 14, 0) if name == "fastqc" else (2, 1, 0) <= version < (3, 0, 0) if name == "kraken2" else (1, 25, 0) <= version < (2, 0, 0)
         if not result["compatible"]:
-            result["error"] = f"Unsupported {name} version {match[1]}; expected " + ("0.12.1–0.13.x." if name == "fastqc" else "1.25 or newer, below 2.")
+            result["error"] = f"Unsupported {name} version {match[1]}; expected " + ("0.12.1–0.13.x." if name == "fastqc" else "2.1 or newer, below 3." if name == "kraken2" else "1.25 or newer, below 2.")
     except (OSError, ValueError, asyncio.TimeoutError) as exc:
         result["error"] = str(exc) or f"{name} version detection timed out."
     finally:

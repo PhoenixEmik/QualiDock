@@ -46,7 +46,7 @@ class ReleaseService:
                 artifacts.append({'path':name,'size':stat.st_size,'mtime_ns':stat.st_mtime_ns,'inode':stat.st_ino,'device':stat.st_dev})
             except (OSError,ValueError):artifacts.append({'path':name,'state':'unavailable'})
         context={'qc_state':run['state'],'tools':run.get('tools'), 'parameters':run.get('parameters'),'metrics_sha256':metrics_hash,'integrity_state':run.get('integrity',{}).get('state'),
-                 'demultiplex':run.get('demultiplex'),'demultiplex_data_sha256':digest(data.get('demultiplex')),'artifacts':artifacts}
+                 'screening':run.get('screening'),'demultiplex':run.get('demultiplex'),'demultiplex_data_sha256':digest(data.get('demultiplex')),'artifacts':artifacts}
         result=evaluate(run,data,metrics,sample_ids,context)
         result['delivery']=data
         return result

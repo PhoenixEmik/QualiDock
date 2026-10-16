@@ -6,8 +6,8 @@ const numeric = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
  * A quoted leading tab follows OWASP's Excel-resistant mitigation. It is data,
  * so programmatic consumers must explicitly choose the verbatim scientific mode.
  */
-export function exportModule(
-  module: Module,
+export function exportModule<T extends Pick<Module, "columns" | "rows">>(
+  module: T,
   delimiter: "," | "\t",
   mode: ExportMode = "verbatim",
 ): string {

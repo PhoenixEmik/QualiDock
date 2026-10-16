@@ -1,3 +1,4 @@
+import type { ScreeningRecord } from "./screening";
 import type { ReleaseExport } from "./release";
 export type View = "workspace" | "new" | "analyses" | "analysis";
 export type DetailTab = "overview" | "metrics" | "reports";
@@ -66,6 +67,7 @@ export interface Run {
     snapshot_artifact?: string;
   }[];
   integrity?: IntegrityResult;
+  screening?: ScreeningRecord;
   release_export?: ReleaseExport;
   report_input_map?: Record<
     string,

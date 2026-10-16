@@ -74,6 +74,8 @@ class RunManager:
         self.release = ReleaseService(self)
         from .release_exports import ReleaseExports
         self.exports = ReleaseExports(self)
+        from .screening_jobs import ScreeningJobs
+        self.screening = ScreeningJobs(self)
 
     def start(self):
         self.stores.start()
@@ -97,11 +99,13 @@ class RunManager:
                         recovered_validation = interrupted(run)
                         from .release_exports import interrupted as export_interrupted
                         recovered_export = export_interrupted(run)
+                        from .screening_jobs import interrupted as screening_interrupted
+                        recovered_screening = screening_interrupted(run)
                         if run["state"] in ACTIVE:
                             run.update(state="interrupted", finished_at=now(), stage="Session ended", error="The previous web session ended before this analysis finished.")
                             stop(run.get('input_outcomes', []), 'interrupted', 'Previous session ended before a complete outcome was recorded')
                             save_json(path, run)
-                        elif recovered_validation or recovered_export:
+                        elif recovered_validation or recovered_export or recovered_screening:
                             save_json(path, run)
                         self.runs[run["id"]] = run
                     except (OSError, ValueError, KeyError):
@@ -574,7 +578,7 @@ class RunManager:
                 self.update(run, **changes)
             except (OSError, ValueError):
                 run.update(**changes, updated_at=now())
-        await asyncio.gather(self.validation.close(),self.exports.close())
+        await asyncio.gather(self.validation.close(),self.exports.close(),self.screening.close())
         if self.tasks:
             await asyncio.gather(*list(self.tasks.values()), return_exceptions=True)
         self.stores.close()

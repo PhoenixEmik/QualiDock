@@ -7,6 +7,7 @@ import { configuredTargets, quantity } from "./delivery";
 import ExportModeSelect from "./ExportModeSelect";
 import DemultiplexReview from "./DemultiplexReview";
 import ReleaseReview from "./ReleaseReview";
+import ScreeningReview from "./ScreeningReview";
 
 export default function DeliveryReview({
   run,
@@ -335,6 +336,14 @@ export default function DeliveryReview({
                   </>
                 )}
               </details>
+              <ScreeningReview
+                run={run}
+                data={data}
+                refresh={() => {
+                  setReload((value) => value + 1);
+                  refresh();
+                }}
+              />
               <ReleaseReview
                 run={run}
                 data={data}

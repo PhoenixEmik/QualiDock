@@ -105,6 +105,7 @@ def inventory(run, metrics, current):
         same_qc = bool(available and original and all(key in original for key in ('size','mtime_ns')) and all(observed['snapshot'].get(key) == original.get(key, observed['snapshot'].get(key)) for key in observed['snapshot']))
         scanned = scans.get(path)
         fresh = bool(available and scanned and scanned.get('state') == 'passed' and scanned.get('coverage') == 'full' and scanned.get('source_snapshot') == observed['snapshot'])
+        quality_verified = fresh and scanned.get('qc_input_snapshot_verified') is True
         scan_matches = bool(available and scanned and scanned.get('source_snapshot') == observed['snapshot'])
         matched = [sample for sample in samples if run.get('report_input_map', {}).get(sample['id'], {}).get('path') == path]
         if not matched and names[planned['name']] == 1:
@@ -136,10 +137,10 @@ def inventory(run, metrics, current):
                        'size_bytes':observed['snapshot']['size'] if available else original.get('size') if original else None,
                        'size_source':'current filesystem metadata' if available else 'saved QC input metadata' if original else 'unavailable',
                        'source_snapshot':observed.get('snapshot'), 'sequence_length':(str(scanned['min_length']) if scanned.get('min_length') == scanned.get('max_length') else f"{scanned['min_length']}-{scanned['max_length']}") if fresh and scanned.get('min_length') is not None else length if same_qc else None, 'reads':reads,'bases':bases,
-                       'q20_bases':scanned.get('q20_bases') if fresh else None,
-                       'q30_bases':scanned.get('q30_bases') if fresh else None,
-                       'quality_bases':scanned.get('quality_bases') if fresh else None,
-                       'encoding_source':scanned.get('encoding_source') if fresh else None,
+                       'q20_bases':scanned.get('q20_bases') if quality_verified else None,
+                       'q30_bases':scanned.get('q30_bases') if quality_verified else None,
+                       'quality_bases':scanned.get('quality_bases') if quality_verified else None,
+                       'encoding_source':scanned.get('encoding_source') if quality_verified else None,
                        'counts_source':counts_source, 'sha256':scanned.get('sha256') if fresh else None,
                        'checksum_status':scanned.get('checksum_status') if fresh else 'not_evaluated',
                        'integrity_state':scanned.get('state') if scan_matches or scanned and not available else 'stale' if scanned else 'not_evaluated',
@@ -250,6 +251,7 @@ def export_data(data, include_paths=False):
     return {'schema_version':1,'analysis_id':data['analysis_id'],'name':data['name'],'source_kind':data['source_kind'],
             'paths':'private absolute source paths included' if include_paths else 'relative references only; FASTQ files are not copied',
             'files':files,'notices':data['notices'],'reconciliation':reconciliation,'yields':data['yields'],
+            'offline_screening':screening_export(data),
             'upstream_demultiplexing':{key:data.get('demultiplex',{}).get(key) for key in ('state','run_id','declared_run_id','reported_tool_version','declared_tool_version','version_source','reconciliation_state','lane_totals')} if data.get('demultiplex') else {'state':'not_evaluated'},
             'input_stage':data['input_stage'],'processing_notes':data['processing_notes'],'tool_versions':data['tool_versions']}
 
@@ -274,3 +276,13 @@ def expected_template(data):
     """Editable identities only. Measured inventory is not an independent contract."""
     return {'schema_version':1,'files':[{key:entry[key] for key in ('file_id','filename')}
                                       for entry in data['files']]}
+
+
+def screening_export(data):
+    record = data.get('screening')
+    if not record:return {'state':'not_evaluated'}
+    selected_ids={file['file_id'] for file in data['files']}
+    return {**{key:record.get(key) for key in ('state','task_id','assay','expected_taxids','database','database_files','parameters','threads','finished_at')},
+            'source_tool':'Kraken2','tool_version':record.get('tool',{}).get('version'),
+            'interpretation':'Preliminary taxonomic assignments only; not proof of contamination, index misassignment or sample swap. Reference coverage and assay context limit interpretation.',
+            'files':[{key:entry.get(key) for key in ('id','state','coverage','records_processed','classified_records','unclassified_records','known_input_records','denominator_source','screened_fraction')} for entry in record.get('files',[]) if entry['id'] in selected_ids]}

@@ -32,7 +32,7 @@ def test_genuine_variable_lengths_are_not_guessed_and_full_scan_yields_are_exact
  assert yields(before['files'],run,[])[0]['totals']['read_pairs'] is None
  scans=[];independent_bases=0;independent_q30=0
  for path in map(Path,run['inputs']):
-  scans.append(scan_file({'id':path.stem,'path':str(path),'snapshot':snapshot(path.stat()),'phred_offset':33,'encoding_source':'Genuine FastQC Sanger / Illumina 1.9'}))
+  scans.append(scan_file({'id':path.stem,'path':str(path),'snapshot':snapshot(path.stat()),'phred_offset':33,'encoding_source':'Genuine FastQC Sanger / Illumina 1.9','qc_input_snapshot_verified':True}))
   with gzip.open(path,'rb') as stream:
    while stream.readline():
     independent_bases+=len(stream.readline().rstrip(b'\r\n'));stream.readline()
@@ -123,3 +123,13 @@ def test_multilane_chunks_use_distinct_file_ids_and_sum_only_additive_quantities
  assert actual['totals']['q30_percent']==95 and actual['target_state']=='below_target'
  rows[-1]['bases']=None
  assert yields(rows,run,[])[0]['totals']['bases'] is None
+
+
+def test_unverified_historical_quality_encoding_does_not_become_current_q30_evidence():
+ run,metrics,current=genuine();path=Path(run['inputs'][0])
+ measured=scan_file({'id':'historical','path':str(path),'snapshot':snapshot(path.stat()),'phred_offset':33,'encoding_source':'Historical encoding with no confirmed QC association'})
+ assert measured['q30_bases'] is not None and measured['qc_input_snapshot_verified'] is False
+ run['integrity']={'state':'completed','files':[measured],'pairs':[]}
+ actual=inventory(run,metrics,current)['files'][0]
+ assert actual['reads']==400 and actual['sha256']==measured['sha256']
+ assert actual['q30_bases'] is None and actual['quality_bases'] is None and actual['encoding_source'] is None

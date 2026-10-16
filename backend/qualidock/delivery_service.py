@@ -52,6 +52,10 @@ class DeliveryService:
                       input_stage=target_config.get('input_stage','unknown'), processing_notes=target_config.get('processing_notes',''),
                       assay=target_config.get('assay','Unspecified'), delivery_revision=run.get('delivery_revision',0),
                       tool_versions={name:info.get('version') for name,info in run.get('tools',{}).items()})
+        result['screening'] = run.get('screening')
+        screened={entry['id']:entry for entry in (run.get('screening') or {}).get('files',[])}
+        for file in result['files']:
+            file['screening_snapshot_matches']=bool(file['source_snapshot'] and screened.get(file['file_id'],{}).get('source_snapshot')==file['source_snapshot'])
         result['demultiplex'] = None
         if run.get('demultiplex'):
             try:

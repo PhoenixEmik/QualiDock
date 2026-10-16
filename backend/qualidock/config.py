@@ -44,6 +44,9 @@ class Settings:
     output_roots: list[Path] = field(default_factory=list)
     secure_cookie: bool = False
     allow_root: bool = False  # Only injected by tests; never exposed as a production option.
+    kraken2: str = "kraken2"
+    screening_databases: list[dict] = field(default_factory=list)
+    screening_error: str | None = None
 
     @property
     def max_threads(self) -> int:
@@ -56,6 +59,10 @@ class Settings:
         prefix = os.environ.get("QUALIDOCK_PREFIX", "").rstrip("/")
         if prefix and (not prefix.startswith("/") or ".." in prefix or any(c in prefix for c in "?#\\")):
             raise ValueError("QUALIDOCK_PREFIX must be a URL path such as /node/host/port")
+        screening_error = None
+        try:screening_databases = json.loads(os.environ.get('QUALIDOCK_SCREENING_DATABASES','[]'))
+        except (ValueError,TypeError):
+            screening_databases = [];screening_error = 'QUALIDOCK_SCREENING_DATABASES is not valid JSON; optional screening is not configured'
         return cls(
             roots=[Path(root).expanduser().resolve(strict=True) for root in roots],
             output=Path(os.environ.get("QUALIDOCK_OUTPUT", project / "runs")).expanduser().resolve(),
@@ -65,4 +72,5 @@ class Settings:
             prefix=prefix, secure_cookie=os.environ.get("QUALIDOCK_SECURE_COOKIE") == "1",
             fastqc=os.environ.get("QUALIDOCK_FASTQC", "fastqc"),
             multiqc=os.environ.get("QUALIDOCK_MULTIQC", "multiqc"),
+            kraken2=os.environ.get("QUALIDOCK_KRAKEN2", "kraken2"),screening_databases=screening_databases,screening_error=screening_error,
         )

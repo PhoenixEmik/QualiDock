@@ -1,8 +1,7 @@
 # v0.1.0 release procedure
 
 **Not yet released.** Development versions remain in place until all release
-gates have actual evidence. A green CI run does not establish an HPC deployment,
-large-file performance or live browser acceptance.
+gates have actual evidence. A green CI run does not establish an actual HPC deployment or large-file performance. Automated real-browser standalone/proxy-prefix acceptance is recorded separately from actual site/HTTPS validation.
 
 ## Required evidence
 
@@ -21,7 +20,7 @@ large-file performance or live browser acceptance.
 6. Review `docs/VALIDATION.md`, `docs/ISSUES.md`, README and the compatibility matrix
    against evidence, plus repository/dependency license notices. Keep protected
    input data, private paths, credentials and downloaded tool binaries out of the
-   release source. Test fixtures must retain their public synthetic provenance.
+   release source. Test fixtures must retain their public source, license and exact synthetic/experimental derivation provenance.
 
 ## Candidate release notes
 
@@ -31,13 +30,12 @@ MultiQC >=1.25,<2. Frontend builds require Node.js 22+.
 
 Features: server-side paired FASTQ selection; native visualizations/tables for
 12 FastQC modules where reported; three QC modes; aggregation from saved results;
-version detection; logs/cancellation; secure official report downloads; JSON
-persistence; bounded directory metadata work and stale-page protection.
+version detection; logs/cancellation; isolated official report previews and downloads; native multi-sample analytics; JSON persistence; bounded history/directory updates; manual/lane sample metadata; configured output roots; delivery/yield contracts; auditable data-release review and reference bundles; and opt-in offline screening with explicitly configured references.
 
 Known limits: one analysis at a time; directory snapshots cap 200,000 names and
 expire after five idle minutes; cold directory indexing is O(n) and can still
 incur filesystem metadata reads; native MultiQC summaries cover observed 1.x
-General Statistics schemas; QC inputs for aggregation are FastQC results; K-mer
+General Statistics schemas; QC inputs for aggregation use an explicit FastQC / fastp-JSON allowlist; optional Kraken2 screening requires an existing executable and explicit offline reference, with preliminary assignments rather than a contamination verdict; K-mer
 availability follows FastQC configuration. RSS enforcement is sampled; the
 scheduler/cgroup remains the hard boundary. The current full ECharts bundle emits
 a Vite size warning. Site and browser claims must match the recorded acceptance.
@@ -71,5 +69,5 @@ Only after blockers are resolved:
    or downgrade the saved schema blindly; verify the previous build can read a
    copied/snapshotted result store before reusing the production output directory.
 
-Issue #7 remains open while required site/browser/large-input gates lack evidence.
+Issue #7 remains open while required actual-site/large-input gates lack evidence. Automated real-browser acceptance does not replace those site observations.
 No release tag or publication is authorized by an unverified checklist.

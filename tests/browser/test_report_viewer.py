@@ -89,7 +89,7 @@ def workspace(tmp_path_factory, request):
     assert (ROOT / "frontend/dist/index.html").is_file(), "Build the actual frontend first"
     output = tmp_path_factory.mktemp("report-browser")
     project_output = tmp_path_factory.mktemp("project-output")
-    settings = Settings(roots=[INPUTS, output], output_roots=[project_output], output=output, frontend=ROOT / "frontend/dist", token=secrets.token_urlsafe(32), prefix=request.param, cpus=1, memory_mb=4096, fastqc=fastqc, multiqc=multiqc)
+    settings = Settings(roots=[INPUTS, output], output_roots=[project_output], output=output, frontend=ROOT / "frontend/dist", token=secrets.token_urlsafe(32), kraken2=os.environ.get('QUALIDOCK_KRAKEN2','kraken2'), screening_databases=json.loads(os.environ.get('QUALIDOCK_SCREENING_DATABASES','[]')), prefix=request.param, cpus=1, memory_mb=4096, fastqc=fastqc, multiqc=multiqc)
     # An intentionally malicious HTML artifact is used only to probe the security
     # boundary, never as scientific QC data or as a substitute for genuine reports.
     malicious_id = uuid.uuid4().hex

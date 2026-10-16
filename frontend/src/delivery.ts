@@ -7,6 +7,7 @@ export interface QuantityTarget {
   minimum: number;
 }
 export interface DeliveryFile {
+  screening_snapshot_matches?: boolean;
   file_id: string;
   path: string;
   filename: string;

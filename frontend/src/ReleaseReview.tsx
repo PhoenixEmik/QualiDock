@@ -293,6 +293,10 @@ export default function ReleaseReview({
                       "demultiplex",
                       "Supported Illumina sample/index reconciliation",
                     ],
+                    [
+                      "screening",
+                      "Offline screening evidence available (not contamination clearance)",
+                    ],
                   ].map(([id, label]) => (
                     <label key={id}>
                       <input

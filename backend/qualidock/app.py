@@ -95,7 +95,7 @@ class FastQCReleaseRule(BaseModel):
 class ReleasePolicyRequest(BaseModel):
     version: str = Field(min_length=1,max_length=120)
     assay: str = Field(min_length=1,max_length=120)
-    required_checks: list[Literal['integrity','expected_delivery','quantity','demultiplex']] = Field(max_length=4)
+    required_checks: list[Literal['integrity','expected_delivery','quantity','demultiplex','screening']] = Field(max_length=5)
     fastqc_rules: list[FastQCReleaseRule] = Field(default_factory=list,max_length=20)
 
 
@@ -117,6 +117,14 @@ class ReleaseExportRequest(ReleaseEvaluationRequest):
     acknowledge_report_paths: bool = False
     include_paths: bool = False
     mode: Literal['spreadsheet','verbatim'] = 'spreadsheet'
+
+
+class ScreeningRequest(BaseModel):
+    file_ids: list[str] = Field(min_length=1,max_length=500)
+    database_id: str = Field(min_length=1,max_length=80)
+    threads: int = Field(default=1,ge=1,le=32)
+    assay: str = Field(default='Unspecified',min_length=1,max_length=120)
+    expected_taxids: list[str] = Field(default_factory=list,max_length=20)
 
 
 class AnalysisRequest(BaseModel):
@@ -316,6 +324,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise ValueError('Duplicate evidence document names')
         documents = {item.name:base64.b64decode(item.content_base64,validate=True) for item in body.documents}
         return manager.delivery.import_demultiplex(run_id,documents,body.declared_tool_version,body.declared_run_id)
+
+    @app.get('/api/screening')
+    async def screening_config():
+        return await manager.screening.config()
+
+    @app.post('/api/runs/{run_id}/screening',status_code=202)
+    async def screening(run_id: str,body: ScreeningRequest):
+        return await manager.screening.start(run_id,**body.model_dump())
+
+    @app.post('/api/runs/{run_id}/screening/cancel')
+    async def cancel_screening(run_id: str):
+        return await manager.screening.cancel(run_id)
+
+    @app.get('/api/runs/{run_id}/screening-metrics')
+    async def screening_metrics(run_id: str,file_id: str):
+        record = manager.runs[run_id].get('screening',{})
+        row = next((row for row in record.get('files',[]) if row['id']==file_id and row.get('metrics_artifact')),None)
+        if row is None:raise HTTPException(404,'Screening file evidence is unavailable')
+        path = manager.artifact(run_id,row['metrics_artifact'])
+        from .metrics import bounded_text
+        return json.loads(await asyncio.to_thread(bounded_text,path))
 
     @app.post('/api/runs/{run_id}/release-policy')
     async def release_policy(run_id: str,body: ReleasePolicyRequest):

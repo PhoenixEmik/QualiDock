@@ -2,6 +2,8 @@
 import asyncio
 from copy import deepcopy
 import hashlib
+from importlib.metadata import version,PackageNotFoundError
+import platform
 import json
 import os
 from pathlib import Path
@@ -32,11 +34,13 @@ class ReleaseExports:
         if check['state']!='pass':raise ValueError('Complete current source hashing and mate validation before exporting any release/reference bundle')
         selected=evaluation['files'];ids=set(evaluation['sample_ids']);selected_paths={file['path'] for file in selected}
         directory=self.manager.directory(run['id']);artifacts=[]
+        selected_ids={file['file_id'] for file in selected}
+        screening_artifacts={entry[key] for entry in (run.get('screening') or {}).get('files',[]) if entry['id'] in selected_ids for key in ('report_artifact','metrics_artifact') if entry.get(key)}
         if include_reports:
             for registered in run['reports']:
                 name=registered['path'];path=Path(name)
                 if path.is_absolute() or '..' in path.parts:raise ValueError('Unsafe registered report path')
-                if not name.startswith(('fastqc/','multiqc/','inputs/')):continue
+                if not name.startswith(('fastqc/','multiqc/','inputs/')) and name not in screening_artifacts:continue
                 if name.startswith('fastqc/'):
                     mapping=run.get('report_input_map',{}).get(name.replace('_fastqc.html','_fastqc.zip'))
                     if not mapping or mapping.get('path') not in selected_paths:continue
@@ -54,7 +58,7 @@ class ReleaseExports:
                         selected_sample_ids=evaluation['sample_ids'],excluded_sample_ids=sorted({file['sample_id'] for file in evaluation['delivery']['files']}-ids))
         checks=deepcopy(evaluation['checks'])
         next(check for check in checks if check['id']=='expected_delivery')['evidence']=manifest['reconciliation']
-        review={key:evaluation[key] for key in ('fingerprint','sample_ids','file_ids','policy','readiness','review_state','decision','active_waivers')}
+        review={key:evaluation[key] for key in ('evaluator_version','fingerprint','sample_ids','file_ids','policy','readiness','review_state','decision','active_waivers')}
         review.update(checks=checks,history=[event for event in evaluation['history'] if set(event['sample_ids'])==ids])
         metrics={};path=directory/'metrics.json'
         if path.exists():
@@ -65,6 +69,12 @@ class ReleaseExports:
                     'completed_at':run.get('finished_at'),'tool_versions':manifest['tool_versions'],'execution_parameters':{key:value for key,value in run.get('parameters',{}).items() if key in {'threads','memory_mb','executor'}},
                     'input_stage':data['input_stage'],'processing_notes':data['processing_notes'],'integrity_task_id':run['integrity']['task_id'],
                     'integrity_validator_version':run['integrity']['version'],'official_reports_included':include_reports,'absolute_input_paths_included':include_paths}
+        try:qualidock_version = version('qualidock')
+        except PackageNotFoundError:qualidock_version = None
+        provenance.update(exporter={'name':'QualiDock','version':qualidock_version,'python':platform.python_version()},
+                          qc_executions=[{key:entry.get(key) for key in ('tool','started_at','finished_at','exit_code')} for entry in run.get('executions',[])],
+                          integrity_execution={key:run['integrity'].get('execution',{}).get(key) for key in ('started_at','finished_at','exit_code','resources')},
+                          screening_execution={key:(run.get('screening') or {}).get('execution',{}).get(key) for key in ('started_at','finished_at','exit_code','resources')} if run.get('screening') else None)
         readme=f'''# QualiDock {status} reference bundle
 
 Analysis: {run['id']}
@@ -98,13 +108,13 @@ self-declared reviewer labels are not separate authenticated identities.
 
     async def start(self,run_id,sample_ids,include_reports=False,acknowledge_report_paths=False,include_paths=False,mode='spreadsheet',fingerprint=None):
         manager=self.manager;run=manager.delivery.writable(run_id)
-        if manager.closing or run['state'] in ACTIVE or run_id in self.tasks or len(self.tasks)>=20 or run_id in manager.validation.tasks:raise ValueError('Wait until active QC, integrity or export tasks finish')
+        if manager.closing or run['state'] in ACTIVE or run_id in self.tasks or len(self.tasks)>=20 or run_id in manager.validation.tasks or run_id in manager.screening.tasks:raise ValueError('Wait until active QC, integrity or export tasks finish')
         if include_reports and not acknowledge_report_paths:raise ValueError('Including original reports requires acknowledgment of embedded private paths and excluded samples')
         if mode not in {'spreadsheet','verbatim'}:raise ValueError('Select a known CSV export safety mode')
         saved=deepcopy(run);evaluation=await asyncio.to_thread(manager.release.inspect,run_id,sample_ids,saved)
         if fingerprint is not None and fingerprint!=evaluation['fingerprint']:raise ValueError('Release evidence changed; refresh the review before exporting')
         config=await asyncio.to_thread(self.plan,saved,evaluation,include_reports,include_paths,mode)
-        if saved['updated_at']!=run['updated_at'] or run_id in self.tasks or run_id in manager.validation.tasks or manager.closing:raise ValueError('Evidence changed while preparing export; refresh before exporting')
+        if saved['updated_at']!=run['updated_at'] or run_id in self.tasks or run_id in manager.validation.tasks or run_id in manager.screening.tasks or manager.closing:raise ValueError('Evidence changed while preparing export; refresh before exporting')
         parent=manager.directory(run_id)/'release-exports'
         if parent.is_symlink() or parent.resolve()!=parent:raise ValueError('Export directory has symlink components')
         parent.mkdir(exist_ok=True,mode=0o700)

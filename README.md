@@ -132,3 +132,5 @@ MultiQC-only imports additionally support existing fastp JSON reports, without r
 Existing Illumina sample sheets and verified BCL Convert CSV schemas can be imported as read-only upstream evidence. See [Demultiplexing evidence](docs/DEMULTIPLEXING.md) for supported versions, exact denominators and unavailable measurements.
 
 Versioned per-analysis release contracts, reasoned review/waivers and cancellable reference-only handoff bundles are available alongside delivery evidence. See [Release review and reference bundles](docs/RELEASE-REVIEW.md) for readiness rules, source-versus-transfer checksums, privacy defaults and limitations.
+
+Optional offline Kraken2 screening can attach preliminary per-read-file taxonomic evidence using explicitly configured local references. It never installs/downloads tools or uploads reads at runtime. See [Offline screening](docs/OFFLINE-SCREENING.md) for setup, provenance, coverage definitions and scientific limitations.

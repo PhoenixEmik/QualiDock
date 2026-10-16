@@ -2688,3 +2688,9 @@ section[aria-label="Analysis jobs"] > .table-scroll {
 .release-review .analytics-selection-list label {
   overflow-wrap: anywhere;
 }
+
+.delivery-review .analytics-selection-list label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
