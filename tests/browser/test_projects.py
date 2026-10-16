@@ -300,6 +300,10 @@ def test_cross_run_comparison_actual_q30_declared_rule_exports_reports_and_resta
     import io
     # Separate, explicitly synthetic low-quality fixture copies; original reads stay unchanged.
     before = {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in INPUTS.glob('*.fastq.gz')}
+    expected_bases = {}
+    for original in before:
+        with gzip.open(original, 'rb') as source:
+            expected_bases[original.name] = sum(len(line.rstrip(b'\r\n')) for index, line in enumerate(source) if index % 4 == 3)
     with workspace.api() as client:
         project = client.post('api/projects', json={'fields': {'display_name': 'Browser comparable runs'}}).json()
         base = 'api/projects/' + project['id']
@@ -338,14 +342,14 @@ def test_cross_run_comparison_actual_q30_declared_rule_exports_reports_and_resta
         page.get_by_label('Optional Q30 minimum (%)', exact=True).fill('50')
         page.get_by_role('button', name='Apply comparison', exact=True).click()
         expect(table.get_by_text('Review: below declared reference', exact=True)).to_have_count(2)
-        expect(table).to_contain_text('0 / 60000 quality bases')
+        expect(table).to_contain_text(f'0 / {expected_bases["coverage_R1.fastq.gz"]} quality bases')
         expect(page.get_by_role('img', name='Cross-run Q30 bases; exact source values and denominators available in the provenance table and CSV/TSV', exact=True)).to_be_visible()
         with page.expect_download() as event:
             page.get_by_role('button', name='Export cohort CSV', exact=True).click()
         downloaded = event.value
         rows = list(csv.DictReader(io.StringIO(Path(downloaded.path()).read_text())))
         assert len(rows) == 4 and sum(row['rule_result'] == 'review' for row in rows) == 2
-        assert all(row['unit'] == '%' and int(row['denominator']) == 60000 for row in rows)
+        assert all(row['unit'] == '%' and int(row['denominator']) == expected_bases[json.loads(row['source_provenance'])[0]['filename']] for row in rows)
         with page.expect_download() as event:
             page.get_by_role('button', name='Export SVG', exact=True).click()
         assert '<svg' in Path(event.value.path()).read_text()
