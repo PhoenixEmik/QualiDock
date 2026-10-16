@@ -189,3 +189,35 @@ optional site integration and measured-performance claims. No tag or release was
 created. Historical scientific analyses, archived catalogs and validation evidence
 were not deleted. RELEASING.md and VALIDATION.md now describe the current scope;
 PHASE2.md is clearly a historical record with its meaningful original evidence.
+
+Cleanup production inventory (`9d7aa49` → `6361f43`): **233 lines added, 231 removed,
+net +2**, 73 production files before/after (14,866 → 14,868 lines). This is reduced
+duplication and clearer ownership, not a claimed line-count reduction. App state
+calls fell 34 → 33; ResultsList fell 14 → 8. AnalysisDetail's independent module,
+sample and comparison choices remain intact; it was reviewed without a speculative
+rewrite. No runtime dependency was added or removed.
+
+Added: `backend/qualidock/multiqc.py`, `backend/tests/test_multiqc_shared.py`.
+Deleted: `frontend/src/analysisManagement.ts`. Modified: backend manager, processing
+and outcomes; App, ResultsList, SampleEditor and the two setup forms; backend history
+and processing regressions; frontend management tests; the processing/history
+browser tests; CI; README and this guide, HISTORY.md, PHASE2.md, RELEASING.md and
+VALIDATION.md. The machine-readable diff is `git diff --name-status 9d7aa49..6361f43`
+(2 files added, 20 modified, 1 deleted). Local details are also retained under
+`validation/cleanup/change-inventory.json`.
+
+[Accepted cleanup CI 38918679043](https://github.com/PhoenixEmik/QualiDock/actions/runs/38918679043)
+passed at `6361f43`: backend 269 passed/29 tool cases covered by provisioned jobs;
+frontend 141 tests/build; 47 processing cases with MultiQC 1.35 and seven
+QC/import cases per supported MultiQC target; Chromium 45 and Firefox 21 critical cases; Linux 1 CPU / 1 GiB
+resource/process checks. Local full genuine-tool suite: 298 passed, zero skips.
+Both browsers caught the stale-session pairing regression; resetting reviewed
+metadata and derived/rerun context fixed it. Official reports, source checksums,
+registered datasets and historical manifests remain unchanged. New runs share
+`multiqc-config.json`; old per-workflow config artifacts remain downloadable.
+
+Remaining debt is explicit: full-list compatibility payloads are still large when
+requested, startup loads existing manifests, artifact discovery still walks result
+directories, the ECharts bundle-size warning remains, and large/shared-storage/site
+acceptance is unverified. These do not justify a new cache, database or framework
+in this cleanup. See VALIDATION.md for evidence boundaries.

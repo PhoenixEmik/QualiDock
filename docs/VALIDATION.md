@@ -6,24 +6,31 @@ implementation environments and do not override this record.
 
 ## Accepted automated evidence — 2026-10-16
 
-[CI 38913214520](https://github.com/PhoenixEmik/QualiDock/actions/runs/38913214520)
-at `02e1524` passed every job, including the paired-processing enhancement:
+[CI 38918679043](https://github.com/PhoenixEmik/QualiDock/actions/runs/38918679043)
+at `6361f43` passed all eight jobs after the focused cleanup:
 
 | Check | Accepted evidence |
 | --- | --- |
-| Backend | 261 passed; 27 missing-tool cases run in separately provisioned jobs |
-| Frontend | 142 tests; TypeScript/Vite production build |
-| Actual processing | 45 tests, no skips; FastQC 0.13.0, MultiQC 1.35, fastp 0.23.4, SeqKit 2.14.0 |
+| Backend | 269 passed; 29 missing-tool cases run in separately provisioned jobs |
+| Frontend | 141 tests; TypeScript/Vite production build |
+| Actual processing | 47 tests, no skips; FastQC 0.13.0, MultiQC 1.35, fastp 0.23.4, SeqKit 2.14.0 |
 | Actual QC/imports | Seven tests per MultiQC 1.25.1, 1.35 and latest-supported 1.x target (resolved to 1.35) |
 | Chromium | Nine native processing/reuse tests and 36 retained interaction/security/history/chart tests |
+| Firefox 157.0 | Nine native processing/reuse tests and 12 critical genuine-report interaction/isolation/restart tests |
 | Linux resource/process | Non-root, 1 CPU / 1 GiB cgroup; affinity, RSS termination, cancellation, queue recovery, guardian and restart |
 
-Local full genuine-tool verification at the same processing implementation:
-**288 backend tests passed, no skips**, with FastQC 0.13.0, MultiQC 1.35,
-fastp 1.4.0 and SeqKit 2.14.0 (macOS arm64). The later `9d7aa49` refinement
-records selector identity on failed operations and clarifies UI labels; acceptance
-for the cleanup candidate must use its own complete CI rather than assuming that
-an older green build certifies new code.
+Local full genuine-tool verification: **298 backend tests passed, no skips**,
+with FastQC 0.13.0, MultiQC 1.35, fastp 1.4.0 and SeqKit 2.14.0 (macOS arm64).
+Chromium was 156.0.8078.4. The Firefox job covers the listed critical subset;
+the complete 45-case browser suite remains Chromium acceptance.
+
+One obsolete unit test for the unused client-side history filter was removed
+with that module; equivalent sorting/filter assertions now exercise the backend
+contract. No supported scientific/security regression was disabled. New genuine
+MultiQC CLI failures preserve FastQC/fastp results, and both browsers verify
+confirmed fraction-sampling setup plus derived reuse → logout/login → raw-input
+processing. The initial logout regression exposed stale reviewed metadata;
+the application reset was fixed rather than weakening the test.
 
 The processing tests compare actual FASTQ records, source checksums, normalized
 mate identifiers/order, counts, seed reproducibility and independent reservoir
@@ -38,7 +45,9 @@ recovery, history, reruns, derived reuse and narrow layouts. These are local HTT
 integration tests, not evidence of an actual OOD/HTTPS installation. See
 [REPORT-VIEWER.md](REPORT-VIEWER.md), [HISTORY.md](HISTORY.md) and the CI artifacts.
 
-Earlier accepted baselines remain meaningful: the [core-first simplification
+Earlier accepted baselines remain meaningful: [paired-processing CI 38914238400](https://github.com/PhoenixEmik/QualiDock/actions/runs/38914238400)
+at `9d7aa49` passed 288 backend cases across its provisioned jobs, 142 frontend
+tests and 45 Chromium cases; the [core-first simplification
 CI 38899079194](https://github.com/PhoenixEmik/QualiDock/actions/runs/38899079194)
 at `1914146` passed 42 Chromium cases and the then-current core suites;
 [LINUX-VALIDATION.md](LINUX-VALIDATION.md) preserves the original cgroup/process
@@ -51,13 +60,13 @@ NFS/Lustre throughput.
 - [x] Genuine FastQC/MultiQC/fastp/SeqKit workflows and exact native data checks.
 - [x] Authentication, path containment, downloads and HTML sandbox regressions.
 - [x] Linux cancellation, resource enforcement, guardian and restart evidence.
-- [x] Chromium interaction, responsive layout and derived reuse evidence.
-- [ ] All relevant CI jobs pass at the exact final release candidate.
+- [x] Chromium interaction/responsiveness and Firefox critical workflows, including derived reuse and session reset.
+- [x] All relevant cleanup CI jobs pass at `6361f43`; a future versioned release candidate must rerun its own gates.
 - [ ] Review licenses, installation, upgrade/rollback and scoped limitations.
 - [ ] Align release versions and publish only under a separate release instruction.
 
 Release notes must list the browsers and tool versions actually tested. Current
-CI supports Chromium; previous Chromium acceptance is not Firefox acceptance.
+CI covers Chromium fully and the explicitly listed Firefox critical subset.
 A compatible version range is not a claim that every version was tested.
 
 ## Separate, unaccepted deployment/performance claims
@@ -92,3 +101,7 @@ fixture substituted only the denied RSS sampler; orchestration fixtures did not
 validate the scientific engines. The smoke test reported missing FastQC clearly.
 That bootstrap record was never a claim of release acceptance. Subsequent genuine
 tool, Linux and browser evidence above supersedes those environment limitations.
+
+The final follow-up commit updates documentation only and uses `[skip ci]` because
+the complete production/test/workflow tree above already passed. No code, test or
+CI configuration change is excluded from acceptance. No release/tag was created.
