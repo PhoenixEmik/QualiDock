@@ -39,8 +39,18 @@ def test_full_integrity_readonly_evidence_and_download(workspace,browser):
   delivery.get_by_label('Expected delivery manifest file',exact=True).set_input_files({'name':'expected.csv','mimeType':'text/csv','buffer':b'filename,expected_reads\ncoverage_R1.fastq.gz,400\ncoverage_R2.fastq.gz,400\nmissing_L002_R1.fastq.gz,400\n'})
   delivery.get_by_role('button',name='Import expected manifest',exact=True).click()
   expect(delivery.get_by_text('2 matched · 1 missing',exact=False)).to_be_visible()
+  # Expected-manifest import also refreshes the parent analysis over REST/SSE.
+  # Wait for the rendered source inventory to settle before clicking its link,
+  # and check the real attachment response rather than treating a timeout as
+  # evidence that the backend served a successful download.
+  expect(delivery.get_by_text('Refreshing source metadata…',exact=True)).not_to_be_visible()
   with page.expect_download() as manifest:
-   delivery.get_by_role('link',name='Manifest JSON',exact=True).click()
+   with page.expect_response(lambda response:response.request.method=='GET' and '/delivery-manifest?' in response.url) as attachment:
+    delivery.get_by_role('link',name='Manifest JSON',exact=True).click()
+   response=attachment.value
+   print('Manifest attachment response:',response.status,response.headers.get('content-type'),response.headers.get('content-disposition'))
+   assert response.status==200
+   assert response.headers.get('content-disposition','').startswith('attachment;')
   exported=json.loads(Path(manifest.value.path()).read_text())
   assert exported['yields'][0]['totals']['read_pairs']==400
   assert exported['yields'][0]['target_state']=='below_target'
