@@ -14,6 +14,7 @@ TOOL_SPECS = {
     'multiqc': ('--version', (1, 25, 0), (2, 0, 0), '1.25 or newer, below 2'),
     'fastp': ('--version', (0, 23, 0), (2, 0, 0), '0.23 or newer, below 2'),
     'seqkit': ('version', (2, 6, 0), (3, 0, 0), '2.6 or newer, below 3'),
+    'nanoq': ('--version', (0, 10, 0), (0, 10, 1), 'tested nanoq 0.10.0'),
 }
 
 

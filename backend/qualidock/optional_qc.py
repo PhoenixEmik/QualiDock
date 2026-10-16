@@ -1,0 +1,107 @@
+"""Optional read-only QC adapters; called inside RunManager's existing slot."""
+import asyncio
+import json
+import math
+from pathlib import Path
+
+from .integrity import snapshot
+from .outcomes import stop
+from .processing import local_file, validate
+from .store import now, save_json
+
+MODES = {'nanoq'}
+
+
+def parse_nanoq(path):
+    """Verified 0.10.0 JSON, without recalculating reported scientific metrics."""
+    if path.is_symlink() or not path.is_file() or path.stat().st_size > 1024 * 1024:
+        raise ValueError('nanoq report must be a regular JSON file of at most 1 MiB')
+    with path.open('rb') as stream:
+        raw = stream.read(1024 * 1024 + 1)
+    if len(raw) > 1024 * 1024:
+        raise ValueError('nanoq report exceeds 1 MiB')
+    def unique(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError('Duplicate nanoq JSON field')
+            result[key] = value
+        return result
+    value = json.loads(raw, object_pairs_hook=unique)
+    if not isinstance(value, dict):
+        raise ValueError('Expected a nanoq JSON object')
+    integers = ('reads', 'bases', 'n50', 'longest', 'shortest', 'mean_length', 'median_length', 'filtered')
+    for key in integers:
+        if type(value.get(key)) is not int or value[key] < 0:
+            raise ValueError(f'Invalid nanoq {key}')
+    if not value['reads'] or not value['bases'] or value['filtered']:
+        raise ValueError('Empty or filtered nanoq data is not read-only QC evidence')
+    for key in ('mean_quality', 'median_quality'):
+        number = value.get(key)
+        if type(number) not in (int, float) or not math.isfinite(number) or not 0 <= number <= 93:
+            raise ValueError(f'Unavailable or invalid nanoq {key}; fast/no-quality mode is unsupported')
+    for key in ('length_thresholds', 'quality_thresholds'):
+        table = value.get(key)
+        if not isinstance(table, dict) or not table or any(not k.isdecimal() or type(v) is not int or not 0 <= v <= value['reads'] for k, v in table.items()):
+            raise ValueError(f'Invalid nanoq {key}')
+    for key in ('n50', 'mean_length', 'median_length'):
+        if not value['shortest'] <= value[key] <= value['longest']:
+            raise ValueError('Inconsistent nanoq length statistics')
+    return value
+
+
+def records(paths, tool):
+    from .outcomes import plan
+    return [{**{key: row[key] for key in ('id', 'path', 'name', 'state', 'error', 'exit_code', 'finished_at')},
+             'report': f'qc/{row["id"]}/{tool}.json', 'summary': None} for row in plan(paths)]
+
+
+async def execute(manager, run, metrics, errors):
+    directory = manager.directory(run['id'])
+    paths = await asyncio.to_thread(manager.checked_inputs, run)
+    manager.update(run, stage='Validating FASTQ inputs')
+    checked = await validate(manager, run, paths, [], 'source', namespace='qc/private')
+    if run['id'] in manager.cancelled:
+        return
+    validated = {row['path']: row for row in checked['files']}
+    for row in run['qc']['results']:
+        if run['id'] in manager.cancelled:
+            break
+        try:
+            source = validated[row['path']]
+            if source['state'] != 'passed' or not source['records_scanned']:
+                raise ValueError(source.get('error') or 'Empty or incompletely validated FASTQ')
+            # Recheck authorization and queued identity after the validation scan.
+            await asyncio.to_thread(manager.checked_inputs, run)
+            manager.stores.subdirectory(run['id'], f'qc/{row["id"]}', exist_ok=True)
+            row['state'] = 'running'
+            manager.update(run, stage=f'nanoq · {row["name"]}')
+            argv = [run['tools']['nanoq']['executable'], '--stats', '--json', '--report',
+                    str(directory / row['report']), '--input', row['path']]
+            code = await manager.command(run, 'nanoq', argv, directory)
+            if run['id'] in manager.cancelled:
+                break
+            row['exit_code'] = code
+            if code:
+                raise ValueError(f'nanoq exited with code {code}; see analysis log')
+            summary = await asyncio.to_thread(parse_nanoq, local_file(directory, row['report']))
+            if (summary['reads'], summary['bases'], summary['shortest'], summary['longest']) != (
+                    source['records_scanned'], source['bases_scanned'], source['min_length'], source['max_length']):
+                raise ValueError('nanoq counts or length range differ from validated source records')
+            if snapshot(Path(row['path']).stat()) != source['source_snapshot']:
+                raise ValueError('Source changed during QC')
+            await asyncio.to_thread(manager.checked_inputs, run)
+            row.update(state='completed', summary=summary, source_sha256=source['sha256'], error=None)
+            run['report_input_map'][row['report']] = {'id': row['id'], 'path': row['path']}
+        except (ValueError, OSError, KeyError, TypeError) as exc:
+            row.update(state='failed', summary=None, error=str(exc))
+            errors.append(f'{row["name"]}: {exc}')
+        row['finished_at'] = now()
+        manager.update(run, sample_count=sum(r['state'] == 'completed' for r in run['qc']['results']))
+    metrics['qc'] = run['qc']
+    await asyncio.to_thread(save_json, directory / 'metrics.json', metrics)
+
+
+def stopped(run):
+    stop(run.get('qc', {}).get('results', []), run['state'] if run['state'] in {'cancelled', 'interrupted'} else 'failed',
+         'QC stopped before a verified result was recorded')

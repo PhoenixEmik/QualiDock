@@ -39,6 +39,11 @@ pipeline input. The dataset guide documents verified pairing and provenance limi
 
 ## Workspace
 
+Optional [nanoq 0.10.0 long-read QC](docs/OPTIONAL-QC.md) provides read-only counts,
+N50, length and read-quality summaries through the existing Quality Control view.
+Configure `QUALIDOCK_NANOQ` or place the executable on PATH; it is independent of
+FastQC and no tool is installed automatically.
+
 - **Workspace:** browse connected storage, navigate directories, and select inputs. Switch between **Samples** (grouped detected read pairs) and **Files** (individual files). Incomplete pairs and unrecognized names remain available. Search covers currently loaded sample names and filenames; load more to include additional entries.
 - **Quality Control:** configure FastQC-only, combined FastQC/MultiQC, or existing-report MultiQC runs.
 - **Read Processing:** execute fastp, SeqKit statistics, seeded fraction or exact-count sampling, length filtering or exact read-ID extraction. Confirmed pairs can stay synchronized during filtering and extraction. Select FASTQs using the existing browser; advanced settings remain optional.

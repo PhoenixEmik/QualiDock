@@ -46,6 +46,7 @@ class Settings:
     allow_root: bool = False  # Only injected by tests; never exposed as a production option.
     fastp: str = "fastp"
     seqkit: str = "seqkit"
+    nanoq: str = "nanoq"
     @property
     def max_threads(self) -> int:
         return max(1, min(self.cpus, (self.memory_mb - 512) // 768, 32))
@@ -68,4 +69,5 @@ class Settings:
             multiqc=os.environ.get("QUALIDOCK_MULTIQC", "multiqc"),
             fastp=os.environ.get("QUALIDOCK_FASTP", "fastp"),
             seqkit=os.environ.get("QUALIDOCK_SEQKIT", "seqkit"),
+            nanoq=os.environ.get("QUALIDOCK_NANOQ", "nanoq"),
         )

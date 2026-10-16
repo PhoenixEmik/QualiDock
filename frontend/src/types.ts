@@ -49,6 +49,7 @@ export interface Run {
     | "both"
     | "fastqc"
     | "multiqc"
+    | "nanoq"
     | "fastp"
     | "seqkit-stats"
     | "seqkit-sample"
@@ -84,6 +85,23 @@ export interface Run {
     snapshot_artifact?: string;
   }[];
   processing?: ProcessingResult;
+  qc?: {
+    tool: "nanoq";
+    options: Record<string, unknown>;
+    results: {
+      id: string;
+      path: string;
+      name: string;
+      state: string;
+      error: string | null;
+      report: string;
+      source_sha256?: string;
+      summary: Record<
+        string,
+        number | Record<string, number> | number[]
+      > | null;
+    }[];
+  };
   derived_datasets?: DerivedDataset[];
   integrity?: IntegrityResult;
   report_input_map?: Record<
@@ -288,6 +306,7 @@ export interface Config {
     multiqc: boolean;
     fastp?: boolean;
     seqkit?: boolean;
+    nanoq?: boolean;
   };
   prefix: string;
   tool_details?: Record<string, ToolInfo>;

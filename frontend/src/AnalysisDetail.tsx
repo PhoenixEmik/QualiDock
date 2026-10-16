@@ -17,6 +17,7 @@ import {
 import { bytes, date, modeLabel, url } from "./api";
 import { Empty, State } from "./Feedback";
 import type { DetailTab, Run, Sample, MultiQCSummary } from "./types";
+import OptionalQcResults from "./OptionalQcResults";
 import QcModule from "./QcModule";
 import ProcessingResults from "./ProcessingResults";
 import ReportViewer from "./ReportViewer";
@@ -365,99 +366,103 @@ export default function AnalysisDetail({
         aria-labelledby="detail-tab-metrics"
         tabIndex={0}
       >
-        {tab === "metrics" && (
-          <>
-            <div
-              className="view-toggle analytics-views"
-              role="group"
-              aria-label="Native QC views"
-            >
-              {[
-                ...(currentRun.processing ? ["Before / After"] : []),
-                "Overview",
-                "Sample Details",
-                "Compare Samples",
-              ].map((view) => (
-                <button
-                  key={view}
-                  className={analyticsView === view ? "active" : ""}
-                  aria-pressed={analyticsView === view}
-                  onClick={() => setAnalyticsView(view)}
-                >
-                  {view}
-                </button>
-              ))}
-            </div>
-            {analyticsView === "Before / After" && currentRun.processing && (
-              <ProcessingResults
-                reuse={(ids) => reuse(currentRun, ids)}
-                busy={busy}
-                run={currentRun}
-                samples={samples}
-              />
-            )}
-            {analyticsView === "Overview" && (
-              <AnalyticsSummary
-                run={currentRun}
-                samples={samples}
-                loading={metricsLoading}
-              />
-            )}
-            {analyticsView !== "Before / After" && (
-              <AnalyticsSelection
-                entities={entities}
-                selected={selected}
-                select={select}
-              />
-            )}
-            {analyticsView === "Overview" && (
-              <>
-                <AnalysisGroups
+        {tab === "metrics" &&
+          (currentRun.qc ? (
+            <OptionalQcResults run={currentRun} />
+          ) : (
+            <>
+              <div
+                className="view-toggle analytics-views"
+                role="group"
+                aria-label="Native QC views"
+              >
+                {[
+                  ...(currentRun.processing ? ["Before / After"] : []),
+                  "Overview",
+                  "Sample Details",
+                  "Compare Samples",
+                ].map((view) => (
+                  <button
+                    key={view}
+                    className={analyticsView === view ? "active" : ""}
+                    aria-pressed={analyticsView === view}
+                    onClick={() => setAnalyticsView(view)}
+                  >
+                    {view}
+                  </button>
+                ))}
+              </div>
+              {analyticsView === "Before / After" && currentRun.processing && (
+                <ProcessingResults
+                  reuse={(ids) => reuse(currentRun, ids)}
+                  busy={busy}
                   run={currentRun}
                   samples={samples}
-                  selected={selected}
-                  select={select}
-                  inspect={(id) => {
-                    setSampleId(id);
-                    setQcMode("single");
-                    setAnalyticsView("Sample Details");
-                    requestAnimationFrame(() =>
-                      document.getElementById("qc-metric-heading")?.focus(),
-                    );
-                  }}
                 />
-                <GeneralStatistics
-                  summary={multiqc}
-                  version={currentRun.tools?.multiqc?.version}
+              )}
+              {analyticsView === "Overview" && (
+                <AnalyticsSummary
+                  run={currentRun}
+                  samples={samples}
+                  loading={metricsLoading}
+                />
+              )}
+              {analyticsView !== "Before / After" && (
+                <AnalyticsSelection
                   entities={entities}
                   selected={selected}
                   select={select}
                 />
-                <StatusMatrix
-                  entities={entities}
-                  selected={selected}
-                  select={select}
-                  inspect={(id, module) => {
-                    setSampleId(id);
-                    setMetric(module);
-                    setQcMode("single");
-                    setAnalyticsView("Sample Details");
-                    requestAnimationFrame(() =>
-                      document.getElementById("qc-metric-heading")?.focus(),
-                    );
-                  }}
-                />
-                {metricsLoading && (
-                  <p role="status">Loading saved QC metrics…</p>
-                )}
-              </>
-            )}
-            {analyticsView === "Compare Samples" && (
-              <CompareSamples entities={entities} selected={selected} />
-            )}
-          </>
-        )}
+              )}
+              {analyticsView === "Overview" && (
+                <>
+                  <AnalysisGroups
+                    run={currentRun}
+                    samples={samples}
+                    selected={selected}
+                    select={select}
+                    inspect={(id) => {
+                      setSampleId(id);
+                      setQcMode("single");
+                      setAnalyticsView("Sample Details");
+                      requestAnimationFrame(() =>
+                        document.getElementById("qc-metric-heading")?.focus(),
+                      );
+                    }}
+                  />
+                  <GeneralStatistics
+                    summary={multiqc}
+                    version={currentRun.tools?.multiqc?.version}
+                    entities={entities}
+                    selected={selected}
+                    select={select}
+                  />
+                  <StatusMatrix
+                    entities={entities}
+                    selected={selected}
+                    select={select}
+                    inspect={(id, module) => {
+                      setSampleId(id);
+                      setMetric(module);
+                      setQcMode("single");
+                      setAnalyticsView("Sample Details");
+                      requestAnimationFrame(() =>
+                        document.getElementById("qc-metric-heading")?.focus(),
+                      );
+                    }}
+                  />
+                  {metricsLoading && (
+                    <p role="status">Loading saved QC metrics…</p>
+                  )}
+                </>
+              )}
+              {analyticsView === "Compare Samples" && (
+                <CompareSamples entities={entities} selected={selected} />
+              )}
+            </>
+          ))}
         {tab === "metrics" &&
+          !currentRun.qc &&
           analyticsView === "Sample Details" &&
           (samples.length ? (
             <>

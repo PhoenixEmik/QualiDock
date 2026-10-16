@@ -63,6 +63,17 @@ export default function NewAnalysisForm({
       ? ["fastqc", "qcreport"].includes(entry.kind)
       : entry.kind === "fastq";
   const configuredPaths = [...selected.values()].filter(suitable);
+  const required =
+    mode === "nanoq"
+      ? ["nanoq"]
+      : mode === "fastqc"
+        ? ["fastqc"]
+        : mode === "multiqc"
+          ? ["multiqc"]
+          : ["fastqc", "multiqc"];
+  const unavailable = config
+    ? required.filter((tool) => !config.tools[tool as keyof Config["tools"]])
+    : [];
   return (
     <div className="setup-layout">
       <div className="setup-main">
@@ -85,7 +96,7 @@ export default function NewAnalysisForm({
           />
           <div className="field-label">QC workflow</div>
           <div className="mode-options" role="group" aria-label="QC workflow">
-            {(["both", "fastqc", "multiqc"] as const).map((value) => (
+            {(["both", "fastqc", "multiqc", "nanoq"] as const).map((value) => (
               <button
                 key={value}
                 className={`mode-option ${mode === value ? "chosen" : ""}`}
@@ -100,7 +111,9 @@ export default function NewAnalysisForm({
                     ? "Individual read QC and a combined report"
                     : value === "fastqc"
                       ? "Individual read quality assessment"
-                      : "Combine existing FastQC or fastp JSON reports"}
+                      : value === "nanoq"
+                        ? "Read-only long-read counts, N50 and quality summaries"
+                        : "Combine existing FastQC or fastp JSON reports"}
                 </small>
                 {mode === value && <Check size={15} />}
               </button>
@@ -259,31 +272,22 @@ export default function NewAnalysisForm({
             <dd>Local</dd>
           </div>
         </dl>
-        {config &&
-          ((!config.tools.fastqc && mode !== "multiqc") ||
-            (!config.tools.multiqc && mode !== "fastqc")) && (
-            <p className="tool-warning">
-              {Object.values(config.tool_details || {})
-                .filter(
-                  (tool) =>
-                    ((tool.name === "fastqc" && mode !== "multiqc") ||
-                      (tool.name === "multiqc" && mode !== "fastqc")) &&
-                    tool.error,
-                )
-                .map((tool) => tool.error)
-                .join(" ") ||
-                "A required QC tool is unavailable on this host. Configure it before starting."}
-            </p>
-          )}
+        {unavailable.length > 0 && (
+          <p className="tool-warning">
+            {Object.values(config?.tool_details || {})
+              .filter((tool) => unavailable.includes(tool.name) && tool.error)
+              .map((tool) => tool.error)
+              .join(" ") ||
+              "A required QC tool is unavailable on this host. Configure it before starting."}
+          </p>
+        )}
         <button
           className="button primary"
           disabled={
             busy ||
             (!configuredPaths.length &&
               !(mode === "multiqc" && multiqcDirectory.trim())) ||
-            (!!config &&
-              ((!config.tools.fastqc && mode !== "multiqc") ||
-                (!config.tools.multiqc && mode !== "fastqc")))
+            unavailable.length > 0
           }
           onClick={() => void submit()}
         >
