@@ -35,11 +35,15 @@ export async function api<T>(
   return response.json();
 }
 export const modeLabel = (mode: string) =>
-  mode === "both"
-    ? "FastQC + MultiQC"
-    : mode === "fastqc"
-      ? "FastQC only"
-      : "MultiQC only";
+  mode === "fastp"
+    ? "fastp processing"
+    : mode.startsWith("seqkit-")
+      ? `SeqKit ${mode.slice(7)}`
+      : mode === "both"
+        ? "FastQC + MultiQC"
+        : mode === "fastqc"
+          ? "FastQC only"
+          : "MultiQC only";
 export const bytes = (value: number | null) =>
   value === null
     ? "—"

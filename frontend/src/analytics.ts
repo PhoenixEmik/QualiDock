@@ -45,13 +45,20 @@ export function analyticsSamples(
       inputs.length === 1
         ? inputs[0]
         : run.report_input_map?.[sample.id]?.source_report || sample.id;
+    const derived = run.derived_datasets?.find(
+      (row) => `${run.output_directory}/${row.path}` === original,
+    );
     const group =
       inputs.length === 1
-        ? run.sample_groups?.find((group) => group.files.includes(inputs[0]))
+        ? run.sample_groups?.find((group) =>
+            group.files.includes(derived?.source || inputs[0]),
+          )
         : undefined;
     const record =
       inputs.length === 1
-        ? run.input_pairing?.find((record) => record.path === inputs[0])
+        ? run.input_pairing?.find(
+            (record) => record.path === (derived?.source || inputs[0]),
+          )
         : undefined;
     return {
       id: sample.id,

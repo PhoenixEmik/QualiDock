@@ -1,6 +1,6 @@
 import type { ScreeningRecord } from "./screening";
 import type { ReleaseExport, ReviewEvent } from "./release";
-export type View = "workspace" | "new" | "analyses" | "analysis";
+export type View = "workspace" | "new" | "processing" | "analyses" | "analysis";
 export type DetailTab = "overview" | "metrics" | "reports";
 export type RunState =
   | "queued"
@@ -36,7 +36,15 @@ export interface HistoryPage {
 export interface Run {
   id: string;
   name: string;
-  mode: "both" | "fastqc" | "multiqc";
+  mode:
+    | "both"
+    | "fastqc"
+    | "multiqc"
+    | "fastp"
+    | "seqkit-stats"
+    | "seqkit-sample"
+    | "seqkit-filter"
+    | "seqkit-extract";
   state: RunState;
   stage: string;
   created_at: string;
@@ -66,13 +74,21 @@ export interface Run {
     snapshot_sha256?: string;
     snapshot_artifact?: string;
   }[];
+  processing?: ProcessingResult;
+  derived_datasets?: DerivedDataset[];
   integrity?: IntegrityResult;
   screening?: ScreeningRecord;
   release_export?: ReleaseExport;
   release_reviews?: ReviewEvent[];
   report_input_map?: Record<
     string,
-    { path?: string; source_report?: string; id: string; multiqc_name?: string }
+    {
+      path?: string;
+      source_report?: string;
+      id: string;
+      multiqc_name?: string;
+      processing_stage?: "raw" | "processed";
+    }
   >;
   input_outcomes?: {
     id: string;
@@ -187,6 +203,7 @@ export interface RerunConfiguration extends SampleConfiguration {
   threads: number;
   output_root: string;
   rerun_of: string;
+  processing_options?: ProcessingOptions;
 }
 export interface InputPairing {
   path: string;
@@ -259,7 +276,12 @@ export interface Config {
   cpus: number;
   memory_mb: number;
   max_threads: number;
-  tools: { fastqc: boolean; multiqc: boolean };
+  tools: {
+    fastqc: boolean;
+    multiqc: boolean;
+    fastp?: boolean;
+    seqkit?: boolean;
+  };
   prefix: string;
   tool_details?: Record<string, ToolInfo>;
 }
@@ -293,4 +315,56 @@ export interface Sample {
   status: string;
   modules: Module[];
   per_base_quality: BaseQuality[];
+}
+
+export interface ProcessingOptions {
+  adapter_trimming?: boolean;
+  quality_filtering?: boolean;
+  qualified_quality?: number;
+  unqualified_percent?: number;
+  min_length?: number;
+  gzip?: boolean;
+  compare_qc?: boolean;
+  multiqc?: boolean;
+  fraction?: number;
+  seed?: number;
+  max_length?: number | null;
+  identifiers?: string[];
+}
+export interface ProcessingResult {
+  schema_version: number;
+  options: ProcessingOptions;
+  quality_encoding?: string;
+  units: {
+    id: string;
+    inputs: string[];
+    outputs: string[];
+    state: string;
+    error: string | null;
+    lane?: string | null;
+    chunk?: string | null;
+    raw_qc?: { report: string; state: string }[];
+    processed_qc?: { report: string; state: string }[];
+    fastp?: {
+      summary: {
+        before_filtering: Record<string, number>;
+        after_filtering: Record<string, number>;
+      };
+      filtering_result?: Record<string, number>;
+      adapter_cutting?: Record<string, unknown>;
+    } | null;
+    statistics?: Record<string, string>[];
+  }[];
+}
+export interface DerivedDataset {
+  id: string;
+  unit_id: string;
+  path: string;
+  source: string;
+  stage: string;
+  paired: boolean;
+  read: string | null;
+  sha256: string;
+  records: number;
+  bases: number;
 }

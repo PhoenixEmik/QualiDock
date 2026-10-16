@@ -2810,3 +2810,78 @@ section[aria-label="Analysis jobs"] > .table-scroll {
 [aria-label="Project cohort comparison"] .quality-chart {
   height: 390px;
 }
+
+/* Processing uses the existing neutral surfaces and compact controls. */
+.processing-setup {
+  max-width: 1000px;
+}
+.processing-setup .form-section > label,
+.processing-advanced > label {
+  display: block;
+  margin: 14px 0;
+}
+.processing-setup input[type="number"],
+.processing-setup select,
+.processing-setup textarea {
+  max-width: 100%;
+}
+.processing-setup input[type="checkbox"] {
+  margin-right: 8px;
+}
+.processing-selection,
+.processing-chart-controls {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+.processing-results {
+  margin-bottom: 28px;
+  min-width: 0;
+}
+.processing-results select {
+  max-width: 100%;
+}
+.processing-results pre {
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.processing-charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.processing-charts .chart-panel {
+  min-width: 0;
+  padding: 14px;
+}
+.processing-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 16px 0;
+}
+.processing-table th,
+.processing-table td {
+  padding: 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border, #e2e5e9);
+}
+.processing-table td {
+  overflow-wrap: anywhere;
+}
+.secondary-navigation {
+  margin: 18px 14px;
+  font-size: 12px;
+}
+.secondary-navigation p {
+  color: var(--muted, #667085);
+  line-height: 1.5;
+}
+@media (max-width: 1100px) {
+  .processing-charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

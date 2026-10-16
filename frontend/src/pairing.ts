@@ -19,13 +19,42 @@ export function confirmedPairs(run: Run, samples: Sample[]): SamplePair[] {
     if (path) byPath.set(path, [...(byPath.get(path) || []), sample]);
   }
   const groups = new Map<string, InputPairing[]>();
-  const records = run.input_pairing || [];
+  const records = [...(run.input_pairing || [])];
+  const derivedPaths = new Set<string>();
+  if (run.output_directory)
+    for (const unit of run.processing?.units || []) {
+      const outputs = (run.derived_datasets || []).filter(
+        (row) => row.unit_id === unit.id && row.paired,
+      );
+      if (
+        outputs.length !== 2 ||
+        !outputs.some((row) => row.read === "R1") ||
+        !outputs.some((row) => row.read === "R2")
+      )
+        continue;
+      for (const row of outputs) {
+        const path = `${run.output_directory}/${row.path}`;
+        derivedPaths.add(path);
+        records.push({
+          path,
+          name: row.path.split("/").pop()!,
+          read: row.read,
+          pair_key: `processed:${unit.id}`,
+          paired: true,
+          mate: `${run.output_directory}/${outputs.find((other) => other.id !== row.id)!.path}`,
+          lane: unit.lane,
+          chunk: unit.chunk,
+          source: "auto",
+        });
+      }
+    }
   for (const input of records) {
     if (
       input.paired &&
       input.pair_key &&
       input.mate &&
-      (run.sample_input_paths || run.inputs).includes(input.path) &&
+      ((run.sample_input_paths || run.inputs).includes(input.path) ||
+        derivedPaths.has(input.path)) &&
       input.name === input.path.split("/").pop()
     )
       groups.set(input.pair_key, [

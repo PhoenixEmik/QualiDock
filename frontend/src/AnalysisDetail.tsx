@@ -18,6 +18,7 @@ import { bytes, date, modeLabel, url } from "./api";
 import { Empty, State } from "./Feedback";
 import type { DetailTab, Run, Sample, MultiQCSummary } from "./types";
 import QcModule from "./QcModule";
+import ProcessingResults from "./ProcessingResults";
 import ReportViewer from "./ReportViewer";
 import { findModule } from "./qc";
 import { confirmedPairs } from "./pairing";
@@ -80,7 +81,11 @@ export default function AnalysisDetail({
   initialReportId = "",
 }: Props) {
   const [analyticsView, setAnalyticsView] = useState(
-    initialReportId ? "Sample Details" : "Overview",
+    currentRun.processing
+      ? "Before / After"
+      : initialReportId
+        ? "Sample Details"
+        : "Overview",
   );
   const entities = useMemo(
     () => analyticsSamples(currentRun, samples, multiqc),
@@ -297,18 +302,22 @@ export default function AnalysisDetail({
         ))}
         <AnalysisGroups run={currentRun} samples={samples} />
         <FileOutcomes run={currentRun} />
-        <IntegrityReview run={currentRun} refresh={refresh} />
-        <DeliveryReview
-          key={currentRun.id}
-          run={currentRun}
-          refresh={refresh}
-          inspect={(reportId) => {
-            setSampleId(reportId);
-            setQcMode("single");
-            setAnalyticsView("Sample Details");
-            setTab("metrics");
-          }}
-        />
+        {!currentRun.processing && (
+          <IntegrityReview run={currentRun} refresh={refresh} />
+        )}
+        {!currentRun.processing && (
+          <DeliveryReview
+            key={currentRun.id}
+            run={currentRun}
+            refresh={refresh}
+            inspect={(reportId) => {
+              setSampleId(reportId);
+              setQcMode("single");
+              setAnalyticsView("Sample Details");
+              setTab("metrics");
+            }}
+          />
+        )}
         {!!currentRun.report_inputs?.length && (
           <details className="analysis-inputs">
             <summary>
@@ -370,6 +379,11 @@ export default function AnalysisDetail({
         aria-labelledby="detail-tab-metrics"
         tabIndex={0}
       >
+        {tab === "metrics" &&
+          analyticsView === "Before / After" &&
+          currentRun.processing && (
+            <ProcessingResults run={currentRun} samples={samples} />
+          )}
         {tab === "metrics" && (
           <>
             <div
@@ -377,7 +391,12 @@ export default function AnalysisDetail({
               role="group"
               aria-label="Native QC views"
             >
-              {["Overview", "Sample Details", "Compare Samples"].map((view) => (
+              {[
+                ...(currentRun.processing ? ["Before / After"] : []),
+                "Overview",
+                "Sample Details",
+                "Compare Samples",
+              ].map((view) => (
                 <button
                   key={view}
                   className={analyticsView === view ? "active" : ""}
@@ -395,11 +414,13 @@ export default function AnalysisDetail({
                 loading={metricsLoading}
               />
             )}
-            <AnalyticsSelection
-              entities={entities}
-              selected={selected}
-              select={select}
-            />
+            {analyticsView !== "Before / After" && (
+              <AnalyticsSelection
+                entities={entities}
+                selected={selected}
+                select={select}
+              />
+            )}
             {analyticsView === "Overview" && (
               <>
                 <AnalysisGroups

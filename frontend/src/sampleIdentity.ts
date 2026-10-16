@@ -5,7 +5,12 @@ import { inputFilename } from "./qc.ts";
 export function sampleSource(run: Run, sample: Sample): string | undefined {
   const paths = run.sample_input_paths || run.inputs;
   const mapped = run.report_input_map?.[sample.id]?.path;
-  if (mapped && paths.includes(mapped)) return mapped;
+  const derived = run.output_directory
+    ? (run.derived_datasets || []).map(
+        (row) => `${run.output_directory}/${row.path}`,
+      )
+    : [];
+  if (mapped && [...paths, ...derived].includes(mapped)) return mapped;
   const matches = paths.filter(
     (path) => path.split("/").pop() === inputFilename(sample),
   );
@@ -13,6 +18,14 @@ export function sampleSource(run: Run, sample: Sample): string | undefined {
 }
 
 export function sampleLabel(run: Run, sample: Sample, samples: Sample[]) {
+  const stage = run.report_input_map?.[sample.id]?.processing_stage;
+  if (stage) {
+    const source = sampleSource(run, sample);
+    const derived = run.derived_datasets?.find(
+      (row) => `${run.output_directory}/${row.path}` === source,
+    );
+    return `${stage === "raw" ? "Raw" : "Processed"} · ${derived?.source.split("/").pop() || sample.name} · ${sample.id.split("/").slice(1, 2).join("")}`;
+  }
   if (
     samples.filter((other) => inputFilename(other) === inputFilename(sample))
       .length < 2

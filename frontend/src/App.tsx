@@ -30,11 +30,14 @@ import type {
   RerunConfiguration,
   RunSummary,
   HistoryPage,
+  ProcessingOptions,
 } from "./types";
 import { Empty, State } from "./Feedback";
 import FileExplorer from "./FileExplorer";
 import AnalysisDetail from "./AnalysisDetail";
 import NewAnalysisForm from "./NewAnalysisForm";
+import ProcessingForm from "./ProcessingForm";
+import { defaults, isProcessing, processingModes } from "./processing";
 import ProjectWorkspace from "./ProjectWorkspace";
 import { reconcileConfig } from "./sampleConfig";
 import { resolveEntries, listingUrl, type ExplorerMode } from "./explorer";
@@ -43,7 +46,9 @@ const active = (run: Pick<Run, "state">) =>
   ["queued", "running"].includes(run.state);
 const nav = [
   { id: "workspace" as const, label: "Workspace", icon: Files },
-  { id: "analyses" as const, label: "Analyses", icon: Activity },
+  { id: "new" as const, label: "QC & Analysis", icon: FileBarChart2 },
+  { id: "processing" as const, label: "Read Processing", icon: Dna },
+  { id: "analyses" as const, label: "Results", icon: Activity },
 ];
 const filters = [
   { id: "all", label: "All" },
@@ -105,6 +110,9 @@ export default function App() {
   const [renameName, setRenameName] = useState("");
   const [mode, setMode] = useState<Run["mode"]>("both");
   const [threads, setThreads] = useState(1);
+  const [processingOptions, setProcessingOptions] = useState<ProcessingOptions>(
+    defaults("fastp"),
+  );
   const [jobFilter, setJobFilter] = useState("all");
   const [analysisSearch, setAnalysisSearch] = useState("");
   const [cancellingId, setCancellingId] = useState("");
@@ -112,7 +120,7 @@ export default function App() {
     "connecting",
   );
   const primaryView =
-    view === "analysis" ? "analyses" : view === "new" ? "workspace" : view;
+    view === "analysis" ? "analyses" : view === "new" ? "new" : view;
   const open = (next: View) => {
     setView(next);
     setError("");
@@ -471,7 +479,7 @@ export default function App() {
       )
     )
       setMode("multiqc");
-    else if (mode === "multiqc") setMode("both");
+    else if (mode === "multiqc" || isProcessing(mode)) setMode("both");
     open("new");
   };
   const showRun = (run: Pick<Run, "id">) => {
@@ -494,6 +502,9 @@ export default function App() {
       const payload = {
         name,
         mode,
+        ...(isProcessing(mode)
+          ? { processing_options: processingOptions }
+          : {}),
         paths:
           mode === "multiqc" && multiqcDirectory.trim()
             ? [multiqcDirectory.trim()]
@@ -509,12 +520,18 @@ export default function App() {
         rerun_of: rerunOf,
         ...(mode !== "multiqc" && sampleConfiguration
           ? {
-              input_pairing: reconcileConfig(sampleConfiguration, [
-                ...selected.keys(),
-              ]).input_pairing,
-              sample_groups: reconcileConfig(sampleConfiguration, [
-                ...selected.keys(),
-              ]).sample_groups,
+              input_pairing: reconcileConfig(
+                sampleConfiguration,
+                [...selected.values()]
+                  .filter((entry) => entry.kind === "fastq")
+                  .map((entry) => entry.path),
+              ).input_pairing,
+              sample_groups: reconcileConfig(
+                sampleConfiguration,
+                [...selected.values()]
+                  .filter((entry) => entry.kind === "fastq")
+                  .map((entry) => entry.path),
+              ).sample_groups,
             }
           : {}),
       };
@@ -603,6 +620,8 @@ export default function App() {
       );
       setName(draft.name);
       setMode(draft.mode);
+      if (isProcessing(draft.mode))
+        setProcessingOptions(draft.processing_options || defaults(draft.mode));
       setMultiqcDirectory(
         draft.mode === "multiqc" &&
           draft.entries.length === 1 &&
@@ -621,7 +640,7 @@ export default function App() {
             }
           : null,
       );
-      open("new");
+      open(isProcessing(draft.mode) ? "processing" : "new");
     } catch (err) {
       fail(err);
     } finally {
@@ -755,13 +774,39 @@ export default function App() {
               aria-label={item.label}
               aria-current={primaryView === item.id ? "page" : undefined}
               className={`nav-item ${primaryView === item.id ? "selected" : ""}`}
-              onClick={() => open(item.id)}
+              onClick={() => {
+                if (item.id === "processing") {
+                  setProjectIntake(null);
+                  setRerunOf(null);
+                  setMode("fastp");
+                  setProcessingOptions(defaults("fastp"));
+                  open("processing");
+                } else if (item.id === "new") {
+                  setMode("both");
+                  newAnalysis();
+                } else open(item.id);
+              }}
             >
               <item.icon size={18} />
               <span>{item.label}</span>
             </button>
           ))}
         </nav>
+        <details className="secondary-navigation">
+          <summary>Advanced</summary>
+          <button
+            className="nav-item"
+            onClick={() => {
+              setWorkspacePanel("projects");
+              open("workspace");
+            }}
+          >
+            Projects & cross-run analytics
+          </button>
+          <p>
+            Validation and release review are available within analysis details.
+          </p>
+        </details>
         <footer className="sidebar-bottom">
           <section className="session-info" aria-label="Session resources">
             <strong>Session resources</strong>
@@ -782,6 +827,10 @@ export default function App() {
               MultiQC{" "}
               {config?.tool_details?.multiqc.version ||
                 (config?.tools.multiqc ? "available" : "unavailable")}
+            </small>
+            <small>
+              fastp {config?.tool_details?.fastp?.version || "unavailable"} ·
+              SeqKit {config?.tool_details?.seqkit?.version || "unavailable"}
             </small>
             <small className="connection-status">
               {updates === "live"
@@ -840,10 +889,12 @@ export default function App() {
                 {view === "workspace"
                   ? "Workspace"
                   : view === "analyses"
-                    ? "Analyses"
-                    : view === "new"
-                      ? "New analysis"
-                      : currentRun?.name || "Analysis"}
+                    ? "Results"
+                    : view === "processing"
+                      ? "Read Processing"
+                      : view === "new"
+                        ? "New analysis"
+                        : currentRun?.name || "Analysis"}
               </h1>
               <p>
                 {view === "workspace"
@@ -852,11 +903,13 @@ export default function App() {
                     : "Browse FASTQ files, check sample pairs, and start a QC analysis."
                   : view === "analyses"
                     ? "Manage QC runs and open their logs, metrics, and reports."
-                    : view === "new"
-                      ? "Configure FastQC and MultiQC using your selected server files."
-                      : currentRun
-                        ? `Created ${date(currentRun.created_at)}`
-                        : "Choose an analysis to inspect its results."}
+                    : view === "processing"
+                      ? "Trim, filter, subsample, or inspect selected FASTQs. Source files stay unchanged."
+                      : view === "new"
+                        ? "Configure FastQC and MultiQC using your selected server files."
+                        : currentRun
+                          ? `Created ${date(currentRun.created_at)}`
+                          : "Choose an analysis to inspect its results."}
               </p>
             </div>
             {view === "workspace" && workspacePanel === "files" && (
@@ -1028,13 +1081,49 @@ export default function App() {
               )}
             </div>
           )}
+          {view === "processing" && (
+            <ProcessingForm
+              config={config}
+              selected={selected}
+              busy={busy}
+              mode={mode}
+              setMode={setMode}
+              options={processingOptions}
+              setOptions={setProcessingOptions}
+              name={name}
+              setName={setName}
+              threads={threads}
+              setThreads={setThreads}
+              outputRoot={outputRoot}
+              setOutputRoot={setOutputRoot}
+              samples={
+                sampleConfiguration
+                  ? reconcileConfig(
+                      sampleConfiguration,
+                      [...selected.values()]
+                        .filter((entry) => entry.kind === "fastq")
+                        .map((entry) => entry.path),
+                    )
+                  : null
+              }
+              setSamples={setSampleConfiguration}
+              prepare={prepareSamples}
+              browse={() => open("workspace")}
+              submit={submit}
+            />
+          )}
           {view === "new" && (
             <NewAnalysisForm
               projectName={projectIntake?.name}
               config={config}
               sampleConfiguration={
                 sampleConfiguration
-                  ? reconcileConfig(sampleConfiguration, [...selected.keys()])
+                  ? reconcileConfig(
+                      sampleConfiguration,
+                      [...selected.values()]
+                        .filter((entry) => entry.kind === "fastq")
+                        .map((entry) => entry.path),
+                    )
                   : null
               }
               setSampleConfiguration={setSampleConfiguration}
@@ -1121,6 +1210,11 @@ export default function App() {
                       <option value="fastqc">FastQC only</option>
                       <option value="both">FastQC + MultiQC</option>
                       <option value="multiqc">MultiQC only</option>
+                      {processingModes.map((mode) => (
+                        <option key={mode} value={mode}>
+                          {modeLabel(mode)}
+                        </option>
+                      ))}
                     </select>
                   </label>
                   <label>
