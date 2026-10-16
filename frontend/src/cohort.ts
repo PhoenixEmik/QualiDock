@@ -130,9 +130,10 @@ export function cohortPlot(
       barMaxWidth: 36,
     };
   });
+  const description = `Cross-run ${result.metric.name}; exact source values and denominators available in the provenance table and CSV/TSV`;
   const options: echarts.EChartsOption = {
     animation: false,
-    aria: { enabled: true },
+    aria: { enabled: true, label: { description } },
     grid: { left: 80, right: 24, top: 30, bottom: 150 },
     legend: { type: "scroll", bottom: 0, textStyle: { color: "#475467" } },
     xAxis: {
@@ -187,7 +188,7 @@ export function cohortPlot(
   };
   return {
     options,
-    description: `Cross-run ${result.metric.name}; exact source values and denominators available in the provenance table and CSV/TSV`,
+    description,
     summary: `${points.length} ${result.group_by === "run" ? "selected-run scopes" : "read files"} · ${result.metric.unit}`,
     series: series.map(({ name, label }) => ({ name, label })),
   };

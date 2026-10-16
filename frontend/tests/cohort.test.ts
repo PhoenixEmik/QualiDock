@@ -69,6 +69,11 @@ test("cross-run charts preserve true zero, exact fraction, source identities and
   assert.match(tooltip, /Review: below user-declared reference/);
   assert.equal(options.series[0].markArea, undefined); // No Phred bands on Q30 base percentages.
   assert.equal(options.tooltip.renderMode, "richText");
+  assert.equal(options.aria.label.description, view.description);
+  assert.match(
+    view.description,
+    /Q30 bases.*exact source values and denominators/,
+  );
 });
 test("missing values excluded from chart, different run identities preserved despite same names", () => {
   const missing = { ...point, id: "missing", value: null };
