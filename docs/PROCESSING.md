@@ -62,7 +62,8 @@ records together. Both mates must meet the inclusive minimum/maximum lengths;
 otherwise both are removed. This uses the existing FASTQ parser through a small
 QualiDock selector under LocalExecutor. Its actual processor/version, pair counts,
 input/output byte observations and original bytes are retained in `selection.json`.
-Full input and output validation is still required. Independent-file filtering
+Full input and output validation is still required. The selected processor/version
+is also saved before execution, including failed extraction attempts. Independent-file filtering
 remains the API default for historical configurations. All-paired selection needs
 no SeqKit executable; mixed/single-end input still uses normal SeqKit filtering.
 Identifier extraction also accepts `preserve_pairs: true`. Requests use exact,

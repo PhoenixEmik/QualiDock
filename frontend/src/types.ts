@@ -362,6 +362,7 @@ export interface ProcessingResult {
       filtering_result?: Record<string, number>;
       adapter_cutting?: Record<string, unknown>;
     } | null;
+    processor?: { name: string; version: string };
     selection?: {
       processor: string;
       version: string;

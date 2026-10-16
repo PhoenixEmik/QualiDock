@@ -139,6 +139,7 @@ def test_duplicate_matching_source_identifiers_fail_instead_of_publishing_duplic
         result=run(client,paths,{'preserve_pairs':True,'identifiers':['dup/1','dup/2']},mode='seqkit-extract')
         assert result['state']=='failed' and result['derived_datasets']==[]
         assert 'ambiguous' in result['error']
+        assert result['processing']['units'][0]['processor']=={'name':'QualiDock synchronized FASTQ selector','version':'1.0'}
         assert 'more than once' in result['processing']['units'][0]['error']
         assert not any(p['path'].startswith('processing/u0001/') for p in result['reports'])
 

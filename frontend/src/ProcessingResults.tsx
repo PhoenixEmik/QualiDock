@@ -53,7 +53,9 @@ export default function ProcessingResults({
   return (
     <section className="processing-results" aria-label="Processing results">
       <h2>
-        {run.mode === "fastp" ? "Before / after processing" : "SeqKit results"}
+        {run.mode === "fastp"
+          ? "Before / after processing"
+          : "Processing results"}
       </h2>
       <label>
         Input dataset
@@ -88,8 +90,10 @@ export default function ProcessingResults({
               Tool:{" "}
               {unit.selection
                 ? `${unit.selection.processor} ${unit.selection.version}`
-                : run.tools?.[run.mode === "fastp" ? "fastp" : "seqkit"]
-                    ?.version || "Unavailable"}
+                : unit.processor
+                  ? `${unit.processor.name} ${unit.processor.version}`
+                  : run.tools?.[run.mode === "fastp" ? "fastp" : "seqkit"]
+                      ?.version || "Unavailable"}
               . Original files are read-only.
             </p>
           </details>

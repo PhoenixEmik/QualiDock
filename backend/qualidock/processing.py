@@ -196,6 +196,9 @@ async def execute(manager, run, metrics, errors):
             tool = 'fastp' if run['mode'] == 'fastp' else 'seqkit'
             synchronized = run['mode'] in {'seqkit-filter', 'seqkit-extract'} and len(source) == 2
             if synchronized:
+                from .paired_reads import VERSION
+                tool = 'QualiDock synchronized FASTQ selector'
+                unit['processor'] = {'name': tool, 'version': VERSION}
                 config = ids.parent / (unit['id'] + '-selection-config.json')
                 result = destination / 'selection.json'
                 save_json(config, {'inputs': list(map(str, source)), 'outputs': list(map(str, outputs)),
@@ -203,7 +206,6 @@ async def execute(manager, run, metrics, errors):
                                    'min_length': value['min_length'], 'max_length': value['max_length'],
                                    'gzip': value['gzip'], 'result': str(result), 'operation': 'identifiers' if run['mode'] == 'seqkit-extract' else 'length', 'identifiers': value['identifiers']})
                 commands = [[sys.executable, '-m', 'qualidock.paired_reads', '--config', str(config)]]
-                tool = 'QualiDock synchronized FASTQ selector'
             else:
                 commands = [fastp_command(run['tools'][tool]['executable'], source, outputs, destination, run['threads'], value)] if tool == 'fastp' else [seqkit_command(run['tools'][tool]['executable'], run['mode'], path, output, run['threads'], value, ids) for path, output in zip(source, outputs)]
             for argv in commands:

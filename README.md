@@ -38,7 +38,7 @@ synthetic multi-lane, manual-pairing, QC-profile and 24-read cohort scenarios un
 
 - **Workspace:** browse connected storage, navigate directories, and select inputs. Switch between **Samples** (grouped detected read pairs) and **Files** (individual files). Incomplete pairs and unrecognized names remain available. Search covers currently loaded sample names and filenames; load more to include additional entries.
 - **Quality Control:** configure FastQC-only, combined FastQC/MultiQC, or existing-report MultiQC runs.
-- **Read Processing:** execute fastp, SeqKit statistics, seeded fraction sampling, length filtering or exact read-ID extraction. Select FASTQs using the existing browser; advanced settings remain optional.
+- **Read Processing:** execute fastp, SeqKit statistics, seeded fraction or exact-count sampling, length filtering or exact read-ID extraction. Confirmed pairs can stay synchronized during filtering and extraction. Select FASTQs using the existing browser; advanced settings remain optional.
 - **Results:** find running, queued, completed, failed, partial, interrupted, or cancelled runs. Open an analysis for **Overview & logs**, **QC metrics**, and **Reports**. The UI displays the actual job state and stage, without estimated progress percentages.
 
 Use **New analysis** in the Workspace, or configure the current selection, to choose FastQC + MultiQC, FastQC only, or MultiQC only and set a bounded thread count. Selecting a confirmed pair in Samples includes both mates, even if directory pagination splits them. Files mode supports individual-read selection; partial selections remain visible when switching views.
@@ -74,8 +74,9 @@ Quick or interrupted scans retain explicit incomplete coverage.
 
 Every processing operation writes to a new analysis directory, never to the
 original FASTQ file. Select published outputs and choose **Use as input** to run
-QC or further processing without copying data. Confirmed paired-end fraction
-sampling validates mate order before and after SeqKit execution. Advanced parameters are optional. See [processing](docs/PROCESSING.md).
+QC or further processing without copying data. Confirmed paired-end sampling, filtering and ID extraction validate mate order
+before and after processing. Exact counts use SeqKit 2.14+ with explicit seed,
+uniform selection without replacement and preserved input order. Advanced parameters are optional. See [processing](docs/PROCESSING.md).
 
 Project catalogs, batch planning, cross-run cohorts, delivery policies, release
 review and optional Kraken2 screening have been removed from the application.

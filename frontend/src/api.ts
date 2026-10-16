@@ -37,13 +37,17 @@ export async function api<T>(
 export const modeLabel = (mode: string) =>
   mode === "fastp"
     ? "fastp processing"
-    : mode.startsWith("seqkit-")
-      ? `SeqKit ${mode.slice(7)}`
-      : mode === "both"
-        ? "FastQC + MultiQC"
-        : mode === "fastqc"
-          ? "FastQC only"
-          : "MultiQC only";
+    : mode === "seqkit-filter"
+      ? "Length filtering"
+      : mode === "seqkit-extract"
+        ? "Extract read identifiers"
+        : mode.startsWith("seqkit-")
+          ? `SeqKit ${mode.slice(7)}`
+          : mode === "both"
+            ? "FastQC + MultiQC"
+            : mode === "fastqc"
+              ? "FastQC only"
+              : "MultiQC only";
 export const bytes = (value: number | null) =>
   value === null
     ? "—"
