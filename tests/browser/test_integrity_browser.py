@@ -44,14 +44,18 @@ def test_full_integrity_readonly_evidence_and_download(workspace,browser):
   # and check the real attachment response rather than treating a timeout as
   # evidence that the backend served a successful download.
   expect(delivery.get_by_text('Refreshing source metadata…',exact=True)).not_to_be_visible()
+  manifest_link=delivery.get_by_role('link',name='Manifest JSON',exact=True)
+  # A download navigation can be reported as aborted by the browser protocol;
+  # inspect headers through the same authenticated context separately, while
+  # retaining the original real click/download/content assertions below.
+  attachment=page.request.get(manifest_link.get_attribute('href'))
+  print('Manifest attachment response:',attachment.status,attachment.headers.get('content-type'),attachment.headers.get('content-disposition'))
+  assert attachment.status==200
+  assert attachment.headers.get('content-disposition','').startswith('attachment;')
   with page.expect_download() as manifest:
-   with page.expect_response(lambda response:response.request.method=='GET' and '/delivery-manifest?' in response.url) as attachment:
-    delivery.get_by_role('link',name='Manifest JSON',exact=True).click()
-   response=attachment.value
-   print('Manifest attachment response:',response.status,response.headers.get('content-type'),response.headers.get('content-disposition'))
-   assert response.status==200
-   assert response.headers.get('content-disposition','').startswith('attachment;')
+   manifest_link.click()
   exported=json.loads(Path(manifest.value.path()).read_text())
+  assert exported==attachment.json()
   assert exported['yields'][0]['totals']['read_pairs']==400
   assert exported['yields'][0]['target_state']=='below_target'
   assert len(exported['reconciliation']['missing'])==1
