@@ -97,9 +97,15 @@ export const batchActive = (state: string) =>
 export function stageLabel(stage: BatchStage): string {
   return `${stage.state.replaceAll("_", " ")}${stage.reused ? " · reused" : ""}${stage.result ? ` · ${stage.result}` : ""}${stage.validation_result ? ` · target ${stage.validation_result.replaceAll("_", " ")}` : ""}`;
 }
-export function selectCohortRows(ids: string[], values: string[]): string[] {
+export function selectCohortRows(
+  ids: string[],
+  values: string[],
+  maximum = 100,
+): string[] {
   const next = [...new Set([...ids, ...values])];
-  if (next.length > 100)
-    throw new Error("Select at most 100 records, or use All project scope.");
+  if (next.length > maximum)
+    throw new Error(
+      `Select at most ${maximum} records, or narrow the selection.`,
+    );
   return next.length === ids.length ? ids : next;
 }

@@ -10,7 +10,7 @@ remain authoritative and compatible. No deployment/scheduler work is included.
 | [#20](https://github.com/PhoenixEmik/QualiDock/issues/20) | Complete; issue closed | [Project model, API, storage decision, backup and rollback](PROJECTS.md). Fully green [CI 38855524020](https://github.com/PhoenixEmik/QualiDock/actions/runs/38855524020), commit `2117168`: backend/frontend/build, genuine QC/tools, Linux resources and 42 browser cases per browser. |
 | [#21](https://github.com/PhoenixEmik/QualiDock/issues/21) | Complete; issue closed | Project Workspace, metadata CRUD/imports, audited file-association corrections and source QC/report drill-down. Fully green [CI 38861150941](https://github.com/PhoenixEmik/QualiDock/actions/runs/38861150941), `291d6ef`; 48 browser cases per target. |
 | [#22](https://github.com/PhoenixEmik/QualiDock/issues/22) | Complete; issue closed | [Batch planning, provenance, limits and API](BATCH-QC.md). Browse-first registration and checkbox cohorts. Fully green [CI 38869158008](https://github.com/PhoenixEmik/QualiDock/actions/runs/38869158008), `328c604`: actual tools/resources, 316 backend + provisioned missing-tool cases, 143 frontend/build, 54 browser cases per target. |
-| [#23](https://github.com/PhoenixEmik/QualiDock/issues/23) | In progress | Comparable cohorts only; exact source metrics and declared outlier rules. |
+| [#23](https://github.com/PhoenixEmik/QualiDock/issues/23) | Implemented; CI acceptance pending | [Compatible cohort projections, exact fractions and declared review rules](COHORT-COMPARISON.md). Actual FastQC low-Q30/restart test passed; 353 full local backend tests passed; 26 focused cohort and 147 frontend tests/build passed. Browser/CI acceptance pending. |
 | [#24](https://github.com/PhoenixEmik/QualiDock/issues/24) | Pending project/release foundations | Allowlisted, approved, verified destination copies; no source writes or unsafe overwrites. Actual shared-filesystem benchmarking remains dependent on authorized storage/data. |
 | [#25](https://github.com/PhoenixEmik/QualiDock/issues/25) | Pending controlled delivery | Append-only lifecycle reporting and advisory retention; no automatic deletion. |
 
@@ -61,3 +61,9 @@ pre-existing scientific artifacts remained unchanged. Native screenshots live
 in CI artifacts and were visually inspected. The browse-first test polling
 client defect was fixed, not skipped. Detailed [batch API and limits](BATCH-QC.md)
 and [name-only / browse-first workflow](PROJECTS.md) document the accepted changes.
+
+#23 local implementation verification: **353 backend tests passed** with actual FastQC,
+MultiQC and Kraken2 available, plus the final **26 focused cohort cases** (including
+new pagination/security regressions). **147 frontend tests** and production build
+passed. The actual low-Q30 FastQC/full-validation/restart regression passed. Browser
+acceptance remains pending and #23 stays open until the CI matrix is green.

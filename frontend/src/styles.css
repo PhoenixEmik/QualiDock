@@ -2771,3 +2771,33 @@ section[aria-label="Analysis jobs"] > .table-scroll {
   overflow-wrap: anywhere;
   white-space: normal;
 }
+
+.cohort-pickers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.cohort-source {
+  margin: 0.5rem 0;
+  overflow-wrap: anywhere;
+}
+.cohort-review {
+  color: var(--warning, #92400e);
+}
+[aria-label="Project cohort comparison"] details {
+  margin: 0.75rem 0;
+}
+[aria-label="Project cohort comparison"] pre {
+  max-width: min(48rem, 70vw);
+  max-height: 18rem;
+  overflow: auto;
+  font-size: 0.75rem;
+}
+[aria-label="Project cohort comparison"] summary {
+  cursor: pointer;
+}
+@media (max-width: 700px) {
+  .cohort-pickers {
+    grid-template-columns: 1fr;
+  }
+}

@@ -282,6 +282,7 @@ def test_project_browse_first_requires_only_name_and_bulk_selects_fastqs(workspa
         expect(page.get_by_role('heading', name='Browse-first project', exact=True)).to_be_visible()
         Path('validation').mkdir(exist_ok=True)
         page.evaluate('window.scrollTo(0,0)')
+        expect(page.get_by_role('table', name='sample records', exact=True).locator('tbody tr')).to_have_count(1)
         page.screenshot(path='validation/native-project-browse-first' + workspace.settings.prefix.replace('/', '-') + '.png', full_page=True)
         # Rerun is a separate existing workflow, not an accidental new intake.
         page.get_by_role('button', name='Browse & select FASTQs', exact=True).click()
@@ -291,3 +292,86 @@ def test_project_browse_first_requires_only_name_and_bulk_selects_fastqs(workspa
         expect(page.get_by_role('region', name='Add FASTQs to project', exact=True)).not_to_be_visible()
 
     assert before == {path: hashlib.sha256(path.read_bytes()).hexdigest() for path in before}
+
+
+def test_cross_run_comparison_actual_q30_declared_rule_exports_reports_and_restart(workspace, browser):
+    import gzip
+    import csv
+    import io
+    # Separate, explicitly synthetic low-quality fixture copies; original reads stay unchanged.
+    before = {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in INPUTS.glob('*.fastq.gz')}
+    with workspace.api() as client:
+        project = client.post('api/projects', json={'fields': {'display_name': 'Browser comparable runs'}}).json()
+        base = 'api/projects/' + project['id']
+        sample = client.post(base + '/samples', json={'fields': {'display_name': 'Declared comparison sample', 'assay': 'RNA-seq fixture', 'library_type': 'Synthetic fixture'}}).json()
+        for label in ['Baseline', 'Intentional low-Q30 synthetic']:
+            directory = workspace.settings.output / ('comparison-input-' + secrets.token_hex(4)); directory.mkdir()
+            paths = []
+            for original in sorted(INPUTS.glob('*.fastq.gz')):
+                path = directory / original.name
+                if label == 'Baseline':
+                    path.write_bytes(original.read_bytes())
+                else:
+                    with gzip.open(original, 'rb') as source, gzip.open(path, 'wb') as destination:
+                        for index, line in enumerate(source):
+                            destination.write(b'5' * len(line.rstrip(b'\r\n')) + b'\n' if index % 4 == 3 else line)
+                paths.append(str(path))
+            analysis = workspace.finish(client, client.post('api/runs', json={'name': label + ' actual QC', 'mode': 'fastqc', 'paths': paths}))
+            sequencing = client.post(base + '/sequencing-runs', json={'fields': {'display_name': label, 'input_stage': 'raw_fastq', 'platform': 'Declared Illumina', 'sequenced_at': '2026-10-16'}}).json()
+            files = client.get('api/runs/' + analysis['id'] + '/delivery').json()['files']
+            assigned = client.post(base + '/analyses', json={'analysis_id': analysis['id'], 'assignments': [{'file_id': file['file_id'], 'sample_id': sample['id'], 'sequencing_run_id': sequencing['id'], 'read': file['read'], 'lane': 'L001', 'chunk': '001', 'source': 'user_confirmed'} for file in files]})
+            assert assigned.status_code == 201, assigned.text
+            assert client.post('api/runs/' + analysis['id'] + '/integrity', json={'mode': 'full'}).status_code == 202
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline:
+                scan = client.get('api/runs/' + analysis['id']).json()['integrity']
+                if scan['state'] not in {'queued', 'running'}: break
+                time.sleep(.1)
+            assert scan['state'] == 'completed' and scan['result'] == 'passed'
+    with browser.new_context(viewport={'width': 1440, 'height': 1100}, accept_downloads=True) as context:
+        page = context.new_page(); login(page, workspace)
+        page.get_by_role('table', name='project records', exact=True).locator('tbody tr').filter(has_text='Browser comparable runs').get_by_role('button', name='Open project', exact=True).click()
+        page.get_by_role('tab', name='Compare runs', exact=True).click()
+        table = page.get_by_role('table', name='Cohort metric values', exact=True)
+        expect(table.locator('tbody tr')).to_have_count(4)
+        page.get_by_text('Context filters & optional review reference', exact=True).click()
+        page.get_by_label('Optional Q30 minimum (%)', exact=True).fill('50')
+        page.get_by_role('button', name='Apply comparison', exact=True).click()
+        expect(table.get_by_text('Review: below declared reference', exact=True)).to_have_count(2)
+        expect(table).to_contain_text('0 / 60000 quality bases')
+        expect(page.get_by_role('img', name='Cross-run Q30 bases; exact source values and denominators available in the provenance table and CSV/TSV', exact=True)).to_be_visible()
+        with page.expect_download() as event:
+            page.get_by_role('button', name='Export cohort CSV', exact=True).click()
+        downloaded = event.value
+        rows = list(csv.DictReader(io.StringIO(Path(downloaded.path()).read_text())))
+        assert len(rows) == 4 and sum(row['rule_result'] == 'review' for row in rows) == 2
+        assert all(row['unit'] == '%' and int(row['denominator']) == 60000 for row in rows)
+        with page.expect_download() as event:
+            page.get_by_role('button', name='Export SVG', exact=True).click()
+        assert '<svg' in Path(event.value.path()).read_text()
+        page.get_by_label('Comparison metric', exact=True).select_option('gc_percent')
+        page.get_by_role('button', name='Apply comparison', exact=True).click()
+        expect(page.get_by_role('region', name='Cohort comparison result', exact=True).get_by_role('heading', name='GC content (FastQC reported)', exact=True)).to_be_visible()
+        expect(table.locator('tbody tr')).to_have_count(4)
+        Path('validation').mkdir(exist_ok=True)
+        page.screenshot(path='validation/native-project-comparison' + workspace.settings.prefix.replace('/', '-') + '.png', full_page=True)
+        page.set_viewport_size({'width': 390, 'height': 844})
+        page.wait_for_function('() => document.documentElement.scrollWidth <= innerWidth', timeout=3000)
+        table.get_by_text('Sources (1)', exact=True).first.click()
+        table.get_by_role('button', name='Original reports', exact=True).first.click()
+        expect(page.get_by_label('Select HTML report', exact=True)).to_be_visible()
+        workspace.stop(); workspace.start()
+        login(page, workspace)
+        page.get_by_role('table', name='project records', exact=True).locator('tbody tr').filter(has_text='Browser comparable runs').get_by_role('button', name='Open project', exact=True).click()
+        page.get_by_role('tab', name='Compare runs', exact=True).click()
+        expect(page.get_by_role('table', name='Cohort metric values', exact=True).locator('tbody tr')).to_have_count(4)
+        # An explicit stage change produces separate compatible groups, not a mixed overlay.
+        with workspace.api() as client:
+            run = client.get(base + '/sequencing-runs').json()['items'][0]
+            assert client.patch(base + '/sequencing-runs/' + run['id'], json={'revision': run['revision'], 'fields': {'input_stage': 'upstream_processed'}}).status_code == 200
+        page.get_by_role('button', name='Apply comparison', exact=True).click()
+        expect(page.get_by_label('Compatible definition', exact=True).locator('option')).to_have_count(2)
+        expect(page.get_by_role('table', name='Cohort metric values', exact=True).locator('tbody tr')).to_have_count(2)
+        page.get_by_text('Unavailable & incompatible evidence (2)', exact=True).click()
+        expect(page.get_by_role('table', name='Excluded cohort evidence', exact=True)).to_contain_text('Different metric definition/tool version/stage/context')
+    assert before == {p: hashlib.sha256(p.read_bytes()).hexdigest() for p in before}

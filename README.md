@@ -144,5 +144,8 @@ audited corrections. Legacy analyses remain unassigned until explicitly linked;
 existing QC and Reports open directly from a project.
 [Project batch QC and validation](docs/BATCH-QC.md) adds browsable checkbox cohorts,
 previewed scopes, safe reuse and queue/cancel/retry with source provenance.
+[Cross-run and project comparisons](docs/COHORT-COMPARISON.md) add compatible
+cohort charts, exact count fractions, optional declared review rules and
+source-linked CSV/TSV exports without rerunning QC.
 See [per-issue implementation status](docs/NEXT-PHASE.md)
 for project UI, batch workflows, cohort analytics and controlled delivery progress.

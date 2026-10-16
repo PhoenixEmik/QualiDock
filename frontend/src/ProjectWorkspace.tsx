@@ -14,6 +14,7 @@ import ProjectEntityForm from "./ProjectEntityForm";
 import ProjectImport from "./ProjectImport";
 import ProjectAssignments from "./ProjectAssignments";
 import ProjectBatch from "./ProjectBatch";
+import ProjectComparison from "./ProjectComparison";
 
 const blankPage = <T,>(): CatalogPage<T> => ({
   items: [],
@@ -813,6 +814,7 @@ function ProjectDetail({
     "Sequencing runs",
     "Analyses & evidence",
     "Batch QC",
+    "Compare runs",
   ];
   const [tab, setTab] = useState(tabs[0]),
     [filter, setFilter] = useState<ProjectEntity | null>(null);
@@ -973,6 +975,9 @@ function ProjectDetail({
             )}
             {tab === tabs[3] && (
               <ProjectBatch projectId={id} openAnalysis={openAnalysis} />
+            )}
+            {tab === tabs[4] && (
+              <ProjectComparison projectId={id} openAnalysis={openAnalysis} />
             )}
           </div>
         </>
