@@ -61,7 +61,14 @@ input/output byte observations and original bytes are retained in `selection.jso
 Full input and output validation is still required. Independent-file filtering
 remains the API default for historical configurations. All-paired selection needs
 no SeqKit executable; mixed/single-end input still uses normal SeqKit filtering.
-Identifier extraction remains independent, and exact-number sampling is not yet
+Identifier extraction also accepts `preserve_pairs: true`. Requests use exact,
+case-sensitive normalized first-token IDs; only terminal `/1` and `/2` are removed,
+matching the integrity validator. Both mates are emitted in original order, once
+per requested ID. Duplicate requests are collapsed. If a requested normalized ID
+occurs repeatedly in the source, extraction fails as ambiguous and publishes
+nothing. Missing IDs are listed in `selection.json` and surfaced as warnings;
+matched records are retained (including a valid empty result when all are missing).
+Independent-file extraction remains unchanged. Exact-count sampling is not yet
 implemented.
 Statistics is read-only and produces no derived FASTQ. No reads are concatenated
 or automatically repaired.

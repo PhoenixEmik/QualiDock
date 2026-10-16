@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import stat
 
-from .integrity import record, snapshot
+from .integrity import record, snapshot, normalize_identifier
 from .store import save_json
 
 VERSION = '1.0'
@@ -17,6 +17,10 @@ VERSION = '1.0'
 def execute(config):
     if len(config['inputs']) != 2 or len(config['snapshots']) != 2 or len(config['outputs']) != 2 or len(set(config['outputs'])) != 2:
         raise ValueError('Synchronized selection requires two inputs and two distinct outputs')
+    operation = config.get('operation', 'length')
+    if operation not in {'length', 'identifiers'}: raise ValueError('Unsupported synchronized selection')
+    requested = dict.fromkeys(normalize_identifier(identifier.encode('utf-8')) for identifier in config.get('identifiers', []))
+    matched = set()
     total = retained = 0
     with ExitStack() as stack:
         sources, streams, writers = [], [], []
@@ -42,7 +46,15 @@ def execute(config):
             if any(read is None for read in reads) or reads[0][0] != reads[1][0]:
                 raise ValueError('Mate identifiers, counts or ordering differ')
             total += 1
-            keep = all(read[1] >= config['min_length'] and (config['max_length'] is None or read[1] <= config['max_length']) for read in reads)
+            if operation == 'length':
+                keep = all(read[1] >= config['min_length'] and (config['max_length'] is None or read[1] <= config['max_length']) for read in reads)
+            else:
+                identifier = reads[0][0]
+                keep = identifier in requested
+                if keep:
+                    if identifier in matched:
+                        raise ValueError(f'Requested identifier occurs more than once; extraction is ambiguous: {identifier[:160]!r}')
+                    matched.add(identifier)
             if keep:
                 for (writer, _), content in zip(writers, parts): writer.writelines(content)
                 retained += 1
@@ -55,9 +67,12 @@ def execute(config):
             if writer is not raw: writer.close()
             raw.flush(); written_bytes.append(raw.tell())
     result = {'processor': 'QualiDock synchronized FASTQ selector', 'version': VERSION,
-              'operation': 'length', 'record_unit': 'read_pairs', 'input_records': total,
+              'operation': operation, 'record_unit': 'read_pairs', 'input_records': total,
               'retained_records': retained, 'removed_records': total-retained,
               'input_bytes_read': read_bytes, 'output_bytes_written': written_bytes}
+    if operation == 'identifiers':
+        result.update(requested_identifiers=len(requested), matched_identifiers=len(matched),
+                      missing_identifiers=[identifier.decode('utf-8') for identifier in requested if identifier not in matched])
     save_json(Path(config['result']), result)
     return result
 
@@ -65,4 +80,9 @@ def execute(config):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config', type=Path, required=True)
-    execute(json.loads(parser.parse_args().config.read_text()))
+    config = json.loads(parser.parse_args().config.read_text())
+    try:
+        execute(config)
+    except (ValueError, OSError, EOFError) as exc:
+        save_json(Path(config['result']), {'error': str(exc)[:1000], 'processor': 'QualiDock synchronized FASTQ selector', 'version': VERSION})
+        raise

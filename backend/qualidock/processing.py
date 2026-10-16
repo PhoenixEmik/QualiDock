@@ -59,7 +59,7 @@ def options(mode, supplied):
 def required(mode, value, operation_units=None):
     if mode == 'fastp':
         return ['fastp', *(['fastqc'] if value['compare_qc'] else []), *(['multiqc'] if value['multiqc'] else [])]
-    if mode == 'seqkit-filter' and value.get('preserve_pairs') and operation_units and all(len(unit['inputs']) == 2 for unit in operation_units):
+    if mode in {'seqkit-filter', 'seqkit-extract'} and value.get('preserve_pairs') and operation_units and all(len(unit['inputs']) == 2 for unit in operation_units):
         return []
     return ['seqkit']
 
@@ -73,7 +73,7 @@ def units(run, value=None):
         if path in seen: continue
         member = relationships.get(path, {})
         paths = [path]
-        if (run['mode'] in {'fastp', 'seqkit-sample'} or run['mode'] == 'seqkit-filter' and value.get('preserve_pairs')) and member.get('paired'):
+        if (run['mode'] in {'fastp', 'seqkit-sample'} or run['mode'] in {'seqkit-filter', 'seqkit-extract'} and value.get('preserve_pairs')) and member.get('paired'):
             mate = relationships.get(member.get('mate'), {})
             if mate.get('mate') != path or mate.get('read') == member.get('read'):
                 raise ValueError('Conflicting paired-end metadata')
@@ -178,14 +178,14 @@ async def execute(manager, run, metrics, errors):
             ids = manager.stores.subdirectory(run['id'], 'processing/private', exist_ok=True) / 'identifiers.txt'
             if run['mode'] == 'seqkit-extract': ids.write_text('\n'.join(value['identifiers']) + '\n')
             tool = 'fastp' if run['mode'] == 'fastp' else 'seqkit'
-            synchronized = run['mode'] == 'seqkit-filter' and len(source) == 2
+            synchronized = run['mode'] in {'seqkit-filter', 'seqkit-extract'} and len(source) == 2
             if synchronized:
                 config = ids.parent / (unit['id'] + '-selection-config.json')
                 result = destination / 'selection.json'
                 save_json(config, {'inputs': list(map(str, source)), 'outputs': list(map(str, outputs)),
                                    'snapshots': [valid[str(path)]['source_snapshot'] for path in source],
                                    'min_length': value['min_length'], 'max_length': value['max_length'],
-                                   'gzip': value['gzip'], 'result': str(result)})
+                                   'gzip': value['gzip'], 'result': str(result), 'operation': 'identifiers' if run['mode'] == 'seqkit-extract' else 'length', 'identifiers': value['identifiers']})
                 commands = [[sys.executable, '-m', 'qualidock.paired_reads', '--config', str(config)]]
                 tool = 'QualiDock synchronized FASTQ selector'
             else:
@@ -193,9 +193,13 @@ async def execute(manager, run, metrics, errors):
             for argv in commands:
                 code = await manager.command(run, tool, argv, directory)
                 if run['id'] in manager.cancelled: return
-                if code: raise ValueError(f'{tool} exited with code {code}; see analysis log')
+                if code:
+                    detail = json.loads(bounded_text(local_file(directory, str(result.relative_to(directory))))).get('error') if synchronized and result.exists() else None
+                    raise ValueError(detail or f'{tool} exited with code {code}; see analysis log')
             if synchronized:
                 unit['selection'] = json.loads(bounded_text(local_file(directory, str(result.relative_to(directory)))))
+                if unit['selection'].get('missing_identifiers'):
+                    run['warnings'].append(f"{unit['id']}: {len(unit['selection']['missing_identifiers'])} requested identifiers not found; see selection.json")
                 if unit['selection']['input_records'] != valid[unit['inputs'][0]]['records_scanned']:
                     raise ValueError('Selection input count differs from validated sources')
             await asyncio.to_thread(manager.checked_inputs, run)

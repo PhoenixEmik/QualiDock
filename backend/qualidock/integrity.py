@@ -47,6 +47,11 @@ def line(stream):
     return value
 
 
+def normalize_identifier(identifier):
+    """Only the terminal conventional mate suffix; never fuzzy/substring matching."""
+    return identifier[:-2] if identifier.endswith((b'/1', b'/2')) else identifier
+
+
 def record(stream, raw=None):
     # Optional bounded record capture lets synchronized selectors preserve the
     # original bytes without maintaining another FASTQ parser.
@@ -94,7 +99,7 @@ def record(stream, raw=None):
             break
     # Exact first tokens, removing only the conventional mate suffix. Order remains
     # in the length-framed rolling digest; no reordering or fuzzy ID matching occurs.
-    normalized = identifier[:-2] if identifier.endswith((b'/1', b'/2')) else identifier
+    normalized = normalize_identifier(identifier)
     return normalized, length, histogram
 
 

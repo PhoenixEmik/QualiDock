@@ -108,3 +108,44 @@ def test_mismatched_or_malformed_sources_never_publish(tmp_path,change):
         assert result['state']=='failed' and result['derived_datasets']==[]
         assert not any(e['tool']=='QualiDock synchronized FASTQ selector' for e in result['executions'])
         assert client.get(f"/api/runs/{result['id']}/download",params={'path':'processing/u0001/processed_R1.fastq.gz'}).status_code==403
+
+
+@pytest.mark.parametrize('identifiers,indices,missing',[
+    (['read3/2','read0/1','read0/2','read0'],[0,3],[]),
+    (['read1','absent'],[1],['absent']),
+    (['read','READ0','read00'],[],['read','READ0','read00']),
+])
+def test_identifier_extraction_normalizes_suffixes_without_fuzzy_matches(tmp_path,identifiers,indices,missing):
+    config=settings(tmp_path);paths,content=paired(tmp_path)
+    original={p:p.read_bytes() for p in paths}
+    with authenticated(config) as client:
+        result=run(client,paths,{'preserve_pairs':True,'identifiers':identifiers},mode='seqkit-extract')
+        assert result['state']=='completed',result.get('error')
+        selected=result['processing']['units'][0]['selection']
+        assert selected['retained_records']==len(indices) and selected['missing_identifiers']==missing
+        assert selected['matched_identifiers']==len(indices)
+        assert all(output(config,result,mate)==b''.join(content[mate][n] for n in indices) for mate in (0,1))
+        assert bool(result['warnings'])==bool(missing)
+        assert result['processing']['units'][0]['output_validation']['pairs'][0]['state']=='passed'
+    assert original=={p:p.read_bytes() for p in paths}
+
+
+def test_duplicate_matching_source_identifiers_fail_instead_of_publishing_duplicates(tmp_path):
+    config=settings(tmp_path);paths,_=paired(tmp_path,ids=['dup','other','dup','unique'])
+    with authenticated(config) as client:
+        result=run(client,paths,{'preserve_pairs':True,'identifiers':['dup/1','dup/2']},mode='seqkit-extract')
+        assert result['state']=='failed' and result['derived_datasets']==[]
+        assert 'ambiguous' in result['error']
+        assert 'more than once' in result['processing']['units'][0]['error']
+        assert not any(p['path'].startswith('processing/u0001/') for p in result['reports'])
+
+
+def test_wrapped_records_and_literal_special_identifiers_are_preserved(tmp_path):
+    config=settings(tmp_path);paths,content=paired(tmp_path,ids=['x.+[a]','other','third','fourth'])
+    for mate,path in enumerate(paths):
+        content[mate][0]=content[mate][0].replace(b'ACGT\n+\nIIII',b'AC\nGT\n+\nII\nII')
+        path.write_bytes(gzip.compress(b''.join(content[mate]),mtime=0))
+    with authenticated(config) as client:
+        result=run(client,paths,{'preserve_pairs':True,'identifiers':['x.+[a]/2']},mode='seqkit-extract')
+        assert result['state']=='completed',result.get('error')
+        assert all(output(config,result,mate)==content[mate][0] for mate in (0,1))
