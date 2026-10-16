@@ -55,7 +55,7 @@ export interface BatchPlan {
     integrity: string;
     output_root: string;
   };
-  skipped: { file_id: string; reason: string }[];
+  skipped: { file_id?: string; entity_id?: string; reason: string }[];
   expected_outputs: string[];
   io_note: string;
 }
@@ -97,9 +97,9 @@ export const batchActive = (state: string) =>
 export function stageLabel(stage: BatchStage): string {
   return `${stage.state.replaceAll("_", " ")}${stage.reused ? " · reused" : ""}${stage.result ? ` · ${stage.result}` : ""}${stage.validation_result ? ` · target ${stage.validation_result.replaceAll("_", " ")}` : ""}`;
 }
-export function addCohortId(ids: string[], value: string) {
-  if (!value || ids.includes(value)) return ids;
-  if (ids.length >= 100)
-    throw new Error("Select at most 100 explicit IDs per filter.");
-  return [...ids, value];
+export function selectCohortRows(ids: string[], values: string[]): string[] {
+  const next = [...new Set([...ids, ...values])];
+  if (next.length > 100)
+    throw new Error("Select at most 100 records, or use All project scope.");
+  return next.length === ids.length ? ids : next;
 }

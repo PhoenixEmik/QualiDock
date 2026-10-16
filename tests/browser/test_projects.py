@@ -116,6 +116,7 @@ def test_project_sample_run_assignment_review_report_navigation_and_restart(work
             assert {item['sample_id'] for item in inventory['associations']} == {first['id'], second['id']}
             assert client.get(base + '/evidence').json()['items'][0]['summary']['review_state'] == 'approved'
         Path('validation').mkdir(exist_ok=True)
+        page.evaluate('window.scrollTo(0,0)')
         page.screenshot(path='validation/native-project-workspace' + workspace.settings.prefix.replace('/', '-') + '.png', full_page=True)
         panel.get_by_role('button', name='Inspect read QC', exact=True).first.click()
         expect(page.get_by_label('Select FASTQ sample', exact=True)).to_have_value(inventory['files'][0]['report_id'])
@@ -163,6 +164,7 @@ def test_large_sample_import_search_edit_keyboard_mobile_and_distinct_projects(w
         page.set_viewport_size({'width': 390, 'height': 844})
         page.wait_for_function('() => document.documentElement.scrollWidth <= innerWidth', timeout=3000)
         Path('validation').mkdir(exist_ok=True)
+        page.evaluate('window.scrollTo(0,0)')
         page.screenshot(path='validation/native-project-mobile' + workspace.settings.prefix.replace('/', '-') + '.png', full_page=True)
         with workspace.api() as client:
             projects = client.get('api/projects').json()['items']
@@ -206,6 +208,7 @@ def test_project_batch_preview_execution_sources_and_restart(workspace, browser)
         sequencing = page.get_by_role('region', name='Choose batch sequencing runs', exact=True)
         sequencing.get_by_role('button', name='Select this page', exact=True).click()
         expect(sequencing).to_contain_text('2 selected')
+        page.get_by_text('QC options', exact=False).click()
         page.get_by_label('Batch QC mode', exact=True).select_option('fastqc')
         page.get_by_role('button', name='Preview batch plan', exact=True).click()
         preview_panel = page.get_by_role('region', name='Batch plan preview', exact=True)
@@ -226,6 +229,7 @@ def test_project_batch_preview_execution_sources_and_restart(workspace, browser)
             assert len(actual['units']) == 2 and all(unit['owned'] for unit in actual['units'])
             assert all(unit['stages']['qc']['state'] == unit['stages']['integrity']['state'] == 'completed' for unit in actual['units'])
         Path('validation').mkdir(exist_ok=True)
+        page.evaluate('window.scrollTo(0,0)')
         page.screenshot(path='validation/native-project-batch' + workspace.settings.prefix.replace('/', '-') + '.png', full_page=True)
         status.get_by_role('button', name='QC metrics', exact=True).first.click()
         expect(page.get_by_role('tab', name='QC metrics', exact=True)).to_have_attribute('aria-selected', 'true')
@@ -262,7 +266,8 @@ def test_project_browse_first_requires_only_name_and_bulk_selects_fastqs(workspa
         with page.expect_response(lambda response: '/start-analysis' in response.url and response.request.method == 'POST') as started:
             page.get_by_role('button', name='Run analysis', exact=True).click()
         assert started.value.status == 201, started.value.text()
-        child = workspace.finish(None, started.value.json())
+        with workspace.api() as qc_client:
+            child = workspace.finish(qc_client, started.value.json())
         with workspace.api() as client:
             project = next(row for row in client.get('api/projects').json()['items'] if row['declared']['display_name'] == 'Browse-first project')
             detail = client.get('api/projects/' + project['id']).json()
@@ -276,6 +281,7 @@ def test_project_browse_first_requires_only_name_and_bulk_selects_fastqs(workspa
         page.get_by_role('tab', name='Projects', exact=True).click()
         expect(page.get_by_role('heading', name='Browse-first project', exact=True)).to_be_visible()
         Path('validation').mkdir(exist_ok=True)
+        page.evaluate('window.scrollTo(0,0)')
         page.screenshot(path='validation/native-project-browse-first' + workspace.settings.prefix.replace('/', '-') + '.png', full_page=True)
         # Rerun is a separate existing workflow, not an accidental new intake.
         page.get_by_role('button', name='Browse & select FASTQs', exact=True).click()

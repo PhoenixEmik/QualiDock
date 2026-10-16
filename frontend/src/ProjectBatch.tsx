@@ -185,118 +185,148 @@ export default function ProjectBatch({
     <section aria-label="Project batch QC">
       <h2>Batch QC & validation</h2>
       <p className="inline-note">
-        Plan from confirmed file identities. Each FASTQ is analyzed
-        independently; lanes are never concatenated. Batch completion describes
-        execution, not release approval. Project-level expected yields are not
-        automatically applied across runs.
+        Select samples or runs, preview the files, then queue QC and validation.
+        FASTQs remain read-only. Batch completion is not release approval.
       </p>
-      <form
-        aria-label="Plan project batch"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void preview();
-        }}
-      >
-        <fieldset disabled={busy || !!active} className="project-fields">
-          <legend>Cohort and existing QC operations</legend>
-          <ProjectCohort
-            projectId={projectId}
-            kind="samples"
-            selected={sampleIds}
-            change={setSampleIds}
-          />
-          <ProjectCohort
-            projectId={projectId}
-            kind="sequencing-runs"
-            selected={runIds}
-            change={setRunIds}
-          />
-          <label className="field-label">
-            QC mode
-            <select
-              aria-label="Batch QC mode"
-              value={mode}
-              onChange={(e) => setMode(e.target.value)}
-            >
-              <option value="both">FastQC + MultiQC</option>
-              <option value="fastqc">FastQC only</option>
-            </select>
-          </label>
-          <label className="field-label">
-            Integrity coverage
-            <select
-              aria-label="Batch integrity coverage"
-              value={integrity}
-              onChange={(e) => setIntegrity(e.target.value)}
-            >
-              <option value="full">Full read-only validation</option>
-              <option value="quick">
-                Quick scan (full coverage may be unavailable)
-              </option>
-              <option value="off">Skip integrity</option>
-            </select>
-          </label>
-          <label className="field-label">
-            Threads
-            <input
-              aria-label="Batch threads"
-              type="number"
-              min={1}
-              max={config?.max_threads ?? 1}
-              value={threads}
-              onChange={(e) => setThreads(Number(e.target.value))}
+      {!attempt && (
+        <form
+          aria-label="Plan project batch"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void preview();
+          }}
+        >
+          <fieldset disabled={busy || !!active} className="project-fields">
+            <legend>Cohort and existing QC operations</legend>
+            <ProjectCohort
+              projectId={projectId}
+              kind="samples"
+              selected={sampleIds}
+              change={setSampleIds}
             />
-          </label>
-          <label className="field-label">
-            Output root
-            <select
-              aria-label="Batch output root"
-              value={output}
-              onChange={(e) => setOutput(e.target.value)}
-            >
-              <option value="">
-                Default: {config?.default_output ?? "configured result store"}
-              </option>
-              {config?.output_locations?.map((location) => (
-                <option
-                  key={location.path}
-                  value={location.path}
-                  disabled={!location.available}
-                >
-                  {location.path}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={reuse}
-              onChange={(e) => setReuse(e.target.checked)}
-            />{" "}
-            Reuse only matching completed evidence
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={checkYield}
-              onChange={(e) => setCheckYield(e.target.checked)}
-            />{" "}
-            Inspect existing scoped yield data/targets
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={demultiplex}
-              onChange={(e) => setDemultiplex(e.target.checked)}
-            />{" "}
-            Check available demultiplexing evidence
-          </label>
-          <button className="button primary" type="submit">
-            {busy ? "Planning…" : "Preview batch plan"}
-          </button>
-        </fieldset>
-      </form>
+            <ProjectCohort
+              projectId={projectId}
+              kind="sequencing-runs"
+              selected={runIds}
+              change={setRunIds}
+            />
+            <details className="project-wide">
+              <summary>
+                QC options ·{" "}
+                {mode === "both" ? "FastQC + MultiQC" : "FastQC only"} ·{" "}
+                {integrity === "off"
+                  ? "integrity skipped"
+                  : `${integrity} integrity`}
+              </summary>
+              <div className="project-fields">
+                <label className="field-label">
+                  QC mode
+                  <select
+                    aria-label="Batch QC mode"
+                    value={mode}
+                    onChange={(e) => setMode(e.target.value)}
+                  >
+                    <option value="both">FastQC + MultiQC</option>
+                    <option value="fastqc">FastQC only</option>
+                  </select>
+                </label>
+                <label className="field-label">
+                  Integrity coverage
+                  <select
+                    aria-label="Batch integrity coverage"
+                    value={integrity}
+                    onChange={(e) => setIntegrity(e.target.value)}
+                  >
+                    <option value="full">Full read-only validation</option>
+                    <option value="quick">
+                      Quick scan (full coverage may be unavailable)
+                    </option>
+                    <option value="off">Skip integrity</option>
+                  </select>
+                </label>
+                <label className="field-label">
+                  Threads
+                  <input
+                    aria-label="Batch threads"
+                    type="number"
+                    min={1}
+                    max={config?.max_threads ?? 1}
+                    value={threads}
+                    onChange={(e) => setThreads(Number(e.target.value))}
+                  />
+                </label>
+                <label className="field-label">
+                  Output root
+                  <select
+                    aria-label="Batch output root"
+                    value={output}
+                    onChange={(e) => setOutput(e.target.value)}
+                  >
+                    <option value="">
+                      Default:{" "}
+                      {config?.default_output ?? "configured result store"}
+                    </option>
+                    {config?.output_locations?.map((location) => (
+                      <option
+                        key={location.path}
+                        value={location.path}
+                        disabled={!location.available}
+                      >
+                        {location.path}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={reuse}
+                    onChange={(e) => setReuse(e.target.checked)}
+                  />{" "}
+                  Reuse only matching completed evidence
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={checkYield}
+                    onChange={(e) => setCheckYield(e.target.checked)}
+                  />{" "}
+                  Inspect existing scoped yield data/targets
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={demultiplex}
+                    onChange={(e) => setDemultiplex(e.target.checked)}
+                  />{" "}
+                  Check available demultiplexing evidence
+                </label>
+                <p className="inline-note project-wide">
+                  Yield uses saved analysis-local groups and explicit targets,
+                  not unscoped project expectations.
+                </p>
+              </div>
+            </details>
+            <div className="project-actions project-wide">
+              <button className="button primary" type="submit">
+                {busy ? "Planning…" : "Preview batch plan"}
+              </button>
+            </div>
+          </fieldset>
+        </form>
+      )}
+      {attempt && !batchActive(attempt.state) && (
+        <button
+          className="button small"
+          onClick={() => {
+            setAttempt(null);
+            setPlan(null);
+            setRequest(null);
+          }}
+        >
+          Plan another batch
+        </button>
+      )}
       {error && (
         <p className="error" role="alert">
           {error}
@@ -308,9 +338,14 @@ export default function ProjectBatch({
             Plan · {plan.file_count} FASTQs · {plan.units.length} run/chunk
             units
           </h3>
-          <p className="inline-note project-hash">
-            {plan.id} · fingerprint {plan.fingerprint}
-          </p>
+          <details>
+            <summary className="inline-note">
+              Plan reference & fingerprint
+            </summary>
+            <p className="inline-note project-hash">
+              {plan.id} · fingerprint {plan.fingerprint}
+            </p>
+          </details>
           <p>
             {Object.entries(plan.tools)
               .map(([name, version]) => `${name} ${version}`)
@@ -382,7 +417,7 @@ export default function ProjectBatch({
               <ul>
                 {plan.skipped.map((row, index) => (
                   <li key={index}>
-                    {row.file_id} · {row.reason}
+                    {row.file_id || row.entity_id} · {row.reason}
                   </li>
                 ))}
               </ul>
@@ -406,7 +441,10 @@ export default function ProjectBatch({
           aria-live="polite"
         >
           <h3>Batch {attempt.state}</h3>
-          <p className="project-hash">{attempt.id}</p>
+          <details>
+            <summary className="inline-note">Batch reference</summary>
+            <p className="project-hash">{attempt.id}</p>
+          </details>
           <p>
             Release: {attempt.release_state.replaceAll("_", " ")}. No approval
             is created by this operation.
@@ -427,30 +465,32 @@ export default function ProjectBatch({
                     </tr>
                   </thead>
                   <tbody>
-                    {Object.entries(unit.stages).map(([name, stage]) => (
-                      <tr key={name}>
-                        <th>{name}</th>
-                        <td>{stageLabel(stage)}</td>
-                        <td>
-                          {stage.reason || "—"}
-                          {stage.values && (
-                            <details>
-                              <summary>
-                                Reported yield values and scoped targets
-                              </summary>
-                              {stage.values.map((value) => (
-                                <p key={value.sample_id}>
-                                  {value.sample_name} ·{" "}
-                                  {value.totals.reads ?? "unavailable"} reads ·{" "}
-                                  {value.totals.bases ?? "unavailable"} bases ·{" "}
-                                  {value.explanation}
-                                </p>
-                              ))}
-                            </details>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {(["qc", "integrity", "yield", "demultiplex"] as const)
+                      .map((name) => [name, unit.stages[name]] as const)
+                      .map(([name, stage]) => (
+                        <tr key={name}>
+                          <th>{name}</th>
+                          <td>{stageLabel(stage)}</td>
+                          <td>
+                            {stage.reason || "—"}
+                            {stage.values && (
+                              <details>
+                                <summary>
+                                  Reported yield values and scoped targets
+                                </summary>
+                                {stage.values.map((value) => (
+                                  <p key={value.sample_id}>
+                                    {value.sample_name} ·{" "}
+                                    {value.totals.reads ?? "unavailable"} reads
+                                    · {value.totals.bases ?? "unavailable"}{" "}
+                                    bases · {value.explanation}
+                                  </p>
+                                ))}
+                              </details>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               </div>
@@ -458,7 +498,8 @@ export default function ProjectBatch({
                 <p>
                   Scanning{" "}
                   {unit.integrity_progress.current_file.name || "source file"} ·{" "}
-                  {unit.integrity_progress.current_file.records_scanned ?? 0}{" "}
+                  {unit.integrity_progress.current_file.records_scanned ??
+                    "unavailable"}{" "}
                   records read so far; full coverage is not yet established.
                 </p>
               )}
@@ -552,7 +593,7 @@ export default function ProjectBatch({
             <tbody>
               {history?.items.map((row) => (
                 <tr key={row.id}>
-                  <td>{row.id}</td>
+                  <td title={row.id}>Batch {row.id.slice(-8)}</td>
                   <td>{row.state}</td>
                   <td>{date(row.created_at)}</td>
                   <td>{row.finished_at ? date(row.finished_at) : "—"}</td>

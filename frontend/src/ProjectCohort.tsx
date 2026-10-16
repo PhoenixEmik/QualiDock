@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "./api";
+import { selectCohortRows } from "./batch";
 import type { CatalogPage, ProjectEntity } from "./project";
 
 export default function ProjectCohort({
@@ -41,15 +42,12 @@ export default function ProjectCohort({
   }, [projectId, kind, search, offset]);
   const ids = selected ?? [];
   const add = (values: string[]) => {
-    const next = [...new Set([...ids, ...values])];
-    if (next.length > 100) {
-      setError(
-        "This page would exceed 100 selected records. Select fewer rows, or use All project scope.",
-      );
-      return;
+    try {
+      change(selectCohortRows(ids, values));
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Cannot update selection.");
     }
-    setError("");
-    change(next);
   };
   const visible = page?.items.map((row) => row.id) ?? [];
   return (

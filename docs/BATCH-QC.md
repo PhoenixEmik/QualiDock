@@ -6,6 +6,11 @@ Selections combine as an intersection. Select this page adds up to 25 rows;
 selection is retained across search/pages (100 IDs per filter). Clear selection
 is empty, not an implicit request to process the entire project.
 
+QC options are optional and collapsed by default; the preview always displays
+the actual mode, tools and coverage before confirmation. After submission the
+planning form is hidden so execution/results remain primary. Choose **Plan another
+batch** for a new configuration. Full internal references remain expandable.
+
 Preview before queueing. The preview shows every eligible FASTQ reference, its
 sample/run/lane/chunk/read metadata, actual detected tool versions, threads,
 output root, integrity coverage, expected outputs and reuse/rerun reasons.
@@ -57,8 +62,10 @@ continue to bound processes, CPU, memory and tool concurrency, including manual
 analyses. No scheduler adapter or separate execution engine is introduced.
 
 A stable idempotency key returns the same attempt after a lost network response.
-Duplicate active fingerprints (including separately previewed equivalent plans)
-are rejected. Re-submission of an already-used plan requires an explicit terminal
+Duplicate active work (including equivalent All/explicit scopes or different
+selection order) is rejected. Changes to source analysis-local delivery targets
+or demultiplexing configuration also invalidate an earlier preview. Explicitly
+selected samples/runs with no confirmed FASTQ references are listed as skipped. Re-submission of an already-used plan requires an explicit terminal
 attempt ID as `retry_of`, with a new key. Retry revalidates the original cohort and
 can resume matching completed owned children; cancelled/interrupted/failed child
 results are retained and new QC gets a new ID. A changed cohort/source/tool/resource
