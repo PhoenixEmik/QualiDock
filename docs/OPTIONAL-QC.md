@@ -130,3 +130,6 @@ namespaces. The FastQ Screen module supplies its own plot/raw data and source ma
 without manufacturing General Statistics columns. Unsupported schemas or missing
 source mappings remain explicit partial-report failures; successful original QC
 results are retained. No alternative native MultiQC plot renderer is introduced.
+The workflow explicitly enables `preserve_module_raw_data`, required to retain
+these original module values in the MultiQC 1.25.1 structured JSON (its default
+is false). This changes data export retention, not mapping or QC calculations.

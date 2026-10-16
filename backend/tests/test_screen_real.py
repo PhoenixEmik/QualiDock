@@ -92,6 +92,8 @@ def test_actual_screen_multiqc_source_mapping_and_independent_mates(config,tmp_p
         structured=json.loads((config.output/run['id']/'multiqc/multiqc_data/multiqc_data.json').read_text())
         actual=structured['report_saved_raw_data']['multiqc_fastq_screen']
         assert len(actual)==2 and all(row['total_reads']==20 and row['alpha counts']==12 for row in actual.values())
+        configuration=json.loads((config.output/run['id']/'multiqc-config.json').read_text())
+        assert configuration['preserve_module_raw_data'] is True
         assert len({mapping['multiqc_name'] for mapping in run['report_input_map'].values()})==2
 
 

@@ -125,7 +125,8 @@ async def execute(manager, run, metrics, errors):
         reports = [directory/row['report'] for row in run['qc']['results'] if row['state'] == 'completed']
         if reports:
             manager.update(run, stage='MultiQC · FastQ Screen')
-            problem = await multiqc.execute(manager, run, reports, options=['--dirs', '--dirs-depth', '1'])
+            problem = await multiqc.execute(manager, run, reports, options=['--dirs', '--dirs-depth', '1'],
+                                            config={'preserve_module_raw_data': True})
             if problem:
                 errors.append(problem)
             elif run['id'] not in manager.cancelled:
