@@ -33,6 +33,9 @@ For more test inputs, run `python3 scripts/prepare-test-data.py --download-publi
 This adds small, checksum-verified public yeast RNA-seq subsets and clearly labeled
 synthetic multi-lane, manual-pairing, QC-profile and 24-read cohort scenarios under
 `example-data/testing`. See [test datasets and provenance](docs/TEST-DATA.md).
+Add `--download-extra` for eight more pinned fixtures (~42 MB): MiSeq/NovaSeq
+amplicons, Nanopore 16S, simulated bacterial reads and a single-end small-RNA
+pipeline input. The dataset guide documents verified pairing and provenance limits.
 
 ## Workspace
 

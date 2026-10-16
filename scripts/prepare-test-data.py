@@ -91,7 +91,31 @@ def fetch(url, limit):
     return data
 
 
-def prepare(output, count, download):
+def public_files(output, folder, source, download, kind='public-upstream-subset'):
+    """Preserve upstream bytes and verify pinned sizes/checksums, also on reuse."""
+    records = []
+    for item in source['files']:
+        target = output / folder / item['name']
+        if target.is_symlink():
+            raise ValueError(f'Refusing symlink destination: {target}')
+        if not download and not target.exists():
+            continue
+        url = f"https://raw.githubusercontent.com/{source['repository']}/{source['commit']}/{item['path']}"
+        data = target.read_bytes() if target.exists() else fetch(url, item['size'])
+        if len(data) != item['size'] or digest(data) != item['sha256']:
+            raise ValueError(f'Public input checksum mismatch: {item["name"]}')
+        save(target, data)
+        records.append({**item, 'path': folder + '/' + item['name'], 'kind': kind, 'url': url,
+                        'repository': source['repository'], 'commit': source['commit']})
+    if download and records:
+        for name in ('README.md', 'LICENSE'):
+            target = output / folder / ('UPSTREAM-' + name)
+            if not target.exists():
+                save(target, fetch(f"https://raw.githubusercontent.com/{source['repository']}/{source['commit']}/{name}", 128 * 1024))
+    return records
+
+
+def prepare(output, count, download, extra=False):
     output = output.expanduser().absolute()
     sources = json.loads(SOURCE.read_text())
     records = []
@@ -100,25 +124,9 @@ def prepare(output, count, download):
         data = synthetic_fastq(sample, read, count, profile, seed)
         save(output / relative, data)
         records.append({'path': relative, 'kind': 'synthetic', 'reads': count, 'profile': profile, 'sha256': digest(data), 'bytes': len(data)})
-    public = output / 'public-yeast-rnaseq'
-    for item in sources['files']:
-        target = public / item['name']
-        if not download and not target.exists():
-            continue
-        url = f"https://raw.githubusercontent.com/{sources['repository']}/{sources['commit']}/{item['path']}"
-        if not target.exists():
-            data = fetch(url, item['size'])
-            if len(data) != item['size'] or digest(data) != item['sha256']:
-                raise ValueError(f'Public download checksum mismatch: {item["name"]}')
-            save(target, data)
-        if target.is_symlink() or digest(target.read_bytes()) != item['sha256']:
-            raise ValueError(f'Existing public input checksum mismatch: {target}')
-        records.append({**item, 'path': 'public-yeast-rnaseq/' + item['name'], 'kind': 'public-upstream-subset', 'url': url})
-    if download and any(record['kind'] == 'public-upstream-subset' for record in records):
-        for name in ('README.md', 'LICENSE'):
-            target = public / ('UPSTREAM-' + name)
-            if not target.exists():
-                save(target, fetch(f"https://raw.githubusercontent.com/{sources['repository']}/{sources['commit']}/{name}", 128 * 1024))
+    records.extend(public_files(output, 'public-yeast-rnaseq', sources, download))
+    for dataset in sources.get('additional_datasets', []):
+        records.extend(public_files(output, dataset['folder'], dataset, extra, dataset['kind']))
     guide = '''# QualiDock test inputs
 
 Synthetic folders contain generated reads, not biological samples. File naming,
@@ -164,7 +172,8 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, default=Path('example-data/testing'))
     parser.add_argument('--reads', type=int, default=2000)
     parser.add_argument('--download-public', action='store_true', help='Fetch six pinned, checksum-verified yeast RNA-seq FASTQs (~13 MB)')
+    parser.add_argument('--download-extra', action='store_true', help='Fetch eight additional pinned FASTQs: amplicon, small RNA, ONT and simulated bacterial reads (~42 MB); see docs/TEST-DATA.md')
     args = parser.parse_args()
     if not 1 <= args.reads <= 100000:
         parser.error('--reads must be between 1 and 100000')
-    prepare(args.output, args.reads, args.download_public)
+    prepare(args.output, args.reads, args.download_public, args.download_extra)

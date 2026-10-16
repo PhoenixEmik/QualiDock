@@ -44,5 +44,142 @@
       "git_blob_sha1": "f9bc1113e93c9bbbcac728c4e9abd445cabbde87",
       "sha256": "4a04e6de648091eb42d703f67489d87e929544af478ce5e28b0c790f79a82a5d"
     }
+  ],
+  "additional_datasets": [
+    {
+      "folder": "public-miseq-amplicon",
+      "description": "MiSeq v2 amplicon test subset",
+      "kind": "public-upstream-subset",
+      "repository": "nf-core/test-datasets",
+      "commit": "3cc618ea14e87fd944c30dd37acbef08ad01d590",
+      "pair_validation": "not_confirmed",
+      "notes": "SRA-style .1/.2 terminal IDs are not normalized by QualiDock. Use individual-file QC; pair-preserving processing must reject this input.",
+      "files": [
+        {
+          "name": "1_S103_L001_R1_001.fastq.gz",
+          "path": "testdata/1_S103_L001_R1_001.fastq.gz",
+          "size": 267420,
+          "git_blob_sha1": "62185f26025510e93490ec72c8d56239c71a6b41",
+          "sha256": "6121840c7f58f9992a4ed8fbd83d1e84497305481682ccaaa4e05f77f65c037e",
+          "records": 2500,
+          "min_length": 35,
+          "max_length": 250
+        },
+        {
+          "name": "1_S103_L001_R2_001.fastq.gz",
+          "path": "testdata/1_S103_L001_R2_001.fastq.gz",
+          "size": 298247,
+          "git_blob_sha1": "07cf29beee6eb0ef67886da058848c236883e877",
+          "sha256": "96dfe650ec086ece5256b7315e7edbe4665b0ceba251481bd23bd5b0fefd4ab5",
+          "records": 2500,
+          "min_length": 35,
+          "max_length": 250
+        }
+      ]
+    },
+    {
+      "folder": "public-novaseq-amplicon",
+      "description": "NovaSeq binned-quality amplicon test subset",
+      "kind": "public-upstream-subset",
+      "repository": "nf-core/test-datasets",
+      "commit": "3cc618ea14e87fd944c30dd37acbef08ad01d590",
+      "pair_validation": "verified",
+      "notes": "Upstream amplicon fixture with binned quality values; not an unbiased whole-run QC sample.",
+      "files": [
+        {
+          "name": "novaseq1.r1.fq.gz",
+          "path": "testdata/novaseq1.r1.fq.gz",
+          "size": 156758,
+          "git_blob_sha1": "be2931d2875683f349935950b7c1bb41cbe6b5fe",
+          "sha256": "0b5aa6b7907c1473bb1aebd673a3e4e44a727572b94ebe1a0c93a7cbf9bccb6c",
+          "records": 3000,
+          "min_length": 228,
+          "max_length": 228
+        },
+        {
+          "name": "novaseq1.r2.fq.gz",
+          "path": "testdata/novaseq1.r2.fq.gz",
+          "size": 159455,
+          "git_blob_sha1": "9d4e02d5e1e357a785b8e8fdc136446ebefff59a",
+          "sha256": "04c69497467d5e997a025e22c14a8bd042cd8f21c9348881001f015a5b54a4ee",
+          "records": 3000,
+          "min_length": 229,
+          "max_length": 229
+        }
+      ]
+    },
+    {
+      "folder": "public-nanopore-16s",
+      "description": "Nanopore Zymo D6305 16S mock-community subset",
+      "kind": "public-upstream-subset",
+      "repository": "nf-core/test-datasets",
+      "commit": "3cc618ea14e87fd944c30dd37acbef08ad01d590",
+      "pair_validation": "single_end",
+      "notes": "Already filtered upstream with Chopper -q 16, then first 1000 reads. For Inspector, statistics and variable-length QC; short-read fastp defaults are not a recommended ONT workflow.",
+      "files": [
+        {
+          "name": "Std1_ZymoD6305_16SBarcodingKit24V14_SQK-16S114.24_r10.4.1_sup.chopper.1000.fastq.gz",
+          "path": "testdata/Std1_ZymoD6305_16SBarcodingKit24V14_SQK-16S114.24_r10.4.1_sup.chopper.1000.fastq.gz",
+          "size": 1208593,
+          "git_blob_sha1": "54eceedfb64fd3baf32abebf0e0e487ce6044088",
+          "sha256": "cf53d784b470dec4553829ea1baa5796c6f84fa6ddf011b1437d23ef8b917f4c",
+          "records": 1000,
+          "min_length": 229,
+          "max_length": 3173
+        }
+      ]
+    },
+    {
+      "folder": "public-bacteroides",
+      "description": "Upstream synthetic Bacteroides fragilis test pair",
+      "kind": "upstream-synthetic",
+      "repository": "nf-core/test-datasets",
+      "commit": "76179c1c8765b0233ba72d3fb82bc142f1d92b13",
+      "pair_validation": "verified",
+      "notes": "Simulated genomic reads according to the modules README, not experimental bacterial sequencing.",
+      "files": [
+        {
+          "name": "test2_1.fastq.gz",
+          "path": "data/genomics/prokaryotes/bacteroides_fragilis/illumina/fastq/test2_1.fastq.gz",
+          "size": 1600516,
+          "git_blob_sha1": "faa5dce6a9db1e54f60be8df21387d4370b7704b",
+          "sha256": "33fde0b36996de4c28a2014023a2cf0c94bf936f66b33885d7b4931d6da20ab1",
+          "records": 24993,
+          "min_length": 151,
+          "max_length": 151
+        },
+        {
+          "name": "test2_2.fastq.gz",
+          "path": "data/genomics/prokaryotes/bacteroides_fragilis/illumina/fastq/test2_2.fastq.gz",
+          "size": 1807647,
+          "git_blob_sha1": "bf99801a06e39abea6739df4cbd0a5604100d9f6",
+          "sha256": "d89daf678b222c5e43ab1c1f78ac7fcf7de008351748647370d1ac10fa6433bc",
+          "records": 24993,
+          "min_length": 151,
+          "max_length": 151
+        }
+      ]
+    },
+    {
+      "folder": "public-smallrna",
+      "description": "nf-core small-RNA pipeline single-end test input",
+      "kind": "public-upstream-test-fixture",
+      "repository": "nf-core/test-datasets",
+      "commit": "d5a0422243620ef4e32c19812ab12edb5dfc882e",
+      "pair_validation": "single_end",
+      "notes": "Upstream fixture from smrnaseq; original study/accession is not documented in the selected upstream README. No biological condition or full-run representativeness is asserted.",
+      "files": [
+        {
+          "name": "sample_1.fastq.gz",
+          "path": "testdata/sample_1.fastq.gz",
+          "size": 36417994,
+          "git_blob_sha1": "17643e229f00186317318b2ffdfcea0b1171d024",
+          "sha256": "ee1fc6f0213515c1b5d0253ff37e1ad84207c43c059f73011baefd1c97ea9208",
+          "records": 1000000,
+          "min_length": 150,
+          "max_length": 150
+        }
+      ]
+    }
   ]
 }
