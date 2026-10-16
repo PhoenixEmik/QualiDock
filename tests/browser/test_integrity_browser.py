@@ -46,6 +46,15 @@ def test_full_integrity_readonly_evidence_and_download(workspace,browser):
   assert exported['yields'][0]['target_state']=='below_target'
   assert len(exported['reconciliation']['missing'])==1
   assert str(workspace.settings.output) not in json.dumps(exported)
+  delivery.get_by_text('Illumina demultiplexing evidence · Not evaluated',exact=True).click()
+  upstream=delivery.get_by_role('region',name='Illumina demultiplexing evidence',exact=True)
+  fixture_dir=Path(__file__).resolve().parents[2]/'backend/tests/fixtures/demultiplex'
+  upstream.get_by_label('Illumina evidence CSV files',exact=True).set_input_files([str(fixture_dir/name) for name in ['SampleSheet.csv','Demultiplex_Stats.csv','Index_Hopping_Counts.csv']])
+  upstream.get_by_role('button',name='Import Illumina evidence',exact=True).click()
+  expect(upstream.get_by_role('status')).to_contain_text('Sample-sheet reconciliation: matched')
+  expect(upstream).to_contain_text('210615_A00302_0309_AHY3CLDSXY')
+  upstream.get_by_text('Reported index-hopping metrics · 4 rows',exact=True).click()
+  expect(upstream).to_contain_text('Not reported')
   Path('validation').mkdir(exist_ok=True)
   page.screenshot(path='validation/native-delivery'+workspace.settings.prefix.replace('/','-')+'.png',full_page=True)
   page.set_viewport_size({'width':390,'height':844})

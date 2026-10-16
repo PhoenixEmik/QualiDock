@@ -1,4 +1,5 @@
 import asyncio
+import base64
 from contextlib import asynccontextmanager
 from copy import deepcopy
 import hashlib
@@ -73,6 +74,17 @@ class YieldConfigRequest(BaseModel):
     input_stage: Literal['unknown','raw_fastq','upstream_processed'] = 'unknown'
     processing_notes: str = Field(default='',max_length=2000)
     targets: list[QuantityTarget] = Field(default_factory=list,max_length=500)
+
+
+class EvidenceDocument(BaseModel):
+    name: Literal['SampleSheet.csv','Demultiplex_Stats.csv','Quality_Metrics.csv','Index_Hopping_Counts.csv','fastq_list.csv']
+    content_base64: str = Field(max_length=2800000)
+
+
+class DemultiplexRequest(BaseModel):
+    documents: list[EvidenceDocument] = Field(min_length=1,max_length=5)
+    declared_tool_version: str = Field(default='',max_length=120)
+    declared_run_id: str = Field(default='',max_length=200)
 
 
 class AnalysisRequest(BaseModel):
@@ -265,6 +277,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def yield_targets(run_id: str, body: YieldConfigRequest):
         data = await asyncio.to_thread(manager.delivery.inspect, run_id, deepcopy(manager.runs[run_id]))
         return manager.delivery.targets(run_id,body.model_dump(),{entry['sample_id'] for entry in data['files']})
+
+    @app.post('/api/runs/{run_id}/demultiplex')
+    async def demultiplex(run_id: str, body: DemultiplexRequest):
+        if len({item.name for item in body.documents}) != len(body.documents):
+            raise ValueError('Duplicate evidence document names')
+        documents = {item.name:base64.b64decode(item.content_base64,validate=True) for item in body.documents}
+        return manager.delivery.import_demultiplex(run_id,documents,body.declared_tool_version,body.declared_run_id)
 
     @app.get('/api/runs/{run_id}/delivery-manifest')
     async def delivery_manifest(run_id: str, format: Literal['json','csv']='json', mode: Literal['spreadsheet','verbatim']='spreadsheet', include_paths: bool=False):

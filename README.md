@@ -128,3 +128,5 @@ Licensed under [GNU GPLv3](LICENSE). FastQC, MultiQC, Apache ECharts, and other 
 Delivery inventories, independent expected-file reconciliation and explicit per-sample quantity targets are available in analysis Overview & logs. See [Delivery manifests and yield](docs/DELIVERY.md) for exact count definitions, privacy defaults and CSV/JSON schemas.
 
 MultiQC-only imports additionally support existing fastp JSON reports, without running fastp or processing FASTQs. See [QC report imports](docs/QC-IMPORTS.md) for the explicit allowlist, provenance and limitations.
+
+Existing Illumina sample sheets and verified BCL Convert CSV schemas can be imported as read-only upstream evidence. See [Demultiplexing evidence](docs/DEMULTIPLEXING.md) for supported versions, exact denominators and unavailable measurements.

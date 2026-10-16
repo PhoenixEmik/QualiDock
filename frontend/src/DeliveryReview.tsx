@@ -5,6 +5,7 @@ import type { ExportMode } from "./rawExport";
 import type { DeliveryData, QuantityMetric, TargetDraft } from "./delivery";
 import { configuredTargets, quantity } from "./delivery";
 import ExportModeSelect from "./ExportModeSelect";
+import DemultiplexReview from "./DemultiplexReview";
 
 export default function DeliveryReview({
   run,
@@ -333,6 +334,14 @@ export default function DeliveryReview({
                   </>
                 )}
               </details>
+              <DemultiplexReview
+                runId={run.id}
+                evidence={data.demultiplex}
+                refresh={() => {
+                  setReload((value) => value + 1);
+                  refresh();
+                }}
+              />
               {!!data.yields.length && (
                 <details open>
                   <summary>Sample quantity targets</summary>

@@ -250,6 +250,7 @@ def export_data(data, include_paths=False):
     return {'schema_version':1,'analysis_id':data['analysis_id'],'name':data['name'],'source_kind':data['source_kind'],
             'paths':'private absolute source paths included' if include_paths else 'relative references only; FASTQ files are not copied',
             'files':files,'notices':data['notices'],'reconciliation':reconciliation,'yields':data['yields'],
+            'upstream_demultiplexing':{key:data.get('demultiplex',{}).get(key) for key in ('state','run_id','declared_run_id','reported_tool_version','declared_tool_version','version_source','reconciliation_state','lane_totals')} if data.get('demultiplex') else {'state':'not_evaluated'},
             'input_stage':data['input_stage'],'processing_notes':data['processing_notes'],'tool_versions':data['tool_versions']}
 
 

@@ -11,6 +11,7 @@ from .integrity import snapshot
 from .metrics import bounded_text
 from .manager import now, save_json
 from .files import PathViolation
+from .demultiplex import parse_documents, map_fastqs
 
 
 class DeliveryService:
@@ -51,6 +52,14 @@ class DeliveryService:
                       input_stage=target_config.get('input_stage','unknown'), processing_notes=target_config.get('processing_notes',''),
                       assay=target_config.get('assay','Unspecified'), delivery_revision=run.get('delivery_revision',0),
                       tool_versions={name:info.get('version') for name,info in run.get('tools',{}).items()})
+        result['demultiplex'] = None
+        if run.get('demultiplex'):
+            try:
+                evidence = json.loads(bounded_text(manager.artifact(run_id,run['demultiplex']['artifact'])))
+                evidence['file_mappings'] = map_fastqs(evidence,result['files'])
+                result['demultiplex'] = evidence
+            except (OSError,ValueError,KeyError):
+                result['demultiplex'] = {'state':'not_evaluated','message':'Saved demultiplexing evidence is missing, unsupported or inaccessible'}
         result['yields'] = yields(result['files'],context,target_config.get('targets',[]))
         return result
 
@@ -106,3 +115,26 @@ class DeliveryService:
                 raise ValueError('Assay/processing notes exceed the supported length')
         self.manager.update(run,yield_config={'schema_version':1,**config,'updated_at':now(),'updated_by':self.actor()},delivery_revision=run.get('delivery_revision',0)+1)
         return run['yield_config']
+
+    def import_demultiplex(self,run_id,documents,declared_version='',declared_run_id=''):
+        run = self.writable(run_id)
+        evidence = parse_documents(documents,declared_version,declared_run_id)
+        destination = self.directory(run_id) / ('demultiplex-' + uuid.uuid4().hex)
+        destination.mkdir(mode=0o700)
+        for document in evidence['documents']:
+            name = document['name']
+            target = destination / name
+            fd = os.open(target,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+            with os.fdopen(fd,'wb') as stream:
+                stream.write(documents[name]);stream.flush();os.fsync(stream.fileno())
+            document['artifact'] = str(target.relative_to(self.manager.directory(run_id)))
+        evidence.update(imported_at=now(),imported_by=self.actor())
+        path = destination / 'evidence.json'
+        save_json(path,evidence)
+        previous = run.get('demultiplex_history',[])
+        if run.get('demultiplex'):previous = [*previous,run['demultiplex']]
+        record = {'state':evidence['state'],'artifact':str(path.relative_to(self.manager.directory(run_id))),
+                  'imported_at':evidence['imported_at'],'run_id':evidence['run_id'],'declared_tool_version':declared_version or None}
+        self.manager.update(run,demultiplex=record,demultiplex_history=previous,delivery_revision=run.get('delivery_revision',0)+1)
+        self.manager.refresh_reports(run)
+        return evidence

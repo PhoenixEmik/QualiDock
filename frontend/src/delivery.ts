@@ -1,3 +1,4 @@
+import type { DemultiplexEvidence } from "./demultiplex";
 /** Delivery quantities are source counts, independent of FastQC module verdicts. */
 export type QuantityMetric = "reads" | "read_pairs" | "bases";
 export interface QuantityTarget {
@@ -44,6 +45,7 @@ export interface ReconciliationEntry {
   observed?: string | number;
 }
 export interface DeliveryData {
+  demultiplex?: DemultiplexEvidence | null;
   analysis_id: string;
   name: string;
   source_kind: string;
