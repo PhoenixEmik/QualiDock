@@ -29,6 +29,7 @@ def test_bounded_history_pagination_polling_reconnect_and_selected_detail(worksp
         page.get_by_role('button',name='Previous analyses',exact=True).click()
         expect(table.locator('tbody tr')).to_have_count(25)
         page.get_by_label('Search analyses',exact=True).fill('Browser FastQC')
+        page.get_by_label('Filter analysis workflow',exact=True).select_option('fastqc')
         expect(table.locator('tbody tr')).to_have_count(1)
         page.get_by_label('Search analyses',exact=True).fill('Polling renamed')
         with workspace.api() as client:
