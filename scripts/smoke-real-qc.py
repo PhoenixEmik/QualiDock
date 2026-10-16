@@ -29,6 +29,7 @@ if len(inputs) != 2:
 digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
 original = {str(p): digest(p) for p in inputs}
 with tempfile.TemporaryDirectory(prefix='qualidock-smoke-') as output:
+    output = Path(output).resolve()  # macOS temporary paths can contain /var symlinks.
     settings = Settings(roots=[root], output=Path(output), frontend=Path('frontend/dist'), token='smoke-test-only', cpus=1, memory_mb=4096, fastqc=fastqc, multiqc=multiqc)
     with TestClient(create_app(settings)) as client:
         client.headers.update({'Authorization': f'Bearer {settings.token}', 'X-QualiDock-Request': '1'})

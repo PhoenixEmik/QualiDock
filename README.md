@@ -29,6 +29,11 @@ Open the connection URL printed at startup. Its fragment carries a random sessio
 
 Without `QUALIDOCK_ROOTS`, the app uses the generated `example-data` directory. The default output directory is `runs` in this checkout. FASTQ inputs are never uploaded, modified, or relocated. Run under a regular Unix account. One server process/worker may own an output directory at a time.
 
+For more test inputs, run `python3 scripts/prepare-test-data.py --download-public`.
+This adds small, checksum-verified public yeast RNA-seq subsets and clearly labeled
+synthetic multi-lane, manual-pairing, QC-profile and 24-read cohort scenarios under
+`example-data/testing`. See [test datasets and provenance](docs/TEST-DATA.md).
+
 ## Workspace
 
 - **Workspace:** browse connected storage, navigate directories, and select inputs. Switch between **Samples** (grouped detected read pairs) and **Files** (individual files). Incomplete pairs and unrecognized names remain available. Search covers currently loaded sample names and filenames; load more to include additional entries.

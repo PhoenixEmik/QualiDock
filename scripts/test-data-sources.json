@@ -1,0 +1,48 @@
+{
+  "repository": "nf-core/test-datasets",
+  "commit": "cad884e7fbe5617dcd55bdd07d9ddf65b54febe4",
+  "files": [
+    {
+      "name": "SRR6357070_1.fastq.gz",
+      "path": "testdata/GSE110004/SRR6357070_1.fastq.gz",
+      "size": 2239317,
+      "git_blob_sha1": "1842fc6bf799e1744caef4c36dd53d02e594fc28",
+      "sha256": "3f50541fa9cf2bedc87e7b682ada0fccfdfcd6d27b9bb81f17be230ff140ebe7"
+    },
+    {
+      "name": "SRR6357070_2.fastq.gz",
+      "path": "testdata/GSE110004/SRR6357070_2.fastq.gz",
+      "size": 2232117,
+      "git_blob_sha1": "2d2e36e54b74ccc4614c0602a3623d02a2b0aa07",
+      "sha256": "8590e1e01e568fba256aa7dced40519604cbb111ee44ab106a3dcb869660aaf4"
+    },
+    {
+      "name": "SRR6357071_1.fastq.gz",
+      "path": "testdata/GSE110004/SRR6357071_1.fastq.gz",
+      "size": 2189243,
+      "git_blob_sha1": "644238f09ed99d6b45a1b0d84fc9c878c87bcb8a",
+      "sha256": "06951c97884df8975d5419a2f0d03d435b9da722564000536524b01926970c93"
+    },
+    {
+      "name": "SRR6357071_2.fastq.gz",
+      "path": "testdata/GSE110004/SRR6357071_2.fastq.gz",
+      "size": 2183711,
+      "git_blob_sha1": "f211cf4c99698f4a6658bf944488691f5f014980",
+      "sha256": "00bbbf100ee90c5f681c3b4814637283732cd06e620171bd48718aa02de3a91d"
+    },
+    {
+      "name": "SRR6357076_1.fastq.gz",
+      "path": "testdata/GSE110004/SRR6357076_1.fastq.gz",
+      "size": 2268588,
+      "git_blob_sha1": "3036da1db704e61bc1fcba1e7a393b3540f287bc",
+      "sha256": "1ba6b60cd24c8abf1db57dec5a13b23eeb35beece6193af8ce6f9bac4fd4546f"
+    },
+    {
+      "name": "SRR6357076_2.fastq.gz",
+      "path": "testdata/GSE110004/SRR6357076_2.fastq.gz",
+      "size": 2250281,
+      "git_blob_sha1": "f9bc1113e93c9bbbcac728c4e9abd445cabbde87",
+      "sha256": "4a04e6de648091eb42d703f67489d87e929544af478ce5e28b0c790f79a82a5d"
+    }
+  ]
+}
