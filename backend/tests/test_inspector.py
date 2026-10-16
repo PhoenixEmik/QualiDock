@@ -81,6 +81,8 @@ def test_registered_derived_only_and_restart(tmp_path):
     with TestClient(create_app(config)) as client:
         auth(client,config)
         run=submit(client,'fastp',sorted(FIXTURE.glob('*.fastq.gz')),{'compare_qc':False})
+        # An overlapping configured input root cannot bypass result registration.
+        assert inspect(client,[config.output/run['id']/run['derived_datasets'][0]['path']]).status_code==403
     # Only configured fixture roots, not the output's parent.
     config.roots=[FIXTURE.resolve()]
     with TestClient(create_app(config)) as client:
@@ -97,3 +99,15 @@ def test_registered_derived_only_and_restart(tmp_path):
         assert before==(config.output/run['id']/'manifest.json').read_bytes()
         paths[0].write_bytes(b'changed')
         assert inspect(client,[paths[0]],input_datasets=[refs[0]]).status_code==403
+
+
+def test_total_decompression_and_raw_byte_budgets(client,setup):
+    _,root=setup
+    path=root/'bounded.fastq.gz'
+    # Individually small records exceed the cumulative preview cap before 20 reads.
+    path.write_bytes(gzip.compress((b'@id\n'+b'A'*12000+b'\n+\n'+b'I'*12000+b'\n')*20))
+    result=inspect(client,[path],count=20).json()['files'][0]
+    assert result['status']=='record_too_large' and result['records']==[]
+    # A huge gzip header is bounded even before decompression produces any lines.
+    path.write_bytes(b'\x1f\x8b\x08\x08'+b'\x00'*6+b'x'*(MAX_COMPRESSED+100)+b'\x00')
+    assert inspect(client,[path]).json()['files'][0]['status']=='record_too_large'
