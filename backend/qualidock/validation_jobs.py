@@ -152,7 +152,9 @@ class ValidationJobs:
         except Exception as exc:
             if task_id not in self.cancelled:
                 try:
-                    manager.update(run, integrity={**run['integrity'], 'state': 'failed', 'result': 'not_evaluated', 'error': str(exc), 'finished_at': now()})
+                    final = {**run['integrity'], 'state': 'failed', 'result': 'not_evaluated', 'error': str(exc), 'finished_at': now(), 'current_file': None}
+                    save_json(directory / 'validation.json', final)
+                    manager.update(run, integrity=final)
                 except (OSError, ValueError):
                     run['integrity'].update(state='failed', result='not_evaluated', error=str(exc), finished_at=now())
                     manager.revision += 1
@@ -179,6 +181,7 @@ class ValidationJobs:
             result['current_file']['state'] = 'not_evaluated'
         save_json(self.manager.directory(run_id) / record['artifact'], result)
         self.manager.update(run, integrity=result)
+        self.manager.refresh_reports(run)
         return result
 
     async def close(self):

@@ -29,4 +29,4 @@ def test_full_integrity_readonly_evidence_and_download(workspace,browser):
    run=client.get(f"api/runs/{workspace.fastqc['id']}").json()
    assert run['state']=='completed'
   page.set_viewport_size({'width':390,'height':844})
-  page.wait_for_function('document.documentElement.scrollWidth <= innerWidth',timeout=3000)
+  page.wait_for_function('() => document.documentElement.scrollWidth <= innerWidth',timeout=3000)

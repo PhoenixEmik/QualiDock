@@ -197,26 +197,43 @@ export default function App() {
   useEffect(() => {
     if (!authenticated) return;
     setUpdates("connecting");
-    const source = new EventSource(url("api/events?format=invalidation"));
-    source.addEventListener("revision", () =>
-      setRevision((value) => value + 1),
-    );
+    let source: EventSource;
+    let reconnect: ReturnType<typeof setTimeout> | undefined;
     let fallback: ReturnType<typeof setInterval> | undefined;
-    source.onerror = () => {
-      setUpdates("polling");
-      if (!fallback)
-        fallback = setInterval(() => setRevision((value) => value + 1), 5000);
+    let stopped = false;
+    const connect = () => {
+      if (stopped) return;
+      source = new EventSource(url("api/events?format=invalidation"));
+      source.addEventListener("revision", () =>
+        setRevision((value) => value + 1),
+      );
+      source.onerror = () => {
+        // An initial network failure permanently closes EventSource in some
+        // browsers. Own the retry timer so polling can always recover to SSE.
+        source.close();
+        setUpdates("polling");
+        if (!fallback)
+          fallback = setInterval(() => setRevision((value) => value + 1), 5000);
+        if (!reconnect)
+          reconnect = setTimeout(() => {
+            reconnect = undefined;
+            connect();
+          }, 5000);
+      };
+      source.onopen = () => {
+        setUpdates("live");
+        if (fallback) {
+          clearInterval(fallback);
+          fallback = undefined;
+        }
+      };
     };
-    source.onopen = () => {
-      setUpdates("live");
-      if (fallback) {
-        clearInterval(fallback);
-        fallback = undefined;
-      }
-    };
+    connect();
     return () => {
+      stopped = true;
       source.close();
       if (fallback) clearInterval(fallback);
+      if (reconnect) clearTimeout(reconnect);
     };
   }, [authenticated, fail]);
   useEffect(() => {
