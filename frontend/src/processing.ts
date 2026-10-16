@@ -22,6 +22,8 @@ export function defaults(mode: string): ProcessingOptions {
       }
     : {
         gzip: true,
+        preserve_pairs: true,
+        count: null,
         fraction: 0.1,
         seed: 11,
         min_length: 15,
@@ -66,3 +68,29 @@ export const selectedReferences = (
   references
     .filter((ref) => !!ref.path && paths.has(ref.path))
     .map(({ run_id, dataset_id }) => ({ run_id, dataset_id }));
+
+export function processingTools(
+  mode: string,
+  options: ProcessingOptions,
+  pairs: number,
+  files: number,
+): string[] {
+  if (mode === "fastp")
+    return [
+      "fastp",
+      ...((options.compare_qc ?? true) ? ["fastqc"] : []),
+      ...(options.multiqc ? ["multiqc"] : []),
+    ];
+  if (
+    ["seqkit-filter", "seqkit-extract"].includes(mode) &&
+    options.preserve_pairs &&
+    files > 0 &&
+    pairs * 2 === files
+  )
+    return [];
+  return ["seqkit"];
+}
+export function supportsExactCount(version?: string | null): boolean {
+  const match = /^(\d+)\.(\d+)(?:\.(\d+))?$/.exec(version || "");
+  return !!match && Number(match[1]) === 2 && Number(match[2]) >= 14;
+}

@@ -8,7 +8,11 @@ The four primary views are Workspace, Quality Control, Read Processing and Resul
 ## Workflow and derived reuse
 
 Select FASTQs in Workspace, choose QC or Read Processing, and run. Tool settings
-have defaults; advanced parameters are optional. fastp writes separate derived
+have defaults; advanced parameters are optional. New length/extraction setups keep confirmed mates
+together by default; the checkbox also allows independent-file processing. Old
+reruns without this option retain their independent behavior. Essential thresholds,
+sampling method/count/seed and gzip output are visible; relationship review is
+available for every operation that can preserve pairs. fastp writes separate derived
 FASTQs, JSON and HTML, with optional before/after FastQC and combined MultiQC.
 Results show reported counts, bases, Q20/Q30 fractions and filtering statistics;
 these fractions come from fastp, never from FastQC per-base means.
@@ -105,7 +109,7 @@ fastp's before/after totals must match scanned records and bases before publicat
 A failed unit cannot publish apparently successful FASTQs; successful independent
 units survive a partial failure. Cancellation/restart clears unpublished outputs.
 
-Each file therefore receives one source validation scan, the external processing
+Each file therefore receives one source validation scan, the processing
 operation, and one output validation scan. Optional raw/post FastQC adds external
 reads; tools may perform their own additional passes. Chart changes and exports
 use persisted reports and never rescan FASTQs. Disabling optional before/after QC
@@ -121,13 +125,28 @@ and NFS/Lustre throughput are not guessed from file sizes.
 
 ## Tests and limits
 
-`pytest backend/tests/test_processing_real.py` runs actual tools, including source
+`pytest backend/tests/test_processing_real.py backend/tests/test_paired_processing.py`
+runs actual tools and the synchronized selector, including source
 immutability, single/paired inputs, partial failures, derived chaining outside input
 roots, restart/rerun, collision namespaces, paired sampling and malformed IDs.
 CI provisions missing tools explicitly; its strict environment makes missing tools
 an error. Browser coverage uses Chromium and real processing, reports, downloads,
 reuse after restart and narrow layouts. Local missing-SeqKit cases are reported as
-skips, not as successful executions.
+skips, not as successful executions. New cases compare complete output records
+against independently selected source positions, including wrapped FASTQ, unequal
+mate lengths, empty results, ambiguous IDs, mismatched/reordered mates, cancellation,
+partial failure, output collisions, symlinks, source immutability and restart/reuse.
+The exact sampler is checked against committed independent Go reservoir indices
+for two seeds and two counts, then repeated, run at full population and over capacity.
+Chromium exercises filtering → derived reuse → exact sampling → ID extraction,
+including keyboard submission, missing-ID downloads and a 390 px layout.
+
+Synchronized selection holds only the current two bounded records and requested-ID
+metadata. Exact sampling uses O(N) indices in the external tool; selecting a very
+large count still needs proportional index memory and remains subject to the
+existing memory limit. FASTQ lines/records retain the validator's existing 1 MiB /
+4 MiB support bounds. IDs with other conventions must be entered exactly; no
+fuzzy normalization, repair or cross-lane merging is performed.
 
 Before/after charts reuse the existing exact FastQC modules and Raw Data exports;
 incompatible bins remain on separate axes. Q20/Q30 are unavailable unless actually

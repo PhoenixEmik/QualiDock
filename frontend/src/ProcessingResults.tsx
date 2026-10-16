@@ -86,8 +86,10 @@ export default function ProcessingResults({
             <pre>{JSON.stringify(processing.options, null, 2)}</pre>
             <p>
               Tool:{" "}
-              {run.tools?.[run.mode === "fastp" ? "fastp" : "seqkit"]
-                ?.version || "Unavailable"}
+              {unit.selection
+                ? `${unit.selection.processor} ${unit.selection.version}`
+                : run.tools?.[run.mode === "fastp" ? "fastp" : "seqkit"]
+                    ?.version || "Unavailable"}
               . Original files are read-only.
             </p>
           </details>
@@ -95,6 +97,58 @@ export default function ProcessingResults({
             <p className="error" role="alert">
               {unit.error}
             </p>
+          )}
+          {unit.state === "completed" && unit.selection && (
+            <section aria-label="Read selection summary">
+              <p>
+                <strong>
+                  {unit.selection.retained_records.toLocaleString()}
+                </strong>{" "}
+                of {unit.selection.input_records.toLocaleString()}{" "}
+                {unit.selection.record_unit.replaceAll("_", " ")} retained ·{" "}
+                {unit.selection.removed_records.toLocaleString()} removed.
+              </p>
+              {!!unit.selection.missing_identifiers?.length && (
+                <details>
+                  <summary>
+                    Missing requested identifiers (
+                    {unit.selection.missing_identifiers.length})
+                  </summary>
+                  <ul>
+                    {unit.selection.missing_identifiers
+                      .slice(0, 50)
+                      .map((id) => (
+                        <li key={id} className="mono">
+                          {id}
+                        </li>
+                      ))}
+                  </ul>
+                  {unit.selection.missing_identifiers.length > 50 && (
+                    <p>
+                      Showing the first 50. Download selection details for the
+                      full list.
+                    </p>
+                  )}
+                </details>
+              )}
+              {published &&
+                run.reports.some(
+                  (report) =>
+                    report.path === `processing/${unit.id}/selection.json`,
+                ) && (
+                  <a
+                    className="button small"
+                    href={url(
+                      downloadDataset(
+                        run,
+                        `processing/${unit.id}/selection.json`,
+                      ),
+                    )}
+                  >
+                    Selection details (JSON)
+                  </a>
+                )}
+            </section>
           )}
           {before && after && (
             <>

@@ -8,6 +8,8 @@ import {
   processingModes,
   publishedDatasets,
   selectedReferences,
+  processingTools,
+  supportsExactCount,
 } from "../src/processing.ts";
 test("processing modes and defaults stay independent from QC", () => {
   assert.ok(processingModes.every(isProcessing));
@@ -23,6 +25,41 @@ test("processing modes and defaults stay independent from QC", () => {
     multiqc: false,
   });
   assert.equal(defaults("seqkit-sample").seed, 11);
+  assert.equal(defaults("seqkit-sample").count, null);
+  assert.equal(defaults("seqkit-filter").preserve_pairs, true);
+});
+test("pair-aware requirements preserve independent and historical processing", () => {
+  for (const mode of ["seqkit-filter", "seqkit-extract"]) {
+    assert.deepEqual(processingTools(mode, defaults(mode), 2, 4), []);
+    assert.deepEqual(processingTools(mode, defaults(mode), 1, 3), ["seqkit"]);
+    assert.deepEqual(processingTools(mode, {}, 1, 2), ["seqkit"]);
+    assert.deepEqual(processingTools(mode, { preserve_pairs: false }, 1, 2), [
+      "seqkit",
+    ]);
+    assert.deepEqual(processingTools(mode, defaults(mode), 0, 0), ["seqkit"]);
+  }
+  assert.deepEqual(processingTools("seqkit-sample", { count: 7 }, 1, 2), [
+    "seqkit",
+  ]);
+  assert.deepEqual(processingTools("fastp", {}, 1, 2), ["fastp", "fastqc"]);
+  assert.deepEqual(
+    processingTools("fastp", { compare_qc: false, multiqc: true }, 1, 2),
+    ["fastp", "multiqc"],
+  );
+});
+test("exact-count capability requires a verified SeqKit version", () => {
+  for (const version of [
+    null,
+    undefined,
+    "",
+    "unknown",
+    "2.13.0",
+    "1.35",
+    "3.0.0",
+  ])
+    assert.equal(supportsExactCount(version), false);
+  for (const version of ["2.14.0", "2.14", "2.15.1"])
+    assert.equal(supportsExactCount(version), true);
 });
 test("retention derives only from explicit compatible reported counts", () => {
   assert.deepEqual(retention(400, 300), { retained: 75, removed: 25 });

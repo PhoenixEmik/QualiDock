@@ -75,7 +75,7 @@ def check_features(mode, value, tools):
 
 
 def units(run, value=None):
-    """Use persisted mutual pairs; lanes are never merged. Only fastp and validated fraction sampling preserve pairs."""
+    """Use persisted mutual pairs; lanes are never merged. Pair-aware operations use only confirmed mutual mates."""
     value = value or run.get('processing', {}).get('options', {})
     relationships = {row['path']: row for row in run.get('input_pairing', [])}
     result, seen = [], set()

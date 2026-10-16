@@ -333,6 +333,8 @@ export interface ProcessingOptions {
   gzip?: boolean;
   compare_qc?: boolean;
   multiqc?: boolean;
+  preserve_pairs?: boolean;
+  count?: number | null;
   fraction?: number;
   seed?: number;
   max_length?: number | null;
@@ -360,6 +362,18 @@ export interface ProcessingResult {
       filtering_result?: Record<string, number>;
       adapter_cutting?: Record<string, unknown>;
     } | null;
+    selection?: {
+      processor: string;
+      version: string;
+      operation: string;
+      record_unit: "reads" | "read_pairs";
+      input_records: number;
+      retained_records: number;
+      removed_records: number;
+      requested_identifiers?: number;
+      matched_identifiers?: number;
+      missing_identifiers?: string[];
+    };
     statistics?: Record<string, string>[];
   }[];
 }

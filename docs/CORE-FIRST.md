@@ -58,7 +58,7 @@ Atomic JSON helpers now live with persistence rather than forcing scanner
 subprocesses to import the complete analysis manager. Scientific calculations,
 FastQC/MultiQC execution and original HTML reports are unchanged.
 
-## Audit and measured reduction
+## Audit and measured reduction (simplification release `1914146`)
 
 Compared with main `2f6a4be` (before this refactor), using tracked production Python
 under `backend/qualidock` and TypeScript/TSX/CSS under `frontend/src`:
@@ -102,8 +102,9 @@ The complete machine-readable file diff is `git diff --name-status 2f6a4be..HEAD
 
 Registered derived FASTQs can be selected and reused without copying or broadening
 input roots. Source IDs, snapshots, checksums and file/lane metadata persist.
-Confirmed fraction sampling now validates mate order before and after actual
-SeqKit execution; length filters and ID extraction remain explicitly independent.
+Confirmed sampling validates mate order before and after actual SeqKit execution.
+The subsequent core-processing enhancement adds opt-in pair-preserving length/ID
+selection and exact-count sampling; see the current processing contracts below.
 The existing before/after FastQC implementation is reused, including exact grouped
 bins and original tables. See [processing contracts](PROCESSING.md).
 
@@ -112,7 +113,7 @@ filter tabs were deleted; one state selector remains. Read-relationship editing,
 output destination and resource settings are collapsed options in QC setup.
 Removed administrative tasks are never resumed; old fields are archival data.
 
-## Validation evidence
+## Validation evidence for the simplification release
 
 Local retained backend suite: **252 passed, 8 skipped** (the local installation
 has no SeqKit). The missing-file error path and measured scan regression also pass
@@ -150,7 +151,8 @@ sampler is not claimed as a measurement; Linux uses the actual observer.
 per-workflow peak. External tool I/O, large-input scaling and NFS/Lustre throughput
 are unavailable measurements, not extrapolations from this fixture.
 
-Remaining deliberate limits: exact-number sampling, pair-preserving length/ID
-filtering, immutable-evidence scan caching and cross-analysis trend dashboards
-are not implemented. Report sandbox limitations and safe download fallbacks
+At that release, exact-number sampling and pair-preserving length/ID filtering
+were not implemented; the subsequent enhancement is documented in PROCESSING.md.
+Immutable-evidence scan caching and cross-analysis trend dashboards remain outside
+the implemented scope. Report sandbox limitations and safe download fallbacks
 remain. No OOD/PBS changes or deployment work were performed.

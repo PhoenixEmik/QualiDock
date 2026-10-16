@@ -98,13 +98,16 @@ def test_existing_fastqc_input_fixture_filter_and_reuse_restart(tmp_path):
 
 
 @pytest.mark.parametrize('change',['order','missing','corrupt'])
-def test_mismatched_or_malformed_sources_never_publish(tmp_path,change):
+@pytest.mark.parametrize('mode',['seqkit-filter','seqkit-extract'])
+def test_mismatched_or_malformed_sources_never_publish(tmp_path,change,mode):
     config=settings(tmp_path);paths,content=paired(tmp_path,compressed=False)
     if change=='order':paths[1].write_bytes(b''.join(reversed(content[1])))
     elif change=='missing':paths[1].write_bytes(b''.join(content[1][:-1]))
     else:paths[1].write_bytes(b'@bad/2\nACGT\n+\nI\n')
     with authenticated(config) as client:
-        result=run(client,paths,{'preserve_pairs':True,'min_length':1})
+        value={'preserve_pairs':True,'min_length':1}
+        if mode=='seqkit-extract':value['identifiers']=['read0']
+        result=run(client,paths,value,mode=mode)
         assert result['state']=='failed' and result['derived_datasets']==[]
         assert not any(e['tool']=='QualiDock synchronized FASTQ selector' for e in result['executions'])
         assert client.get(f"/api/runs/{result['id']}/download",params={'path':'processing/u0001/processed_R1.fastq.gz'}).status_code==403
@@ -195,7 +198,7 @@ def test_exact_count_matches_independent_reservoir_indices(tmp_path,paired_input
             assert all(d['paired']==paired_input for d in result['derived_datasets'])
         again=run(client,paths,{'count':7,'seed':73},mode='seqkit-sample')
         assert all(output(config,again,m)==b''.join(records[m][i] for i in expected[1]['indices']) for m in range(len(paths)))
-        full=run(client,paths,{'count':400},mode='seqkit-sample')
+        full=run(client,paths,{'count':400,'gzip':False},mode='seqkit-sample')
         assert full['state']=='completed' and all(output(config,full,m)==b''.join(records[m]) for m in range(len(paths)))
         over=run(client,paths,{'count':401},mode='seqkit-sample')
         assert over['state']=='failed' and not over['derived_datasets']
@@ -217,3 +220,71 @@ def test_exact_count_partial_failure_and_empty_input(tmp_path):
         single.write_bytes(b'')
         empty=run(client,[single],{'count':1},mode='seqkit-sample')
         assert empty['state']=='failed' and not empty['derived_datasets'] and 'only 0' in empty['error']
+
+
+def test_partial_extraction_publishes_only_unambiguous_pair(tmp_path):
+    config=settings(tmp_path)
+    bad=tmp_path/'bad';good=tmp_path/'good';bad.mkdir();good.mkdir()
+    paths,_=paired(bad,ids=['dup','other','dup','unique'])
+    valid,content=paired(good,ids=['dup','other','third','unique'])
+    with authenticated(config) as client:
+        result=run(client,[*paths,*valid],{'preserve_pairs':True,'identifiers':['dup']},mode='seqkit-extract')
+        assert result['state']=='partial' and len(result['derived_datasets'])==2
+        assert all(d['source'] in list(map(str,valid)) for d in result['derived_datasets'])
+        assert all(output(config,result,m)==content[m][0] for m in (0,1))
+        assert not any(r['path'].startswith('processing/u0001/') for r in result['reports'])
+
+
+def test_selector_rejects_replaced_sources_existing_outputs_and_symlink_parents(tmp_path):
+    from qualidock.paired_reads import execute
+    from qualidock.integrity import snapshot
+    paths,_=paired(tmp_path,compressed=False)
+    original={p:p.read_bytes() for p in paths}
+    target=tmp_path/'target';target.mkdir()
+    config={'inputs':list(map(str,paths)), 'snapshots':[snapshot(p.stat()) for p in paths],
+            'outputs':[str(target/f'mate{m}.fastq') for m in (1,2)],
+            'gzip':False,'min_length':1,'max_length':None,'result':str(target/'selection.json')}
+    # Writing to an existing file, including a source itself, must never truncate it.
+    for candidate in (paths[0],target/'already.fastq'):
+        if candidate not in paths:candidate.write_bytes(b'keep')
+        before=candidate.read_bytes()
+        with pytest.raises((ValueError,FileExistsError)):
+            execute({**config,'outputs':[str(candidate),config['outputs'][1]]})
+        assert candidate.read_bytes()==before
+    alias=tmp_path/'alias';alias.symlink_to(target,target_is_directory=True)
+    with pytest.raises(ValueError,match='symlink'):
+        execute({**config,'outputs':[str(alias/'left.fastq'),str(alias/'right.fastq')]})
+    saved=config['snapshots'][0]
+    config['snapshots'][0]={**saved,'size':saved['size']+1}
+    with pytest.raises(ValueError,match='changed after full validation'):execute(config)
+    assert original=={p:p.read_bytes() for p in paths}
+    assert not (target/'mate1.fastq').exists()
+
+
+def test_cancel_actual_synchronized_selector_never_publishes(tmp_path):
+    import time
+    config=settings(tmp_path)
+    # Synthetic lifecycle stress input, not a scientific result or performance benchmark.
+    paths,_=paired(tmp_path,lengths=[(10000,10000)]*200,compressed=False)
+    original={p:hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+    with authenticated(config) as client:
+        response=client.post('/api/runs',json={'mode':'seqkit-filter','paths':list(map(str,paths)),
+                                              'processing_options':{'preserve_pairs':True,'min_length':1}})
+        assert response.status_code==201,response.text
+        identifier=response.json()['id'];deadline=time.monotonic()+30
+        while time.monotonic()<deadline:
+            result=client.get(f'/api/runs/{identifier}').json()
+            commands=result.get('executions',[])
+            if commands and commands[-1]['tool']=='QualiDock synchronized FASTQ selector' and commands[-1].get('exit_code') is None and identifier in client.app.state.manager.executor.processes:
+                break
+            assert result['state'] in {'queued','running'},result
+            time.sleep(.005)
+        else:raise AssertionError('The actual selector did not start')
+        assert client.post(f'/api/runs/{identifier}/cancel').status_code==200
+        result=wait(client,identifier,timeout=30)
+        assert result['state']=='cancelled' and not result['derived_datasets']
+        assert client.get(f'/api/runs/{identifier}/download',params={'path':'processing/u0001/processed_R1.fastq.gz'}).status_code==403
+    with authenticated(config) as client:
+        restored=client.get(f'/api/runs/{identifier}').json()
+        assert restored['state']=='cancelled' and not restored['derived_datasets']
+    assert original=={p:hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}

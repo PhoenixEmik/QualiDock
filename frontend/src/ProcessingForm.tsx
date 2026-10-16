@@ -6,7 +6,12 @@ import type {
   Run,
   SampleConfiguration,
 } from "./types";
-import { defaults, processingModes } from "./processing";
+import {
+  defaults,
+  processingModes,
+  processingTools,
+  supportsExactCount,
+} from "./processing";
 import { modeLabel } from "./api";
 import SampleEditor from "./SampleEditor";
 import OutputDirectory from "./OutputDirectory";
@@ -52,19 +57,22 @@ export default function ProcessingForm({
   const files = [...selected.values()].filter(
     (entry) => entry.kind === "fastq",
   );
-  const fastp = mode === "fastp",
-    tool = fastp ? "fastp" : "seqkit";
+  const fastp = mode === "fastp";
+  const pairs = (samples?.input_pairing || files).filter(
+    (row) =>
+      row.paired && row.read === "R1" && !!row.mate && selected.has(row.mate),
+  ).length;
   const update = (changes: Partial<ProcessingOptions>) =>
     setOptions({ ...options, ...changes });
-  const required = [
-    tool,
-    ...(fastp && options.compare_qc ? ["fastqc"] : []),
-    ...(fastp && options.multiqc ? ["multiqc"] : []),
-  ];
+  const required = processingTools(mode, options, pairs, files.length);
   const missing = required.filter(
     (name) => !config?.tool_details?.[name]?.compatible,
   );
-  const unavailable = missing.length > 0;
+  const exactUnavailable =
+    mode === "seqkit-sample" &&
+    options.count != null &&
+    !supportsExactCount(config?.tool_details?.seqkit?.version);
+  const unavailable = missing.length > 0 || exactUnavailable;
   return (
     <section className="processing-setup" aria-label="Read processing setup">
       <div className="form-section">
@@ -88,8 +96,10 @@ export default function ProcessingForm({
           {fastp
             ? "Trim adapters and filter reads with fastp. Each confirmed pair or single read is processed separately."
             : mode === "seqkit-sample"
-              ? "Reproducible fraction sampling. Confirmed mates use the same seed and must pass full identifier/order checks before paired outputs are published."
-              : "Run a focused SeqKit utility on each selected file. Filtering and extraction produce independent files; no mate synchronization is claimed."}
+              ? "Reproducible fraction or exact-count sampling. Confirmed mates stay synchronized and must pass full output checks."
+              : mode === "seqkit-stats"
+                ? "Inspect original FASTQ statistics without creating derived files."
+                : "Filter or extract FASTQ records. Choose whether confirmed mates must stay together; original files remain unchanged."}
         </p>
         <div className="processing-selection">
           <strong>{files.length} FASTQ files selected</strong>
@@ -139,25 +149,97 @@ export default function ProcessingForm({
             </label>
           </>
         )}
+        {["seqkit-filter", "seqkit-extract"].includes(mode) && pairs > 0 && (
+          <>
+            <label>
+              <input
+                type="checkbox"
+                checked={options.preserve_pairs ?? false}
+                onChange={(e) => update({ preserve_pairs: e.target.checked })}
+              />{" "}
+              Keep R1/R2 pairs together
+            </label>
+            <p className="inline-note">
+              {options.preserve_pairs
+                ? mode === "seqkit-filter"
+                  ? "Keep a pair only when both reads meet the length limits. Unpaired inputs remain independent."
+                  : "Match exact IDs after removing terminal /1 or /2. Ambiguous duplicate source IDs fail; missing IDs are listed."
+                : "Process each file independently; outputs are explicitly unpaired."}
+            </p>
+          </>
+        )}
         {mode === "seqkit-sample" && (
           <>
             <label>
-              Sampling fraction (0–1)
+              Sampling method{" "}
+              <select
+                aria-label="Sampling method"
+                value={options.count == null ? "fraction" : "count"}
+                onChange={(e) =>
+                  update({ count: e.target.value === "count" ? 100000 : null })
+                }
+              >
+                <option value="fraction">Fraction</option>
+                <option value="count">Exact count</option>
+              </select>
+            </label>
+            {options.count != null ? (
+              <label>
+                {pairs * 2 === files.length
+                  ? "Exact read pairs per dataset"
+                  : pairs
+                    ? "Exact records per dataset (pairs or reads)"
+                    : "Exact reads per file"}
+                <input
+                  aria-label="Exact count"
+                  type="number"
+                  min="1"
+                  max="9007199254740991"
+                  step="1"
+                  value={options.count}
+                  onChange={(e) => update({ count: Number(e.target.value) })}
+                />
+              </label>
+            ) : (
+              <>
+                <label>
+                  Sampling fraction (0–1)
+                  <input
+                    aria-label="Sampling fraction"
+                    type="number"
+                    min="0.000001"
+                    max="1"
+                    step="0.01"
+                    value={options.fraction ?? 0.1}
+                    onChange={(e) =>
+                      update({ fraction: Number(e.target.value) })
+                    }
+                  />
+                </label>
+                <p className="inline-note">
+                  Fraction sampling is reproducible with a fixed seed and tool
+                  version. The requested fraction is a probability, not an exact
+                  read count.
+                </p>
+              </>
+            )}
+            <label>
+              Random seed{" "}
               <input
-                aria-label="Sampling fraction"
                 type="number"
-                min="0.000001"
-                max="1"
-                step="0.01"
-                value={options.fraction ?? 0.1}
-                onChange={(e) => update({ fraction: Number(e.target.value) })}
+                min="0"
+                max="2147483647"
+                value={options.seed ?? 11}
+                onChange={(e) => update({ seed: Number(e.target.value) })}
               />
             </label>
-            <p className="inline-note">
-              Fraction sampling is reproducible with a fixed seed and tool
-              version. The requested fraction is a probability, not an exact
-              read count.
-            </p>
+            {options.count != null && (
+              <p className="inline-note">
+                Uniform sampling without replacement, preserving input order.
+                The count applies to each pair or single-end dataset; requests
+                exceeding available records fail.
+              </p>
+            )}
           </>
         )}
         {(fastp || mode === "seqkit-filter") && (
@@ -186,6 +268,32 @@ export default function ProcessingForm({
             />
           </label>
         )}
+        {mode === "seqkit-filter" && (
+          <label>
+            Maximum read length (optional)
+            <input
+              type="number"
+              min="1"
+              max="1000000"
+              value={options.max_length ?? ""}
+              onChange={(e) =>
+                update({
+                  max_length: e.target.value ? Number(e.target.value) : null,
+                })
+              }
+            />
+          </label>
+        )}
+        {mode !== "seqkit-stats" && (
+          <label>
+            <input
+              type="checkbox"
+              checked={options.gzip ?? true}
+              onChange={(e) => update({ gzip: e.target.checked })}
+            />{" "}
+            Gzip-compressed output
+          </label>
+        )}
         <details className="processing-advanced">
           <summary>Advanced settings</summary>
           <label>
@@ -196,16 +304,6 @@ export default function ProcessingForm({
               onChange={(e) => setName(e.target.value)}
             />
           </label>
-          {mode !== "seqkit-stats" && (
-            <label>
-              <input
-                type="checkbox"
-                checked={options.gzip ?? true}
-                onChange={(e) => update({ gzip: e.target.checked })}
-              />{" "}
-              Gzip-compressed output
-            </label>
-          )}
           {fastp && (
             <>
               <label>
@@ -248,34 +346,6 @@ export default function ProcessingForm({
               </p>
             </>
           )}
-          {mode === "seqkit-sample" && (
-            <label>
-              Random seed
-              <input
-                type="number"
-                min="0"
-                max="2147483647"
-                value={options.seed ?? 11}
-                onChange={(e) => update({ seed: Number(e.target.value) })}
-              />
-            </label>
-          )}
-          {mode === "seqkit-filter" && (
-            <label>
-              Maximum read length (optional)
-              <input
-                type="number"
-                min="1"
-                max="1000000"
-                value={options.max_length ?? ""}
-                onChange={(e) =>
-                  update({
-                    max_length: e.target.value ? Number(e.target.value) : null,
-                  })
-                }
-              />
-            </label>
-          )}
           <label>
             CPU threads
             <select
@@ -294,7 +364,7 @@ export default function ProcessingForm({
             busy={busy}
           />
         </details>
-        {fastp && !!files.length && (
+        {mode !== "seqkit-stats" && !!files.length && (
           <details>
             <summary>Review read pairs and sample groups</summary>
             {samples ? (
@@ -311,7 +381,13 @@ export default function ProcessingForm({
           reports and separate derived FASTQs. Default output:{" "}
           {outputRoot || config?.default_output}.
         </p>
-        {unavailable && (
+        {exactUnavailable && (
+          <p role="status" className="tool-warning">
+            Exact-count sampling requires SeqKit 2.14 or newer. Fraction
+            sampling remains available on older compatible versions.
+          </p>
+        )}
+        {!!missing.length && (
           <p role="status" className="tool-warning">
             {missing
               .map(
