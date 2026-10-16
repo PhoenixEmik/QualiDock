@@ -106,6 +106,8 @@ evidence verifies **registered** outputs against saved full-validation SHA-256,
 and lists incomplete/unpublished files separately. Completed runs with unknown
 FASTQs fail the benchmark check. Failed/partial states exit unsuccessfully;
 cancellation is recorded separately and never called completed processing.
+Timeouts retain the post-cancellation manifest and `timed_out` evidence, and exit
+unsuccessfully even when process cleanup succeeds.
 
 `validation_scans` records actual scanner bytes, coverage and checksum evidence.
 `execution_stages` records tool/validation wall time and sampled RSS from the

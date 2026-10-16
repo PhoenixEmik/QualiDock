@@ -96,3 +96,14 @@ def test_latency_retention_is_bounded_without_losing_aggregates():
     for index in range(2100): benchmark.latency(evidence,'run',time.monotonic(),500 if index==0 else 200)
     assert len(evidence['api_requests'])==2000
     assert evidence['api_summary']['run']['count']==2100 and evidence['api_summary']['run']['errors']==1
+
+
+@pytest.mark.skipif(not FASTQC, reason='Genuine FastQC required')
+def test_timeout_retains_cancelled_manifest_and_evidence(tmp_path,monkeypatch):
+    monkeypatch.setenv('QUALIDOCK_FASTQC',FASTQC)
+    args=benchmark.parser().parse_args(['--input',str(FIXTURE/'coverage_R1.fastq.gz'),'--output',str(tmp_path/'evidence'),'--mode','fastqc','--timeout','0.001'])
+    with pytest.raises(SystemExit): benchmark.main(args)
+    evidence=json.loads((tmp_path/'evidence/benchmark.json').read_text())
+    assert evidence['timeout_reached'] and evidence['cancellation_requested']
+    assert evidence['status']=='timed_out' and evidence['terminal_state']=='cancelled'
+    assert evidence['input_integrity_unchanged'] and not evidence['derived_outputs']

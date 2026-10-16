@@ -162,7 +162,8 @@ def main(args):
                     client.post(f'/api/runs/{run_id}/cancel').raise_for_status(); evidence['cancellation_requested']=True
                 if elapsed>args.timeout:
                     client.post(f'/api/runs/{run_id}/cancel').raise_for_status()
-                    raise TimeoutError('Benchmark timeout reached; cancellation requested')
+                    evidence.update(cancellation_requested=True,timeout_reached=True)
+                    break  # Persist the actual terminal state after cancellation cleanup.
                 time.sleep(0.5)
             # Allow the cancellation task to persist its final exit record and artifact registry.
             deadline=time.monotonic()+15
@@ -201,7 +202,7 @@ def main(args):
         evidence['input_integrity_unchanged']=before==[fingerprint(path,args.hash_inputs) for path in files]
         evidence['fingerprint_after_seconds']=time.monotonic()-fingerprint_started
         assert evidence['input_integrity_unchanged'], 'Input metadata/hash changed during benchmark'
-        evidence['status']='measured'
+        evidence['status']='timed_out' if evidence.get('timeout_reached') else 'measured'
     except Exception as exc:
         evidence['status']='failed'; evidence['error']=repr(exc)
         raise
@@ -221,7 +222,7 @@ def main(args):
         evidence['child_rss_scope']='Cumulative RUSAGE_CHILDREN high-water mark, not aggregate process-tree peak'
         (args.output/'benchmark.json').write_text(json.dumps(evidence,indent=2,allow_nan=False)+'\n')
     print(f"Benchmark saved: {args.output/'benchmark.json'}; state={evidence['run']['state']}")
-    if evidence['run']['state'] not in {'completed','cancelled'}: raise SystemExit(1)
+    if evidence.get('timeout_reached') or evidence['run']['state'] not in {'completed','cancelled'}: raise SystemExit(1)
 
 
 if __name__=='__main__': main(parser().parse_args())
