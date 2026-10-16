@@ -156,11 +156,17 @@ asyncio.run(main())
                 measured = json.loads((output/'benchmark-smoke/benchmark.json').read_text())
                 assert measured['input_integrity_unchanged'] and measured['run']['state'] == 'completed'
                 evidence['checks']['benchmark_command_smoke'] = 'passed'
-                for run in manager.runs.values():
-                    source = manager.directory(run['id'])
-                    target = output/run['id']; target.mkdir()
-                    for name in ('manifest.json','analysis.log'):
-                        shutil.copyfile(source/name, target/name)
+                # The shutdown check released the store lock. Reopen the saved
+                # history under a new owner before collecting its evidence.
+                history = RunManager(settings); history.start()
+                try:
+                    for run in history.runs.values():
+                        source = history.directory(run['id'])
+                        target = output/run['id']; target.mkdir()
+                        for name in ('manifest.json','analysis.log'):
+                            shutil.copyfile(source/name, target/name)
+                finally:
+                    await history.close()
             finally:
                 await manager.close()
         evidence['status'] = 'passed'
