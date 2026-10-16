@@ -156,3 +156,27 @@ test("processing downloads require completed or partial analysis, even with stag
       [dataset],
     );
 });
+
+test("same-basename manual pair labels expose declared read identities", () => {
+  // Synthetic filename metadata over genuine FastQC fixture values.
+  const samples = [fixture("R1"), fixture("R2")].map((sample, i) => ({
+    ...sample,
+    id: `fastqc/u0001/raw/i${i}/reads_fastqc.zip`,
+    name: "reads.fastq.gz",
+  }));
+  const paths = ["/left/reads.fastq.gz", "/right/reads.fastq.gz"];
+  const run = {
+    inputs: paths,
+    input_pairing: paths.map((path, i) => ({ path, read: `R${i + 1}` })),
+    report_input_map: Object.fromEntries(
+      samples.map((sample, i) => [
+        sample.id,
+        { id: `i${i}`, path: paths[i], processing_stage: "raw" },
+      ]),
+    ),
+  } as Run;
+  const labels = samples.map((sample) => sampleLabel(run, sample, samples));
+  assert.equal(new Set(labels).size, 2);
+  assert.match(labels[0], / · R1 · /);
+  assert.match(labels[1], / · R2 · /);
+});

@@ -12,7 +12,7 @@ from .integrity import snapshot
 from .files import PathViolation
 from .metrics import bounded_text, parse_multiqc
 from .import_formats import fastp_metadata, source_mappings
-from .outcomes import plan, stop
+from .outcomes import plan
 
 MODES = {'fastp', 'seqkit-stats', 'seqkit-sample', 'seqkit-filter', 'seqkit-extract'}
 
@@ -79,6 +79,17 @@ def units(run):
                        'lane': member.get('lane'), 'chunk': member.get('chunk'), 'error': None,
                        'outputs': [], 'fastp': None})
     return result
+
+
+def stage_records(paths, unit_id, stage):
+    """Retain the existing FastQC collision namespaces inside each processing stage."""
+    records = plan(paths)
+    for record in records:
+        namespace = Path('fastqc') / unit_id / stage / Path(record['output_directory']).relative_to('fastqc')
+        record['output_directory'] = str(namespace)
+        for key in ('report', 'html'):
+            record[key] = str(namespace / Path(record[key]).name)
+    return records
 
 
 def local_file(directory, relative):
@@ -153,11 +164,7 @@ async def execute(manager, run, metrics, errors):
             source = [Path(path) for path in unit['inputs']]
             raw_records = []
             if run['mode'] == 'fastp' and value['compare_qc']:
-                raw_records = plan(source)
-                for record in raw_records:
-                    record['output_directory'] = f"fastqc/{unit['id']}/raw"
-                    for key, extension in [('report', '.zip'), ('html', '.html')]:
-                        record[key] = record['output_directory'] + '/' + Path(record[key]).name
+                raw_records = stage_records(source, unit['id'], 'raw')
                 unit['raw_qc'] = raw_records
                 await manager.fastqc_results(run, raw_records, metrics, errors, 'raw')
             if run['id'] in manager.cancelled: return
@@ -195,10 +202,7 @@ async def execute(manager, run, metrics, errors):
                                     'snapshot': snapshot(path.stat()), 'sha256': checked['files'][index]['sha256'],
                                     'records': checked['files'][index]['records_scanned'], 'bases': checked['files'][index]['bases_scanned']})
                 if tool == 'fastp' and value['compare_qc']:
-                    records = plan(outputs)
-                    for record in records:
-                        record['output_directory'] = f"fastqc/{unit['id']}/processed"
-                        for key in ('report', 'html'): record[key] = record['output_directory'] + '/' + Path(record[key]).name
+                    records = stage_records(outputs, unit['id'], 'processed')
                     unit['processed_qc'] = records
                     await manager.fastqc_results(run, records, metrics, errors, 'processed')
             else:

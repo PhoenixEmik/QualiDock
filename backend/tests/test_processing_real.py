@@ -183,3 +183,25 @@ def test_fastp_quality_toggle_controls_n_filter(tmp_path):
         assert filtered['derived_datasets'][0]['records']==0
         assert retained['derived_datasets'][0]['records']==1
         assert source.read_text()=='@n_filter\n'+'N'*20+'\n+\n'+'I'*20+'\n'
+
+
+@pytest.mark.skipif(not (FASTP and FASTQC and MULTIQC),reason='Actual fastp, FastQC and MultiQC required')
+def test_manual_pair_identical_basenames_retains_independent_fastqc_results(tmp_path):
+    config=settings(tmp_path);paths=[]
+    for source,name in zip(sorted(FIXTURE.glob('*.fastq.gz')),('left','right')):
+        folder=tmp_path/name;folder.mkdir();path=folder/'reads.fastq.gz';shutil.copyfile(source,path);paths.append(str(path))
+    pairing=[{'path':path,'read':f'R{i+1}','pair_key':'manual:reads','paired':True,'mate':paths[1-i],'source':'manual','assignment':'paired'} for i,path in enumerate(paths)]
+    with TestClient(create_app(config)) as client:
+        auth(client,config)
+        response=client.post('/api/runs',json={'mode':'fastp','paths':paths,'input_pairing':pairing,'sample_groups':[{'id':'manual:sample','display_name':'Reviewed pair','files':paths,'source':'manual'}], 'processing_options':{'multiqc':True}})
+        assert response.status_code==201,response.text
+        run=wait(client,response.json()['id'],timeout=180)
+        assert run['state']=='completed',client.get(f"/api/runs/{run['id']}/logs").json()
+        raw=run['processing']['units'][0]['raw_qc']
+        assert len({row['report'] for row in raw})==2
+        samples=client.get(f"/api/runs/{run['id']}/metrics").json()['samples']
+        assert len(samples)==len({sample['id'] for sample in samples})==4
+        assert {run['report_input_map'][sample['id']]['path'] for sample in samples if run['report_input_map'][sample['id']]['processing_stage']=='raw'}==set(paths)
+        assert all(sample['name']=='reads.fastq.gz' for sample in samples if sample['id'] in {record['report'] for record in raw})
+        names=[row['multiqc_name'] for row in run['report_input_map'].values() if row.get('processing_stage')]
+        assert len(names)==len(set(names))==4

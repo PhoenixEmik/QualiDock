@@ -14,7 +14,9 @@ persistence boundary. No new database or execution engine is needed.
 
 FastQC batching and result parsing previously lived inside its main execution
 method. They are extracted once, so processing stages can reuse the same code.
-Tool detection now has explicit probe/version specifications instead of treating
+Processing stages retain the existing per-input collision namespaces, including
+manual pairs with identical basenames in different directories. Tool detection
+now has explicit probe/version specifications instead of treating
 all tools other than FastQC/Kraken2 as MultiQC.
 
 Processing adapters declare validated options and derived outputs, call the

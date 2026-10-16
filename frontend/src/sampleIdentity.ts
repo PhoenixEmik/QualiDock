@@ -24,7 +24,10 @@ export function sampleLabel(run: Run, sample: Sample, samples: Sample[]) {
     const derived = run.derived_datasets?.find(
       (row) => `${run.output_directory}/${row.path}` === source,
     );
-    return `${stage === "raw" ? "Raw" : "Processed"} · ${derived?.source.split("/").pop() || sample.name} · ${sample.id.split("/").slice(1, 2).join("")}`;
+    const read =
+      derived?.read ||
+      run.input_pairing?.find((record) => record.path === source)?.read;
+    return `${stage === "raw" ? "Raw" : "Processed"} · ${derived?.source.split("/").pop() || sample.name}${read ? ` · ${read}` : ""} · ${sample.id.split("/").slice(1, 2).join("")}`;
   }
   if (
     samples.filter((other) => inputFilename(other) === inputFilename(sample))
