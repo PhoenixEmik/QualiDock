@@ -65,6 +65,8 @@ class RunManager:
         self.tool_lock = asyncio.Lock()
         self.tool_signature = None
         self.tool_checked_at = 0.0
+        from .validation_jobs import ValidationJobs
+        self.validation = ValidationJobs(self)
 
     def start(self):
         self.stores.start()
@@ -84,9 +86,13 @@ class RunManager:
                             raise RuntimeError('Duplicate analysis ID in configured result stores')
                         self.stores.paths[run['id']] = path.parent
                         self.stores.directory(run['id'])
+                        from .validation_jobs import interrupted
+                        recovered_validation = interrupted(run)
                         if run["state"] in ACTIVE:
                             run.update(state="interrupted", finished_at=now(), stage="Session ended", error="The previous web session ended before this analysis finished.")
                             stop(run.get('input_outcomes', []), 'interrupted', 'Previous session ended before a complete outcome was recorded')
+                            save_json(path, run)
+                        elif recovered_validation:
                             save_json(path, run)
                         self.runs[run["id"]] = run
                     except (OSError, ValueError, KeyError):
@@ -519,6 +525,7 @@ class RunManager:
                 self.update(run, **changes)
             except (OSError, ValueError):
                 run.update(**changes, updated_at=now())
+        await self.validation.close()
         if self.tasks:
             await asyncio.gather(*list(self.tasks.values()), return_exceptions=True)
         self.stores.close()

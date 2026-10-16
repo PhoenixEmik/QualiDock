@@ -33,6 +33,7 @@ import GeneralStatistics from "./GeneralStatistics";
 import StatusMatrix from "./StatusMatrix";
 import CompareSamples from "./CompareSamples";
 import FileOutcomes from "./FileOutcomes";
+import IntegrityReview from "./IntegrityReview";
 import { sampleLabel } from "./sampleIdentity";
 
 const active = (run: Run) => ["running", "queued"].includes(run.state);
@@ -56,6 +57,7 @@ interface Props {
   cancelling: boolean;
   cancel: (id: string) => Promise<void>;
   reselect: (run: Run) => Promise<void>;
+  refresh?: () => void;
 }
 export default function AnalysisDetail({
   currentRun,
@@ -72,6 +74,7 @@ export default function AnalysisDetail({
   cancelling,
   cancel,
   reselect,
+  refresh = () => {},
 }: Props) {
   const [analyticsView, setAnalyticsView] = useState("Overview");
   const entities = useMemo(
@@ -289,6 +292,7 @@ export default function AnalysisDetail({
         ))}
         <AnalysisGroups run={currentRun} samples={samples} />
         <FileOutcomes run={currentRun} />
+        <IntegrityReview run={currentRun} refresh={refresh} />
         <details className="analysis-inputs">
           <summary>Input references ({currentRun.inputs.length})</summary>
           <ul>

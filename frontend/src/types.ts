@@ -50,6 +50,7 @@ export interface Run {
   output_directory?: string;
   rerun_of?: string | null;
   pairing_note?: string | null;
+  integrity?: IntegrityResult;
   report_input_map?: Record<
     string,
     { path?: string; source_report?: string; id: string; multiqc_name?: string }
@@ -77,6 +78,53 @@ export interface Run {
     exit_code: number | null;
     started_at: string;
     finished_at: string | null;
+  }[];
+}
+export interface IntegrityResult {
+  task_id: string;
+  state: string;
+  result: string;
+  mode: "full" | "quick";
+  version: string;
+  total_files: number;
+  configured_pairs: number;
+  started_at: string | null;
+  finished_at: string | null;
+  error: string | null;
+  artifact: string;
+  current_file?: {
+    path: string;
+    records_scanned: number;
+    state: string;
+  } | null;
+  files: {
+    id: string;
+    path: string;
+    state: string;
+    coverage: string;
+    records_scanned: number;
+    bases_scanned: number;
+    gzip_crc: string;
+    sha256: string | null;
+    q20_bases: number | null;
+    q30_bases: number | null;
+    quality_bases: number | null;
+    encoding_source?: string | null;
+    source_snapshot?: {
+      size: number;
+      mtime_ns: number;
+      device: number;
+      inode: number;
+    };
+    error: string | null;
+  }[];
+  pairs: {
+    id: string;
+    r1: string;
+    r2: string;
+    state: string;
+    error: string | null;
+    method: string;
   }[];
 }
 export type MetadataSource = "auto" | "confirmed" | "manual";

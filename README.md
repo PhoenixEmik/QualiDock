@@ -66,6 +66,10 @@ are fetched for the selected analysis. Legacy endpoints remain compatible. See
 [history behavior and payload benchmarks](docs/HISTORY.md). CSV/TSV exports offer
 explicit [spreadsheet-safe and verbatim formats](docs/EXPORTS.md).
 
+Analysis Overview also provides optional [read-only FASTQ integrity validation](docs/INTEGRITY.md):
+full gzip/record checks, source SHA-256 and configured mate identifier/order checks.
+Quick or interrupted scans retain explicit incomplete coverage.
+
 ## Configuration
 
 | Variable | Default | Purpose |

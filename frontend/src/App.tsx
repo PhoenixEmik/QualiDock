@@ -1172,6 +1172,7 @@ export default function App() {
               <AnalysisDetail
                 key={currentRun.id}
                 currentRun={currentRun}
+                refresh={() => setRevision((value) => value + 1)}
                 samples={samples}
                 multiqc={multiqc}
                 aggregate={aggregate}

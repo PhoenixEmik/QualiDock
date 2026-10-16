@@ -51,6 +51,10 @@ class RenameRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120)
 
 
+class IntegrityRequest(BaseModel):
+    mode: Literal['full', 'quick'] = 'full'
+
+
 class AnalysisRequest(BaseModel):
     name: str = Field(default="", max_length=120)
     mode: Literal["both", "fastqc", "multiqc"] = "both"
@@ -213,6 +217,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if path.is_symlink():
             raise PathViolation("Metrics are unavailable")
         return json.loads(path.read_text())
+
+    @app.post('/api/runs/{run_id}/integrity', status_code=202)
+    async def start_integrity(run_id: str, body: IntegrityRequest):
+        return await manager.validation.start(run_id, body.mode)
+
+    @app.post('/api/runs/{run_id}/integrity/cancel')
+    async def cancel_integrity(run_id: str):
+        return await manager.validation.cancel(run_id)
 
     @app.get("/api/runs/{run_id}/logs")
     async def logs(run_id: str, offset: int = 0):

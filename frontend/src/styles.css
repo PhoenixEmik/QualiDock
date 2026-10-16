@@ -2555,3 +2555,10 @@ tr.row-selected:hover {
 .analysis-groups summary input {
   margin-right: 9px;
 }
+
+.integrity-review {
+  min-width: 0;
+}
+.integrity-review p {
+  overflow-wrap: anywhere;
+}
