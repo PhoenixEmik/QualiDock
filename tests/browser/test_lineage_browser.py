@@ -48,7 +48,7 @@ def test_genuine_chain_navigation_restart_and_missing_parent(workspace,browser):
     parent=panel.get_by_role('button',name='Open analysis '+second['id'],exact=True)
     parent.focus();parent.press('Enter')
     playwright.expect(page.get_by_role('heading',level=1)).to_have_text(second['name'])
-    playwright.expect(page.locator('.job-information')).to_contain_text(second['id'])
+    playwright.expect(page.locator('.job-information').get_by_text(second['id'],exact=True)).to_be_visible()
     page.locator('details.processing-lineage > summary').click()
     page.get_by_role('button',name='View reports for '+first['name'],exact=True).click()
     playwright.expect(page.get_by_role('tab',name='Reports',exact=True)).to_have_attribute('aria-selected','true')
