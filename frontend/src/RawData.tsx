@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Module } from "./types";
-import { exportFilename, exportModule } from "./rawExport";
+import { exportFilename, exportModule, type ExportMode } from "./rawExport";
+import ExportModeSelect from "./ExportModeSelect";
 
 export default function RawData({
   module,
@@ -13,13 +14,14 @@ export default function RawData({
 }) {
   const [open, setOpen] = useState(initiallyOpen);
   const [page, setPage] = useState(0);
+  const [exportMode, setExportMode] = useState<ExportMode>("spreadsheet");
   const start = Math.min(
     page * 200,
     Math.max(0, Math.floor((module.rows.length - 1) / 200) * 200),
   );
   const download = (extension: "csv" | "tsv") => {
     const blob = new Blob(
-      [exportModule(module, extension === "csv" ? "," : "\t")],
+      [exportModule(module, extension === "csv" ? "," : "\t", exportMode)],
       {
         type: `${extension === "csv" ? "text/csv" : "text/tab-separated-values"};charset=utf-8`,
       },
@@ -58,6 +60,7 @@ export default function RawData({
             <span>
               Original column names and values; blanks are unavailable.
             </span>
+            <ExportModeSelect value={exportMode} change={setExportMode} />
             <button className="button small" onClick={() => download("csv")}>
               Export CSV
             </button>

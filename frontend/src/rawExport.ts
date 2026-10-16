@@ -1,13 +1,27 @@
 import type { Module } from "./types";
 
-/** RFC-style quoting also protects TSV delimiters/newlines. No numeric conversion,
- * formula rewriting, rounding, comment injection, or zero substitution occurs.
+export type ExportMode = "verbatim" | "spreadsheet";
+const numeric = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+/** Spreadsheet mode changes risky textual cells only; numeric lexemes stay exact.
+ * A quoted leading tab follows OWASP's Excel-resistant mitigation. It is data,
+ * so programmatic consumers must explicitly choose the verbatim scientific mode.
  */
-export function exportModule(module: Module, delimiter: "," | "\t"): string {
-  const field = (value: string) =>
-    value.includes(delimiter) || /["\r\n]/.test(value)
-      ? `"${value.replace(/"/g, '""')}"`
-      : value;
+export function exportModule(
+  module: Module,
+  delimiter: "," | "\t",
+  mode: ExportMode = "verbatim",
+): string {
+  const field = (value: string) => {
+    const risky =
+      mode === "spreadsheet" &&
+      !numeric.test(value) &&
+      (/^[\s\p{Cc}\p{Cf}]*[=+\-@＝＋－＠]/u.test(value) ||
+        /^[\p{Cc}\p{Cf}]/u.test(value));
+    const text = risky ? "\t" + value : value;
+    return risky || text.includes(delimiter) || /["\r\n]/.test(text)
+      ? `"${text.replace(/"/g, '""')}"`
+      : text;
+  };
   return (
     [module.columns, ...module.rows]
       .map((row) => row.map(field).join(delimiter))

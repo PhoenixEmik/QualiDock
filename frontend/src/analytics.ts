@@ -9,7 +9,7 @@ import {
 } from "./qc.ts";
 import { confirmedPairs } from "./pairing.ts";
 import { alignBins } from "./comparison.ts";
-import { exportModule } from "./rawExport.ts";
+import { exportModule, type ExportMode } from "./rawExport.ts";
 
 export interface AnalyticsSample {
   id: string;
@@ -155,6 +155,7 @@ export function statsExport(
   rows: MultiQCSummary["rows"],
   columns: StatColumn[],
   delimiter: "," | "\t",
+  mode: ExportMode = "verbatim",
 ) {
   return exportModule(
     {
@@ -175,6 +176,7 @@ export function statsExport(
       ]),
     },
     delimiter,
+    mode,
   );
 }
 export const statusValues = ["pass", "warn", "fail", "unavailable"] as const;
@@ -403,6 +405,7 @@ export function sourceExport(
   entities: AnalyticsSample[],
   metric: string,
   delimiter: "," | "\t",
+  mode: ExportMode = "verbatim",
 ) {
   // Long format retains each report's own original headers, bins, precision and missing cells.
   const rows: string[][] = [];
@@ -447,6 +450,7 @@ export function sourceExport(
       rows,
     },
     delimiter,
+    mode,
   );
 }
 export function toggleSelection(selected: Set<string>, id: string) {

@@ -7,6 +7,8 @@ import {
 } from "./analytics";
 import AnalyticsChart, { saveFile } from "./AnalyticsChart";
 import { moduleKey } from "./qc";
+import ExportModeSelect from "./ExportModeSelect";
+import type { ExportMode } from "./rawExport";
 export default function CompareSamples({
   entities,
   selected,
@@ -16,6 +18,7 @@ export default function CompareSamples({
 }) {
   const [metric, setMetric] = useState(comparisonMetrics[0]),
     [normalized, setNormalized] = useState(false);
+  const [exportMode, setExportMode] = useState<ExportMode>("spreadsheet");
   const chosen = useMemo(
     () => entities.filter((e) => selected.has(e.id)),
     [entities, selected],
@@ -32,6 +35,7 @@ export default function CompareSamples({
       aria-label="Multi-sample comparison"
     >
       <div className="analytics-actions">
+        <ExportModeSelect value={exportMode} change={setExportMode} />
         <h2>Compare Samples</h2>
         <label>
           Metric{" "}
@@ -60,7 +64,7 @@ export default function CompareSamples({
           disabled={!chosen.length}
           onClick={() =>
             saveFile(
-              sourceExport(chosen, metric, ","),
+              sourceExport(chosen, metric, ",", exportMode),
               "fastqc-comparison.csv",
               "text/csv;charset=utf-8",
             )
@@ -73,7 +77,7 @@ export default function CompareSamples({
           disabled={!chosen.length}
           onClick={() =>
             saveFile(
-              sourceExport(chosen, metric, "\t"),
+              sourceExport(chosen, metric, "\t", exportMode),
               "fastqc-comparison.tsv",
               "text/tab-separated-values;charset=utf-8",
             )

@@ -9,6 +9,8 @@ import {
   toggleSelection,
 } from "./analytics";
 import { saveFile } from "./AnalyticsChart";
+import ExportModeSelect from "./ExportModeSelect";
+import type { ExportMode } from "./rawExport";
 export default function GeneralStatistics({
   summary,
   entities,
@@ -25,6 +27,7 @@ export default function GeneralStatistics({
   const [search, setSearch] = useState(""),
     [hidden, setHidden] = useState<Set<string>>(new Set()),
     [sorts, setSorts] = useState<Sort[]>([{ key: "sample", direction: 1 }]);
+  const [exportMode, setExportMode] = useState<ExportMode>("spreadsheet");
   const rows = useMemo(
     () => sortStats(summary?.rows || [], search, sorts),
     [summary, search, sorts],
@@ -51,7 +54,7 @@ export default function GeneralStatistics({
   };
   const exportRows = (extension: "csv" | "tsv") =>
     saveFile(
-      statsExport(rows, columns, extension === "csv" ? "," : "\t"),
+      statsExport(rows, columns, extension === "csv" ? "," : "\t", exportMode),
       `multiqc-general-statistics.${extension}`,
       "text/plain;charset=utf-8",
     );
@@ -79,6 +82,7 @@ export default function GeneralStatistics({
       ) : (
         <>
           <div className="analytics-actions">
+            <ExportModeSelect value={exportMode} change={setExportMode} />
             <label>
               Search statistics{" "}
               <input
