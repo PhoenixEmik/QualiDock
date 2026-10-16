@@ -48,7 +48,10 @@ def test_history_api_keeps_legacy_and_rejects_stale_snapshots(client,setup):
 def test_invalidation_event_is_small_and_reconnect_always_refreshes(setup):
  settings,_=setup;app=create_app(settings);manager=app.state.manager
  manager.runs=records();manager.revision=105
- endpoint=next(route.endpoint for route in app.routes if route.path=='/api/events')
+ # FastAPI's supported releases may retain included-router wrappers alongside
+ # direct routes. Inspect the actual SSE route without assuming every wrapper
+ # exposes the Starlette Route interface; keep all stream assertions below.
+ endpoint=next(route.endpoint for route in app.routes if getattr(route,'path',None)=='/api/events')
  class Request:
   async def is_disconnected(self):return False
  async def first(format):
