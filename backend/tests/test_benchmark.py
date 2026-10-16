@@ -68,3 +68,22 @@ def test_real_benchmark_cancellation(tmp_path,monkeypatch):
     evidence=json.loads((tmp_path/'evidence/benchmark.json').read_text())
     assert evidence['cancellation_requested'] and evidence['run']['state']=='cancelled'
     assert not evidence['derived_outputs'] and evidence['input_integrity_unchanged']
+
+
+@pytest.mark.skipif(not SEQKIT, reason='Genuine SeqKit required')
+def test_partial_benchmark_only_counts_verified_outputs(tmp_path,monkeypatch):
+    monkeypatch.setenv('QUALIDOCK_SEQKIT',SEQKIT)
+    broken=tmp_path/'broken.fastq';broken.write_text('@broken\nACGT\n+\nI\n')
+    args=benchmark.parser().parse_args(['--input',str(FIXTURE/'coverage_R1.fastq.gz'),str(broken),'--output',str(tmp_path/'evidence'),'--mode','seqkit-filter'])
+    with pytest.raises(SystemExit): benchmark.main(args)
+    evidence=json.loads((tmp_path/'evidence/benchmark.json').read_text())
+    assert evidence['run']['state']=='partial' and len(evidence['derived_outputs'])==1
+    assert evidence['derived_outputs'][0]['records']==400
+    assert any(row['state']=='failed' for row in evidence['validation_scans'])
+    assert evidence['input_integrity_unchanged']
+
+
+def test_benchmark_rejects_misplaced_parameters(tmp_path):
+    args=benchmark.parser().parse_args(['--input','/not/read','--output',str(tmp_path/'evidence'),'--mode','fastqc','--count','5'])
+    with pytest.raises(ValueError,match='count'): benchmark.processing_options(args)
+    assert not args.output.exists()
