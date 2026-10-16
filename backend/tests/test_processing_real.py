@@ -254,7 +254,9 @@ def test_actual_derived_reuse_outside_roots_restart_and_tampering(tmp_path):
         derived.write_bytes(before+b'changed')
         assert client.get(base+'/datasets').status_code==403
         assert client.post('/api/runs',json={**draft,'mode':'fastqc'}).status_code==403
-        derived.write_bytes(before)
+        derived.unlink()
+        assert client.get(base+'/datasets').status_code==403
+        assert client.post('/api/runs',json={**draft,'mode':'fastqc'}).status_code==403
     assert original=={p:hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
 
 

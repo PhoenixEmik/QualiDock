@@ -1,5 +1,6 @@
 """Real processing through the production UI; no replacement QC or fabricated metrics."""
 import json
+import re
 import os
 from pathlib import Path
 import secrets
@@ -81,7 +82,7 @@ def test_select_fastqs_process_compare_download_and_restart(workspace,browser):
     assert reused.value.status==200,reused.value.text()
     draft=reused.value.json()
     assert len(draft['input_datasets'])==2 and all(r['paired'] for r in draft['input_pairing'])
-    page.get_by_role('button',name='FastQC only',exact=True).click()
+    page.get_by_role('button',name=re.compile('^FastQC only')).click()
     with page.expect_response(lambda r:r.request.method=='POST' and r.url.endswith('/api/runs')) as created:
         page.get_by_role('button',name='Run analysis',exact=True).click()
     with workspace.api() as api: downstream=workspace.finish(api,created.value.json())

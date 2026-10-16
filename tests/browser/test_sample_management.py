@@ -77,6 +77,9 @@ def test_manual_pair_output_rename_rerun_and_group_analytics(workspace,browser):
         expect(page.get_by_label('Analysis name',exact=True)).to_have_value('Renamed managed sample · rerun')
         page.get_by_text('Output and resource settings (optional)',exact=True).click()
         expect(page.get_by_label('Persistent results location',exact=True)).to_have_value(project)
+        expect(editor).not_to_be_visible()
+        page.get_by_text('Review read relationships (optional)',exact=True).click()
+        expect(editor).to_be_visible()
         expect(editor).to_contain_text('manual')
         expect(editor).to_contain_text('L009')
         with page.expect_response(lambda response:response.request.method=='POST' and response.url.split('?')[0].endswith('/api/runs')) as response:

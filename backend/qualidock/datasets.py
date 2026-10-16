@@ -20,7 +20,10 @@ def registered(manager, references):
         dataset = next((row for row in source.get('derived_datasets', []) if row['id'] == identity[1]), None)
         if dataset is None:
             raise PathViolation('Dataset is not a registered derived FASTQ')
-        path = manager.artifact(identity[0], dataset['path'])
+        try:
+            path = manager.artifact(identity[0], dataset['path'])
+        except OSError as exc:
+            raise PathViolation('Derived FASTQ is missing or unreadable') from exc
         if str(path) in records:
             raise ValueError('A FASTQ may be selected only once')
         unit = next((unit for unit in source.get('processing', {}).get('units', []) if unit['id'] == dataset['unit_id']), {})

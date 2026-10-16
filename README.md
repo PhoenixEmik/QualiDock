@@ -73,7 +73,9 @@ full gzip/record checks, source SHA-256 and configured mate identifier/order che
 Quick or interrupted scans retain explicit incomplete coverage.
 
 Every processing operation writes to a new analysis directory, never to the
-original FASTQ file. Advanced parameters are optional. See [processing](docs/PROCESSING.md).
+original FASTQ file. Select published outputs and choose **Use as input** to run
+QC or further processing without copying data. Confirmed paired-end fraction
+sampling validates mate order before and after SeqKit execution. Advanced parameters are optional. See [processing](docs/PROCESSING.md).
 
 Project catalogs, batch planning, cross-run cohorts, delivery policies, release
 review and optional Kraken2 screening have been removed from the application.
