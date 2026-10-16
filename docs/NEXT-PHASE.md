@@ -9,8 +9,8 @@ remain authoritative and compatible. No deployment/scheduler work is included.
 |---|---|---|
 | [#20](https://github.com/PhoenixEmik/QualiDock/issues/20) | Complete; issue closed | [Project model, API, storage decision, backup and rollback](PROJECTS.md). Fully green [CI 38855524020](https://github.com/PhoenixEmik/QualiDock/actions/runs/38855524020), commit `2117168`: backend/frontend/build, genuine QC/tools, Linux resources and 42 browser cases per browser. |
 | [#21](https://github.com/PhoenixEmik/QualiDock/issues/21) | Complete; issue closed | Project Workspace, metadata CRUD/imports, audited file-association corrections and source QC/report drill-down. Fully green [CI 38861150941](https://github.com/PhoenixEmik/QualiDock/actions/runs/38861150941), `291d6ef`; 48 browser cases per target. |
-| [#22](https://github.com/PhoenixEmik/QualiDock/issues/22) | Implemented; validation in progress | [Batch planning, provenance, limits and API](BATCH-QC.md). Existing QC/validation workers; native checkbox selection and browse-first project intake. Actual-tool and browser acceptance required before closure. |
-| [#23](https://github.com/PhoenixEmik/QualiDock/issues/23) | Pending project/metric provenance | Comparable cohorts only; exact source metrics and declared outlier rules. |
+| [#22](https://github.com/PhoenixEmik/QualiDock/issues/22) | Complete; issue closed | [Batch planning, provenance, limits and API](BATCH-QC.md). Browse-first registration and checkbox cohorts. Fully green [CI 38869158008](https://github.com/PhoenixEmik/QualiDock/actions/runs/38869158008), `328c604`: actual tools/resources, 316 backend + provisioned missing-tool cases, 143 frontend/build, 54 browser cases per target. |
+| [#23](https://github.com/PhoenixEmik/QualiDock/issues/23) | In progress | Comparable cohorts only; exact source metrics and declared outlier rules. |
 | [#24](https://github.com/PhoenixEmik/QualiDock/issues/24) | Pending project/release foundations | Allowlisted, approved, verified destination copies; no source writes or unsafe overwrites. Actual shared-filesystem benchmarking remains dependent on authorized storage/data. |
 | [#25](https://github.com/PhoenixEmik/QualiDock/issues/25) | Pending controlled delivery | Append-only lifecycle reporting and advisory retention; no automatic deletion. |
 
@@ -51,3 +51,13 @@ and Linux resource checks passed. **48 browser cases passed per matrix target**,
 including project relationship persistence and original manifest/source preservation.
 The initial failed select-label regression was fixed without skipping tests.
 The association audit race regression passed in the 36-test focused project suite.
+
+Accepted #22 CI at `328c604`: **316 backend passed**, 12 absent-tool cases
+covered by provisioned real-QC/screening jobs; **143 frontend passed**, production
+build, genuine FastQC 0.13.0 and MultiQC 1.25.1/1.35/latest 1.x, Linux resource
+limits and optional Kraken2 all passed. Per browser target: **12 project cases +
+42 existing regressions**, all successful. Source synthetic fixture bytes and
+pre-existing scientific artifacts remained unchanged. Native screenshots live
+in CI artifacts and were visually inspected. The browse-first test polling
+client defect was fixed, not skipped. Detailed [batch API and limits](BATCH-QC.md)
+and [name-only / browse-first workflow](PROJECTS.md) document the accepted changes.
