@@ -8,9 +8,18 @@ import signal
 
 
 PROBE_TIMEOUT = 10
+# Explicit probes prevent new tools inheriting MultiQC's compatibility rules.
+TOOL_SPECS = {
+    'fastqc': ('--version', (0, 12, 1), (0, 14, 0), '0.12.1–0.13.x'),
+    'multiqc': ('--version', (1, 25, 0), (2, 0, 0), '1.25 or newer, below 2'),
+    'kraken2': ('--version', (2, 1, 0), (3, 0, 0), '2.1 or newer, below 3'),
+    'fastp': ('--version', (0, 23, 0), (2, 0, 0), '0.23 or newer, below 2'),
+    'seqkit': ('version', (2, 6, 0), (3, 0, 0), '2.6 or newer, below 3'),
+}
 
 
 async def detect_tool(name: str, executable: str) -> dict:
+    probe, minimum, maximum, expected = TOOL_SPECS[name]
     located = shutil.which(executable)
     path = str(Path(located).absolute()) if located else None
     result = {"name": name, "executable": path or executable, "available": bool(path), "compatible": False, "version": None, "error": None}
@@ -22,7 +31,7 @@ async def detect_tool(name: str, executable: str) -> dict:
         env = os.environ.copy()
         for key in ("QUALIDOCK_TOKEN", "password"):
             env.pop(key, None)
-        process = await asyncio.create_subprocess_exec(path, "--version", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, start_new_session=True, env=env)
+        process = await asyncio.create_subprocess_exec(path, probe, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, start_new_session=True, env=env)
         async def output():
             chunks, size = [], 0
             while True:
@@ -42,9 +51,9 @@ async def detect_tool(name: str, executable: str) -> dict:
         result["version"] = match[1]
         version = tuple(int(part) for part in match[1].split("."))
         version = (*version, *([0] * (3 - len(version))))
-        result["compatible"] = (0, 12, 1) <= version < (0, 14, 0) if name == "fastqc" else (2, 1, 0) <= version < (3, 0, 0) if name == "kraken2" else (1, 25, 0) <= version < (2, 0, 0)
+        result["compatible"] = minimum <= version < maximum
         if not result["compatible"]:
-            result["error"] = f"Unsupported {name} version {match[1]}; expected " + ("0.12.1–0.13.x." if name == "fastqc" else "2.1 or newer, below 3." if name == "kraken2" else "1.25 or newer, below 2.")
+            result["error"] = f"Unsupported {name} version {match[1]}; expected {expected}."
     except (OSError, ValueError, asyncio.TimeoutError) as exc:
         result["error"] = str(exc) or f"{name} version detection timed out."
     finally:

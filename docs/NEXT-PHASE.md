@@ -80,3 +80,8 @@ in CI artifacts (including the `/node` comparison image). An existing intermitte
 manifest download timeout was investigated: tests now wait for source refresh and
 check authenticated attachment headers/body as well as the actual UI download; no
 checks were skipped and the final full matrix passed.
+
+## Updated scope: native FASTQ processing
+
+Delivery expansion (#24–#25) is deferred by the new processing brief. Existing
+accepted functionality remains supported. See [processing architecture](PROCESSING.md).

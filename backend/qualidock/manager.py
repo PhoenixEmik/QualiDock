@@ -339,6 +339,49 @@ class RunManager:
                 execution["resources"] = dict(observation)
             self.update(run)
 
+    async def fastqc_results(self, run, records, metrics, errors, stage=None):
+        """Shared FastQC batches/parser; caller owns the existing run resource slot."""
+        run_id, directory = run["id"], self.directory(run["id"])
+        parsed_by_path = {}
+        for batch in batches(records):
+            if run_id in self.cancelled:
+                break
+            destination = directory / batch[0]['output_directory']
+            destination.mkdir(parents=True, exist_ok=True)
+            if destination.is_symlink() or destination.resolve() != destination or not destination.is_relative_to(directory):
+                raise PathViolation('FastQC output namespace is unavailable or escaped its run directory')
+            for record in batch:
+                record.update(state='unknown', error='Submitted to FastQC; individual start is not reported by the tool')
+            completed = counts(records)['completed']
+            self.update(run, stage=f"FastQC · {completed} of {len(records)} inputs completed")
+            command = [run["tools"]["fastqc"]["executable"], "--outdir", str(destination), "--threads", str(run["threads"]), "--memory", "512", "--format", "fastq", *[record['path'] for record in batch]]
+            code = await self.command(run, "fastqc", command, directory)
+            if code and run_id not in self.cancelled:
+                errors.append(f"FastQC exited with code {code}. See analysis log.")
+            for record in batch:
+                record.update(exit_code=code, finished_at=now())
+                path = directory / record['report']
+                try:
+                    if path.is_symlink() or not path.resolve().is_relative_to(directory):
+                        raise ValueError('FastQC artifact escaped its output directory')
+                    sample = await asyncio.to_thread(parse_report, path, record['report'])
+                    if sample['name'] != record['name']:
+                        raise ValueError('FastQC reported filename does not match the original input')
+                    record.update(state='completed', error=None)
+                    parsed_by_path[path] = sample
+                    metrics['samples'].append(sample)
+                    run['report_input_map'][sample['id']] = {'path': record['path'], 'id': record['id'], **({'processing_stage': stage} if stage else {})}
+                except (ValueError, OSError, zipfile.BadZipFile, UnicodeError, RuntimeError, NotImplementedError) as exc:
+                    if run_id in self.cancelled:
+                        record.update(state='interrupted' if run['state'] == 'interrupted' else 'cancelled', error='Tool stopped before a usable report was recorded')
+                    else:
+                        record.update(state='failed', error=f'No usable FastQC result: {exc}')
+                        errors.append(f"{record['name']} ({record['id']}): {record['error']}")
+            await asyncio.to_thread(save_json, directory / 'metrics.json', metrics)
+            self.update(run, sample_count=len(metrics['samples']), stage=f"FastQC · {len(metrics['samples'])} of {len(records)} inputs completed")
+            self.refresh_reports(run)
+        return parsed_by_path
+
     async def execute(self, run):
         run_id = run["id"]
         directory = self.stores.paths[run_id]
@@ -362,43 +405,7 @@ class RunManager:
                     return
                 parsed_by_path = {}
                 if run["mode"] != "multiqc":
-                    for batch in batches(run['input_outcomes']):
-                        if run_id in self.cancelled:
-                            break
-                        destination = directory / batch[0]['output_directory']
-                        destination.mkdir(parents=True, exist_ok=True)
-                        if destination.is_symlink() or destination.resolve() != destination or not destination.is_relative_to(directory):
-                            raise PathViolation('FastQC output namespace is unavailable or escaped its run directory')
-                        for record in batch:
-                            record.update(state='unknown', error='Submitted to FastQC; individual start is not reported by the tool')
-                        completed = counts(run['input_outcomes'])['completed']
-                        self.update(run, stage=f"FastQC · {completed} of {len(paths)} inputs completed")
-                        command = [run["tools"]["fastqc"]["executable"], "--outdir", str(destination), "--threads", str(run["threads"]), "--memory", "512", "--format", "fastq", *[record['path'] for record in batch]]
-                        code = await self.command(run, "fastqc", command, directory)
-                        if code and run_id not in self.cancelled:
-                            errors.append(f"FastQC exited with code {code}. See analysis log.")
-                        for record in batch:
-                            record.update(exit_code=code, finished_at=now())
-                            path = directory / record['report']
-                            try:
-                                if path.is_symlink() or not path.resolve().is_relative_to(directory):
-                                    raise ValueError('FastQC artifact escaped its output directory')
-                                sample = await asyncio.to_thread(parse_report, path, record['report'])
-                                if sample['name'] != record['name']:
-                                    raise ValueError('FastQC reported filename does not match the original input')
-                                record.update(state='completed', error=None)
-                                parsed_by_path[path] = sample
-                                metrics['samples'].append(sample)
-                                run['report_input_map'][sample['id']] = {'path': record['path'], 'id': record['id']}
-                            except (ValueError, OSError, zipfile.BadZipFile, UnicodeError, RuntimeError, NotImplementedError) as exc:
-                                if run_id in self.cancelled:
-                                    record.update(state='interrupted' if run['state'] == 'interrupted' else 'cancelled', error='Tool stopped before a usable report was recorded')
-                                else:
-                                    record.update(state='failed', error=f'No usable FastQC result: {exc}')
-                                    errors.append(f"{record['name']} ({record['id']}): {record['error']}")
-                        await asyncio.to_thread(save_json, directory / 'metrics.json', metrics)
-                        self.update(run, sample_count=len(metrics['samples']), stage=f"FastQC · {len(metrics['samples'])} of {len(paths)} inputs completed")
-                        self.refresh_reports(run)
+                    parsed_by_path = await self.fastqc_results(run, run['input_outcomes'], metrics, errors)
                     reports = list(parsed_by_path)
                     metrics['samples'] = []  # Reuse the common import/aggregation parser below.
                 else:
