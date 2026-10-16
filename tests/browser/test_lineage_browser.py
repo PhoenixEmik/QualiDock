@@ -47,7 +47,8 @@ def test_genuine_chain_navigation_restart_and_missing_parent(workspace,browser):
     # Keyboard navigation to a recorded parent uses the existing analysis route.
     parent=panel.get_by_role('button',name='Open analysis '+second['id'],exact=True)
     parent.focus();parent.press('Enter')
-    playwright.expect(page.locator('.analysis-detail-heading')).to_contain_text(second['name'])
+    playwright.expect(page.get_by_role('heading',level=1)).to_have_text(second['name'])
+    playwright.expect(page.locator('.job-information')).to_contain_text(second['id'])
     page.locator('details.processing-lineage > summary').click()
     page.get_by_role('button',name='View reports for '+first['name'],exact=True).click()
     playwright.expect(page.get_by_role('tab',name='Reports',exact=True)).to_have_attribute('aria-selected','true')
