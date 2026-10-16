@@ -111,7 +111,8 @@ def main(args):
     before=[fingerprint(path,args.hash_inputs) for path in files]
     settings=Settings(roots=list(dict.fromkeys(path.parent for path in files)),output=args.output/'results',frontend=args.output/'frontend',cpus=capacity,memory_mb=budget,fastqc=os.environ.get('QUALIDOCK_FASTQC','fastqc'),multiqc=os.environ.get('QUALIDOCK_MULTIQC','multiqc'),fastp=os.environ.get('QUALIDOCK_FASTP','fastp'),seqkit=os.environ.get('QUALIDOCK_SEQKIT','seqkit'))
     evidence={'scope':'actual tools; in-process HTTP latency, not browser/SSE/network acceptance','platform':sys.platform,
-              'filesystems':[filesystem(path) for path in files], 'inputs':before,'input_bytes':sum(row['size'] for row in before),
+              'filesystems':[filesystem(path) for path in files], 'output_filesystem':filesystem(args.output), 'inputs':before,'input_bytes':sum(row['size'] for row in before),
+              'input_integrity_evidence':'sha256_before_after' if args.hash_inputs else 'metadata_only_not_content_proof',
               'fingerprint_before_seconds':time.monotonic()-fingerprint_started,'hash_only_source_passes':2 if args.hash_inputs else 0,
               'mode':args.mode,'processing_options':options,'threads':args.threads,'memory_mb':budget,'api_requests':[],'stages':[],'process_counters':{},'cancellation_requested':False,
               'measurement_limits':'Linux process counters are sampled lower bounds, not NFS/Lustre throughput; short processes may be missed. RSS is sampled, not exact peak. Non-Linux kernel I/O counters are unavailable.'}
@@ -159,6 +160,7 @@ def main(args):
             evidence['metrics']=client.get(f'/api/runs/{run_id}/metrics').json()
             run=evidence['run']
             evidence['terminal_state']=run['state']
+            output_audit_started=time.monotonic()
             references=[{'run_id':run_id,'dataset_id':row['id']} for row in run.get('derived_datasets',[])]
             published=datasets.registered(client.app.state.manager,references)
             evidence['derived_outputs']=[]
@@ -171,6 +173,7 @@ def main(args):
             evidence['unpublished_fastqs']=sorted(actual-set(published))
             if run['state']=='completed' and evidence['unpublished_fastqs']: raise AssertionError('Completed run contains unregistered FASTQs')
             evidence['output_hash_only_bytes']=evidence['derived_bytes']
+            evidence['output_audit_seconds']=time.monotonic()-output_audit_started
             validation=run.get('processing',{}).get('input_validation',{})
             checks=[('source',validation), *[(unit['id'],unit.get('output_validation',{})) for unit in run.get('processing',{}).get('units',[])]]
             evidence['validation_scans']=[{'stage':stage,'path':row['path'],'bytes_read':row['compressed_bytes_read'],'coverage':row['coverage'],'state':row['state'],'sha256':row['sha256']} for stage,check in checks for row in check.get('files',[])]
@@ -180,6 +183,9 @@ def main(args):
                     if stage['resources']:
                         stage['resources']={**stage['resources'],'peak_sampled_rss_bytes':None,'rss_scope':'Portable benchmark does not assert Linux process-tree RSS'}
             evidence['analysis_wall_seconds']=time.monotonic()-started
+            for index, stage in enumerate(evidence['stages']):
+                end=evidence['stages'][index+1]['elapsed_seconds'] if index+1<len(evidence['stages']) else evidence['analysis_wall_seconds']
+                stage['observed_wall_seconds']=end-stage['elapsed_seconds']
         fingerprint_started=time.monotonic()
         evidence['input_integrity_unchanged']=before==[fingerprint(path,args.hash_inputs) for path in files]
         evidence['fingerprint_after_seconds']=time.monotonic()-fingerprint_started
