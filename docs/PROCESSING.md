@@ -185,3 +185,23 @@ truncated and changed files report unavailable, with no raw parser exception tex
 ASCII quality characters are displayed unchanged. Empty files are explicit.
 No hashing, full-file scan, random access, index, FastQC or extra job is started.
 A valid first-N preview does not verify later records or a complete gzip CRC.
+
+## Processing Lineage (#27)
+
+Expand **Processing Lineage** in an analysis's Overview & logs. The compact
+ancestor-first list shows recorded operations, versions/processor, parameters,
+individual source paths, read/lane/chunk relationships, registered derived dataset
+IDs/counts and parent analysis/report links. Rerun configuration links remain
+separate from source-to-derived edges. Missing parent manifests/datasets and
+inconsistent copied provenance are explicit; old records without parent metadata
+remain usable and do not acquire guessed ancestry. No QC metric is aggregated.
+
+Authenticated `GET /api/runs/{id}/lineage` projects existing manifests only when
+requested. It visits at most 20 analyses, 8 parent edges deep, and 50 inputs,
+outputs/parent references per analysis; omissions and cycles are reported. Opening
+a recorded parent continues inspection. No startup reverse graph, database,
+scientific recalculation, copying or persisted lineage is introduced. Recorded
+checksums are historical evidence. Current accessible file metadata / exact
+registered-dataset checks detect missing or altered snapshots, but matching
+metadata **does not prove unchanged content** and no fresh hash is calculated.
+The existing full validation/reuse checks remain the authority before execution.

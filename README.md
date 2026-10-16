@@ -79,6 +79,12 @@ pair-preserving filtering/ID extraction validate mate order before and after
 processing. Independent-file filtering/extraction stays available. Exact counts use SeqKit 2.14+ with explicit seed,
 uniform selection without replacement and preserved input order. Advanced parameters are optional. See [processing](docs/PROCESSING.md).
 
+Select one or two files and choose **Inspect FASTQ** for a bounded read-only
+preview (5 reads by default, at most 20), also available for selected derived
+outputs. **Processing Lineage** in analysis Overview shows recorded source history
+and parent/report links after restart. Neither feature runs QC or claims fresh
+full-file integrity from a short preview or metadata match.
+
 Project catalogs, batch planning, cross-run cohorts, delivery policies, release
 review and optional Kraken2 screening have been removed from the application.
 Existing analysis manifests, reports and source/derived FASTQs are preserved.

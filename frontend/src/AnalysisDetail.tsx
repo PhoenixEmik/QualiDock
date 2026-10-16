@@ -35,6 +35,7 @@ import StatusMatrix from "./StatusMatrix";
 import CompareSamples from "./CompareSamples";
 import FileOutcomes from "./FileOutcomes";
 import IntegrityReview from "./IntegrityReview";
+import ProcessingLineage from "./ProcessingLineage";
 import { sampleLabel } from "./sampleIdentity";
 
 const active = (run: Run) => ["running", "queued"].includes(run.state);
@@ -60,6 +61,7 @@ interface Props {
   reselect: (run: Run) => Promise<void>;
   refresh?: () => void;
   reuse: (run: Run, ids: string[]) => Promise<void>;
+  navigate: (id: string, tab?: DetailTab) => void;
 }
 export default function AnalysisDetail({
   currentRun,
@@ -77,6 +79,7 @@ export default function AnalysisDetail({
   cancel,
   reselect,
   reuse,
+  navigate,
   refresh = () => {},
 }: Props) {
   const [analyticsView, setAnalyticsView] = useState(
@@ -297,24 +300,7 @@ export default function AnalysisDetail({
         ))}
         <AnalysisGroups run={currentRun} samples={samples} />
         <FileOutcomes run={currentRun} />
-        {!!currentRun.input_provenance?.length && (
-          <details className="analysis-inputs">
-            <summary>
-              Source datasets ({currentRun.input_provenance.length})
-            </summary>
-            <ul>
-              {currentRun.input_provenance.map((source) => (
-                <li key={`${source.run_id}:${source.dataset_id}`}>
-                  <strong>
-                    Analysis {source.run_id} · {source.dataset_id}
-                  </strong>
-                  <p className="mono">{source.absolute_path}</p>
-                  <p className="mono">SHA-256: {source.sha256}</p>
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
+        <ProcessingLineage runId={currentRun.id} navigate={navigate} />
         {!currentRun.processing && (
           <IntegrityReview run={currentRun} refresh={refresh} />
         )}

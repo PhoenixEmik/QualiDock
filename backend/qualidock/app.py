@@ -244,6 +244,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def run(run_id: str):
         return manager.runs[run_id]
 
+    @app.get('/api/runs/{run_id}/lineage')
+    async def run_lineage(run_id: str):
+        from .lineage import project
+        return await asyncio.to_thread(project, manager, run_id)
+
     @app.post("/api/runs/{run_id}/cancel")
     async def cancel(run_id: str):
         return await manager.cancel(run_id)

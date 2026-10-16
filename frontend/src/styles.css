@@ -2649,3 +2649,9 @@ section[aria-label="Analysis jobs"] > .table-scroll {
 .inspector-record dt { color: var(--text-secondary); font-size: 12px; margin-top: 8px; }
 .inspector-record dd { margin: 2px 0; }
 .inspector-record code { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-all; font-size: 12px; }
+.processing-lineage { overflow-wrap: anywhere; }
+.lineage-steps { padding-left: 24px; }
+.lineage-steps > li { border-left: 2px solid var(--border-strong); padding: 0 0 16px 12px; margin-bottom: 16px; }
+.lineage-steps .section-heading { flex-wrap: wrap; }
+.lineage-steps small { display: block; margin: 4px 0; }
+.lineage-steps pre { white-space: pre-wrap; overflow-wrap: anywhere; }

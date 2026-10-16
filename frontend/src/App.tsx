@@ -964,6 +964,10 @@ export default function App() {
                 cancel={cancel}
                 reselect={reselect}
                 reuse={reuse}
+                navigate={(id, tab = "overview") => {
+                  showRun({ id });
+                  setDetailTab(tab);
+                }}
               />
             ) : (
               <Empty
