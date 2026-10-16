@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Run, Sample } from "./types";
 import { url } from "./api";
-import { downloadDataset, retention } from "./processing";
+import { downloadDataset, retention, publishedDatasets } from "./processing";
 import QcModule from "./QcModule";
 const metrics = [
   "Per base sequence quality",
@@ -31,6 +31,8 @@ export default function ProcessingResults({
     [read, setRead] = useState(0),
     [metric, setMetric] = useState(metrics[0]);
   const processing = run.processing;
+  const datasets = publishedDatasets(run);
+  const published = ["completed", "partial"].includes(run.state);
   if (!processing) return null;
   const unit =
     processing.units.find((unit) => unit.id === unitId) || processing.units[0];
@@ -144,14 +146,23 @@ export default function ProcessingResults({
                     2,
                   )}
                 </pre>
-                <a
-                  className="button small"
-                  href={url(
-                    downloadDataset(run, `processing/${unit.id}/fastp.json`),
+                {published &&
+                  run.reports.some(
+                    (report) =>
+                      report.path === `processing/${unit.id}/fastp.json`,
+                  ) && (
+                    <a
+                      className="button small"
+                      href={url(
+                        downloadDataset(
+                          run,
+                          `processing/${unit.id}/fastp.json`,
+                        ),
+                      )}
+                    >
+                      Download original fastp JSON
+                    </a>
                   )}
-                >
-                  Download original fastp JSON
-                </a>
               </details>
               {processing.options.compare_qc && (
                 <>
@@ -229,7 +240,7 @@ export default function ProcessingResults({
         </>
       )}
       <h3>Derived FASTQ datasets</h3>
-      {!run.derived_datasets?.length ? (
+      {!datasets.length ? (
         <p>
           No published derived FASTQs.{" "}
           {["queued", "running"].includes(run.state)
@@ -251,7 +262,7 @@ export default function ProcessingResults({
               </tr>
             </thead>
             <tbody>
-              {run.derived_datasets.map((entry) => (
+              {datasets.map((entry) => (
                 <tr key={entry.id}>
                   <td title={entry.source}>{entry.source.split("/").pop()}</td>
                   <td title={entry.path}>

@@ -31,6 +31,10 @@ def test_select_fastqs_process_compare_download_and_restart(workspace,browser):
     with workspace.api() as api:
         run=workspace.finish(api,created.value.json())
         metrics=api.get(f"api/runs/{run['id']}/metrics").json()
+    assert run['processing']['options']['multiqc'] is True
+    assert any(report['path']=='multiqc/multiqc_report.html' for report in run['reports'])
+    # Backend completion is not proof React has received its final SSE revision.
+    playwright.expect(page.locator('.analysis-detail-heading .state')).to_have_text('completed',timeout=20000)
     page.get_by_role('tab',name='QC metrics',exact=True).click()
     result=page.get_by_role('region',name='Processing results')
     playwright.expect(result.get_by_role('heading',name='Before / after processing',exact=True)).to_be_visible()
@@ -74,6 +78,10 @@ def test_seqkit_statistics_and_subsampling_from_shared_selection(workspace,brows
     page.get_by_label('Select all visible input files').check()
     page.get_by_role('button',name='Read Processing',exact=True).click()
     page.get_by_label('Operation',exact=True).select_option('seqkit-stats')
+    page.get_by_role('button',name='Browse & select FASTQs',exact=True).click()
+    playwright.expect(page.get_by_role('region',name='Read processing setup')).not_to_be_visible()
+    page.get_by_role('button',name='Read Processing',exact=True).click()
+    playwright.expect(page.get_by_label('Operation',exact=True)).to_have_value('seqkit-stats')
     with page.expect_response(lambda response:response.request.method=='POST' and response.url.endswith('/api/runs')) as created:
         page.get_by_role('button',name='Run processing',exact=True).click()
     with workspace.api() as api:run=workspace.finish(api,created.value.json())

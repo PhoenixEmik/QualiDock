@@ -778,8 +778,10 @@ export default function App() {
                 if (item.id === "processing") {
                   setProjectIntake(null);
                   setRerunOf(null);
-                  setMode("fastp");
-                  setProcessingOptions(defaults("fastp"));
+                  if (!isProcessing(mode)) {
+                    setMode("fastp");
+                    setProcessingOptions(defaults("fastp"));
+                  }
                   open("processing");
                 } else if (item.id === "new") {
                   setMode("both");
@@ -1108,7 +1110,10 @@ export default function App() {
               }
               setSamples={setSampleConfiguration}
               prepare={prepareSamples}
-              browse={() => open("workspace")}
+              browse={() => {
+                setWorkspacePanel("files");
+                open("workspace");
+              }}
               submit={submit}
             />
           )}

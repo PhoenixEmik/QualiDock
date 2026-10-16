@@ -50,3 +50,11 @@ export function retention(
 }
 export const downloadDataset = (run: Pick<Run, "id">, path: string) =>
   `api/runs/${run.id}/download?path=${encodeURIComponent(path)}`;
+
+/** Match the backend artifact publication boundary; metadata can arrive mid-run. */
+export const publishedDatasets = (
+  run: Pick<Run, "state" | "derived_datasets">,
+) =>
+  ["completed", "partial"].includes(run.state)
+    ? run.derived_datasets || []
+    : [];

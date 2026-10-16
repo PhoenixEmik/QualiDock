@@ -6,6 +6,7 @@ import {
   retention,
   downloadDataset,
   processingModes,
+  publishedDatasets,
 } from "../src/processing.ts";
 test("processing modes and defaults stay independent from QC", () => {
   assert.ok(processingModes.every(isProcessing));
@@ -134,4 +135,24 @@ test("declared raw and validated processed pairs retain distinct stage identitie
   assert.equal(entity.lane, "L001");
   run.derived_datasets!.forEach((row) => (row.paired = false));
   assert.equal(confirmedPairs(run, all).length, 1); // independent SeqKit files cannot acquire a pair
+});
+
+test("processing downloads require completed or partial analysis, even with staged metadata", () => {
+  const dataset = { id: "staged" } as any;
+  for (const state of [
+    "queued",
+    "running",
+    "failed",
+    "cancelled",
+    "interrupted",
+  ] as const)
+    assert.deepEqual(
+      publishedDatasets({ state, derived_datasets: [dataset] }),
+      [],
+    );
+  for (const state of ["completed", "partial"] as const)
+    assert.deepEqual(
+      publishedDatasets({ state, derived_datasets: [dataset] }),
+      [dataset],
+    );
 });
