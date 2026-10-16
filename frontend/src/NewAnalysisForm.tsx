@@ -59,7 +59,9 @@ export default function NewAnalysisForm({
   submit,
 }: Props) {
   const suitable = (entry: Entry) =>
-    mode === "multiqc" ? entry.kind === "fastqc" : entry.kind === "fastq";
+    mode === "multiqc"
+      ? ["fastqc", "qcreport"].includes(entry.kind)
+      : entry.kind === "fastq";
   const configuredPaths = [...selected.values()].filter(suitable);
   return (
     <div className="setup-layout">
@@ -98,7 +100,7 @@ export default function NewAnalysisForm({
                     ? "Individual read QC and a combined report"
                     : value === "fastqc"
                       ? "Individual read quality assessment"
-                      : "Combine existing FastQC report files"}
+                      : "Combine existing FastQC or fastp JSON reports"}
                 </small>
                 {mode === value && <Check size={15} />}
               </button>
@@ -126,8 +128,9 @@ export default function NewAnalysisForm({
               />
               <p className="inline-note">
                 Use a directory within a configured storage root, or select
-                individual FastQC reports below. A directory overrides the file
-                selection; FASTQ files are never copied or rerun.
+                individual FastQC / fastp JSON reports below. A directory
+                overrides the file selection; FASTQ files are never copied or
+                rerun.
               </p>
             </div>
           )}
@@ -164,14 +167,14 @@ export default function NewAnalysisForm({
               <div className="pair-summary">
                 <Dna size={17} />
                 {mode === "multiqc"
-                  ? "Existing FastQC reports will be copied into this run."
+                  ? "Supported QC reports will be snapshotted into this run."
                   : `${sampleConfiguration ? sampleConfiguration.input_pairing.filter((record) => record.paired && record.read === "R1").length : pairCount} complete read pairs detected. Both reads are analyzed independently.`}
               </div>
             </>
           ) : (
             <Empty icon={Files} title="Choose your input files">
               {mode === "multiqc"
-                ? "Enter a QC results directory, or select FastQC ZIPs or fastqc_data.txt files in the workspace."
+                ? "Enter a QC results directory, or select FastQC ZIPs, fastqc_data.txt or fastp.json reports in the workspace."
                 : "Select FASTQ files in the workspace. No upload is needed."}
             </Empty>
           )}

@@ -126,3 +126,5 @@ Metrics are parsed from bounded `fastqc_data.txt` and `summary.txt` files in Fas
 Licensed under [GNU GPLv3](LICENSE). FastQC, MultiQC, Apache ECharts, and other dependencies retain their respective licenses.
 
 Delivery inventories, independent expected-file reconciliation and explicit per-sample quantity targets are available in analysis Overview & logs. See [Delivery manifests and yield](docs/DELIVERY.md) for exact count definitions, privacy defaults and CSV/JSON schemas.
+
+MultiQC-only imports additionally support existing fastp JSON reports, without running fastp or processing FASTQs. See [QC report imports](docs/QC-IMPORTS.md) for the explicit allowlist, provenance and limitations.

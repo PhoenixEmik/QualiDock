@@ -451,3 +451,27 @@ test("overview keeps ambiguous filenames and multiple lane pairs as separate rea
     1,
   );
 });
+
+test("imported-report identities use verified provenance without inventing FastQC records", () => {
+  // Synthetic identities only; no scientific metrics are fabricated here.
+  const sourceRun = {
+    id: "imports",
+    inputs: ["/reports/HG001.fastp.json"],
+    report_input_map: {
+      "inputs/0/HG001.fastp.json": {
+        id: "report-stable",
+        source_report: "/reports/HG001.fastp.json",
+        multiqc_name: "0 | HG001.fastp.json",
+      },
+    },
+  } as Run;
+  const records = analyticsSamples(sourceRun, [], {
+    columns: [],
+    rows: [{ sample: "0 | HG001.fastp.json", values: {} }],
+  });
+  assert.equal(records[0].id, "inputs/0/HG001.fastp.json");
+  assert.match(records[0].source, /\/reports\/HG001.fastp.json/);
+  assert.equal(records[0].fastqc, undefined);
+  assert.equal(records[0].read, undefined);
+  assert.equal(records[0].pair, undefined);
+});

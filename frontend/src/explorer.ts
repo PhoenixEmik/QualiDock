@@ -12,7 +12,9 @@ export interface ExplorerRow {
 }
 
 export const isInput = (entry: Entry) =>
-  entry.kind === "fastq" || entry.kind === "fastqc";
+  entry.kind === "fastq" ||
+  entry.kind === "fastqc" ||
+  entry.kind === "qcreport";
 
 /** Group only the pairing keys supplied by FastAPI; never guess new mates. */
 export function explorerRows(

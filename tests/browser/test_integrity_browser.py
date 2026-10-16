@@ -50,3 +50,21 @@ def test_full_integrity_readonly_evidence_and_download(workspace,browser):
   page.screenshot(path='validation/native-delivery'+workspace.settings.prefix.replace('/','-')+'.png',full_page=True)
   page.set_viewport_size({'width':390,'height':844})
   page.wait_for_function('() => document.documentElement.scrollWidth <= innerWidth',timeout=3000)
+
+
+def test_imported_fastp_native_statistics_without_fake_fastqc(workspace,browser):
+ import shutil
+ from pathlib import Path
+ folder=workspace.settings.output/'fastp-import-example';folder.mkdir(exist_ok=True)
+ source=Path(__file__).resolve().parents[2]/'backend/tests/fixtures/imported-qc/fastp/HG001.fastp.json'
+ target=folder/source.name;shutil.copyfile(source,target)
+ with workspace.api() as client:
+  run=workspace.finish(client,client.post('api/runs',json={'name':'Imported fastp upstream','mode':'multiqc','paths':[str(target)]}))
+  metrics=client.get(f"api/runs/{run['id']}/metrics").json()
+  assert not metrics['samples'] and len(metrics['multiqc']['rows'])==1
+ with browser.new_context(viewport={'width':1440,'height':1100}) as context:
+  page=context.new_page();open_run(page,workspace,'Imported fastp upstream')
+  page.get_by_role('tab',name='QC metrics',exact=True).click()
+  expect(page.get_by_role('region',name='MultiQC General Statistics',exact=True)).to_contain_text('HG001.fastp.json')
+  page.get_by_role('button',name='Sample Details',exact=True).click()
+  expect(page.get_by_text('No FastQC module data',exact=True)).to_be_visible()

@@ -19,6 +19,7 @@ from .config import Settings
 from .executor import Executor, LocalExecutor
 from .files import FileAccess, FASTQ, PathViolation
 from .metrics import parse_report, parse_multiqc
+from .import_formats import fastp_metadata, source_mappings
 from .reports import discover, metadata
 from .tools import detect_tool
 from .store import ResultStores
@@ -171,13 +172,14 @@ class RunManager:
         if not paths or len(paths) > 500:
             raise ValueError("Select between 1 and 500 inputs")
         report_inputs = []
+        import_summary = {}
         supplied_pairing = input_pairing
         input_pairing = []
         normalized_groups = []
         pairing_note = None
         if mode == "multiqc":
             try:
-                report_inputs = await asyncio.to_thread(discover, paths, access)
+                report_inputs = await asyncio.to_thread(discover, paths, access, import_summary)
             except OSError as exc:
                 raise ValueError(f"Cannot read QC report inputs: {exc.strerror or exc}") from exc
         else:
@@ -216,7 +218,7 @@ class RunManager:
                "input_outcomes": plan(paths) if mode != 'multiqc' else [], "report_input_map": {},
                "output_root": str(directory.parent), "output_directory": str(directory), "rerun_of": rerun_of,
                "pairing_note": pairing_note,
-               "report_inputs": report_inputs, "source_run_id": source_run_id, "tools": {tool: dict(self.tool_info.get(tool, {})) for tool in required},
+               "report_inputs": report_inputs, "import_summary": import_summary, "source_run_id": source_run_id, "tools": {tool: dict(self.tool_info.get(tool, {})) for tool in required},
                "executions": [], "parameters": {"threads": threads, "memory_mb": self.settings.memory_mb, "executor": "local"},
                "progress": 0, "error": None, "warnings": [], "reports": [], "sample_count": 0}
         self.runs[run_id] = run
@@ -393,7 +395,14 @@ class RunManager:
                                 source = access.resolve(entry["path"])
                                 if source.is_symlink() or metadata(source) != {key: entry[key] for key in ("path", "size", "mtime_ns")}:
                                     raise ValueError(f"Input changed while queued: {source.name}")
-                                shutil.copyfile(source, destination / source.name)
+                                copied = destination / source.name
+                                shutil.copyfile(source, copied)
+                                if metadata(source) != {key:entry[key] for key in ('path','size','mtime_ns')} or copied.stat().st_size != entry['size']:
+                                    raise ValueError('QC report changed during snapshot')
+                                if entry is record:
+                                    with copied.open('rb') as stream:
+                                        record['snapshot_sha256'] = hashlib.file_digest(stream,'sha256').hexdigest()
+                                    record['snapshot_artifact'] = str(copied.relative_to(directory))
                             report = destination / Path(record["path"]).name
                             run['report_input_map'][str(report.relative_to(directory))] = {'source_report': record['path'], 'id': 'report_' + hashlib.sha256(record['path'].encode()).hexdigest()[:24]}
                             if run.get('source_run_id'):
@@ -405,11 +414,17 @@ class RunManager:
                             reports.append(report)
                     await asyncio.to_thread(snapshot)
                 successful = []
+                imported_fastp = {}
                 sample_names = set()
                 multiqc_names = {}
                 namespaced = False
                 for path in reports:
                     try:
+                        if path.suffix.lower() == '.json':
+                            details = await asyncio.to_thread(fastp_metadata,path)
+                            imported_fastp[str(path.relative_to(directory))] = details
+                            successful.append(path)
+                            continue
                         sample = parsed_by_path.get(path) or await asyncio.to_thread(parse_report, path, str(path.relative_to(directory)))
                         metrics["samples"].append(sample)
                         sample_name = FASTQ.sub("", sample["name"])
@@ -425,7 +440,7 @@ class RunManager:
                     return
                 if run["mode"] != "fastqc":
                     if not successful:
-                        errors.append("No FastQC reports were produced for MultiQC.")
+                        errors.append("No supported QC reports were produced for MultiQC.")
                     else:
                         self.update(run, stage="MultiQC")
                         # An explicit list includes only successfully parsed, run-local QC reports.
@@ -433,11 +448,19 @@ class RunManager:
                         if any("\n" in str(path) or "\r" in str(path) for path in successful):
                             raise ValueError("MultiQC report paths cannot contain newlines")
                         file_list.write_text("".join(str(path) + "\n" for path in successful))
-                        if namespaced:
+                        extra_options = []
+                        if imported_fastp:
+                            # fastp defaults to names parsed from upstream commands.
+                            # Use physical report filenames and per-snapshot directories
+                            # to prevent unrelated reports being silently overwritten.
+                            config = directory / 'multiqc-import-config.json'
+                            save_json(config, {'use_filename_as_sample_name':['fastp']})
+                            extra_options = ['--config',str(config),'--dirs','--dirs-depth','1','--fullnames']
+                        if namespaced and not imported_fastp:
                             multiqc_names = {str(path.relative_to(directory)): path.parent.name + " | " + multiqc_names[str(path.relative_to(directory))] for path in successful}
                             if len(set(multiqc_names.values())) != len(successful):
                                 raise ValueError("MultiQC sample namespaces are ambiguous; individual FastQC results are preserved")
-                        code = await self.command(run, "multiqc", [run["tools"]["multiqc"]["executable"], "--file-list", str(file_list), "--outdir", str(directory / "multiqc"), "--force", "--data-format", "json", "--no-version-check", *(["--dirs", "--dirs-depth", "1"] if namespaced else [])], directory)
+                        code = await self.command(run, "multiqc", [run["tools"]["multiqc"]["executable"], "--file-list", str(file_list), "--outdir", str(directory / "multiqc"), "--force", "--data-format", "json", "--no-version-check", *extra_options, *(["--dirs", "--dirs-depth", "1"] if namespaced and not imported_fastp else [])], directory)
                         if code:
                             errors.append(f"MultiQC exited with code {code}. See analysis log.")
                         elif not (directory / "multiqc/multiqc_report.html").is_file():
@@ -457,6 +480,16 @@ class RunManager:
                         run["warnings"].append(metrics["multiqc"]["message"])
                 if run['mode'] != 'fastqc' and metrics.get('multiqc', {}).get('status') == 'available':
                     actual_names = {row['sample'] for row in metrics['multiqc']['rows']}
+                    if imported_fastp:
+                        source_names = await asyncio.to_thread(source_mappings,structured)
+                        multiqc_names = {}
+                        for path in successful:
+                            report = str(path.relative_to(directory))
+                            names = source_names.get(str(path), set()) & actual_names
+                            if len(names) == 1:
+                                multiqc_names[report] = next(iter(names))
+                            else:
+                                errors.append(f'MultiQC did not provide an unambiguous data-source mapping for {report}')
                     for report, name in multiqc_names.items():
                         if name in actual_names and report in run['report_input_map']:
                             run['report_input_map'][report]['multiqc_name'] = name
@@ -464,10 +497,14 @@ class RunManager:
                     if missing:
                         errors.append('MultiQC omitted expected report samples: ' + ', '.join(sorted(missing)))
                 await asyncio.to_thread(save_json, directory / "metrics.json", metrics)
-                expected = len(run.get("report_inputs", [])) if run["mode"] == "multiqc" else len(paths)
+                expected = sum(record.get("kind","fastqc") == "fastqc" for record in run.get("report_inputs", [])) if run["mode"] == "multiqc" else len(paths)
                 if len(metrics["samples"]) != expected:
                     errors.append(f"Parsed {len(metrics['samples'])} of {expected} expected FastQC results.")
-                state = "partial" if errors and metrics["samples"] else "failed" if errors else "completed"
+                if imported_fastp and not all(run.get('report_input_map',{}).get(report,{}).get('multiqc_name') for report in imported_fastp):
+                    errors.append('Some imported fastp sources have no verified MultiQC sample mapping; inspect the preserved original reports')
+                if run.get('import_summary',{}).get('unsupported_files'):
+                    run['warnings'].append(f"Excluded {run['import_summary']['unsupported_files']} unsupported files during bounded report discovery")
+                state = "partial" if errors and (metrics["samples"] or metrics.get('multiqc',{}).get('status') == 'available') else "failed" if errors else "completed"
                 self.update(run, state=state, stage="Finished", progress=100, finished_at=now(), error=" ".join(errors) or None)
         except Exception as exc:
             if run_id not in self.cancelled:

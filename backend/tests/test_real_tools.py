@@ -197,3 +197,41 @@ def test_real_corrupt_input_keeps_good_report_and_truthful_file_outcome(tmp_path
         assert by_name[good.name]['state']=='completed'
         assert by_name[broken.name]['state']=='failed' and by_name[broken.name]['error']
         assert client.get(f"/api/runs/{run['id']}/download",params={'path':by_name[good.name]['report']}).status_code==200
+
+
+@pytest.mark.skipif(not MULTIQC,reason='Real MultiQC is required')
+def test_real_fastp_only_and_mixed_import_preserve_provenance_and_native_fastqc(tmp_path):
+ import json
+ root=(Path(__file__).parent/'fixtures').resolve()
+ settings=real_settings(tmp_path);settings.roots=[root]
+ fastp=root/'imported-qc/fastp/HG001.fastp.json';older=root/'imported-qc/fastp/fastp.json'
+ fastqc=root/'fastqc-0.13.0/coverage_R1_fastqc/fastqc_data.txt'
+ before={path:hashlib.sha256(path.read_bytes()).hexdigest() for path in [fastp,older,fastqc]}
+ saved=[]
+ with TestClient(create_app(settings)) as client:
+  client.headers.update({'Authorization':f'Bearer {settings.token}','X-QualiDock-Request':'1'})
+  for sources in [[fastp,older],[fastp,older,fastqc]]:
+   response=client.post('/api/runs',json={'mode':'multiqc','paths':list(map(str,sources))})
+   assert response.status_code==201,response.text
+   run=wait(client,response.json()['id']);base=f"/api/runs/{run['id']}"
+   assert run['state']=='completed',client.get(base+'/logs').text
+   metrics=client.get(base+'/metrics').json();summary=metrics['multiqc']
+   assert summary['status']=='available' and len(summary['rows'])==len(sources)
+   assert len(metrics['samples'])==len(sources)-2
+   assert not any(execution['tool']=='fastqc' for execution in run['executions'])
+   assert all(record['snapshot_sha256']==before[Path(record['path'])] for record in run['report_inputs'])
+   names=[mapping.get('multiqc_name') for mapping in run['report_input_map'].values()]
+   assert len(set(names))==len(sources) and all(names)
+   assert {mapping['source_report'] for mapping in run['report_input_map'].values()}==set(map(str,sources))
+   for record in run['report_inputs']:
+    assert client.get(base+'/download',params={'path':record['snapshot_artifact']}).content==Path(record['path']).read_bytes()
+   assert client.get(base+'/download',params={'path':'multiqc/multiqc_report.html'}).status_code==200
+   imported_row=next(row for row in summary['rows'] if row['sample']==next(mapping['multiqc_name'] for mapping in run['report_input_map'].values() if mapping['source_report']==str(fastp)))
+   source=json.loads(fastp.read_text())
+   count=next(column['key'] for column in summary['columns'] if column['raw_key']=='filtering_result_passed_filter_reads')
+   assert imported_row['values'][count]==source['filtering_result']['passed_filter_reads']
+   saved.append((base,metrics))
+ with TestClient(create_app(settings)) as client:
+  client.headers.update({'Authorization':f'Bearer {settings.token}'})
+  assert all(client.get(base+'/metrics').json()==metrics for base,metrics in saved)
+ assert before=={path:hashlib.sha256(path.read_bytes()).hexdigest() for path in before}

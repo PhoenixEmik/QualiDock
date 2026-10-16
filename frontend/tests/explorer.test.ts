@@ -249,3 +249,10 @@ test("listing queries preserve path and snapshot boundaries", () => {
     "true",
   );
 });
+
+test("allowlisted QC JSON remains selectable without pairing metadata", () => {
+  const report = entry("HG001.fastp.json", { kind: "qcreport" });
+  const rows = explorerRows([report], "samples");
+  assert.equal(rows[0].sample, false);
+  assert.deepEqual(rowInputPaths(rows[0]), [report.path]);
+});

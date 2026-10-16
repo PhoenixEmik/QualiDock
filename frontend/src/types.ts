@@ -50,6 +50,20 @@ export interface Run {
   output_directory?: string;
   rerun_of?: string | null;
   pairing_note?: string | null;
+  import_summary?: {
+    supported_reports?: number;
+    unsupported_files: number;
+    exclusions: { filename: string; reason: string }[];
+  };
+  report_inputs?: {
+    path: string;
+    kind?: string;
+    tool?: string;
+    version?: string | null;
+    schema?: string;
+    snapshot_sha256?: string;
+    snapshot_artifact?: string;
+  }[];
   integrity?: IntegrityResult;
   report_input_map?: Record<
     string,
@@ -138,6 +152,20 @@ export interface SampleConfiguration {
   input_pairing: InputPairing[];
   sample_groups: SampleGroup[];
   pairing_note?: string | null;
+  import_summary?: {
+    supported_reports?: number;
+    unsupported_files: number;
+    exclusions: { filename: string; reason: string }[];
+  };
+  report_inputs?: {
+    path: string;
+    kind?: string;
+    tool?: string;
+    version?: string | null;
+    schema?: string;
+    snapshot_sha256?: string;
+    snapshot_artifact?: string;
+  }[];
 }
 export interface OutputLocation {
   path: string;
@@ -171,7 +199,7 @@ export interface InputPairing {
 export interface Entry {
   name: string;
   path: string;
-  kind: "directory" | "fastq" | "fastqc" | "file";
+  kind: "directory" | "fastq" | "fastqc" | "qcreport" | "file";
   size: number | null;
   modified: number;
   read: string | null;

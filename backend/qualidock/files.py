@@ -60,7 +60,7 @@ class FileAccess:
             info = target.stat()
         if not (file_stat.S_ISREG(info.st_mode) or file_stat.S_ISDIR(info.st_mode)):
             return None
-        kind = "directory" if file_stat.S_ISDIR(info.st_mode) else "fastq" if FASTQ.search(name) else "fastqc" if name.endswith("_fastqc.zip") or name == "fastqc_data.txt" else "file"
+        kind = "directory" if file_stat.S_ISDIR(info.st_mode) else "fastq" if FASTQ.search(name) else "fastqc" if name.endswith("_fastqc.zip") or name == "fastqc_data.txt" else "qcreport" if name.lower() == "fastp.json" or name.lower().endswith(".fastp.json") else "file"
         pair = PAIR.match(FASTQ.sub("", name)) if kind == "fastq" else None
         return {"name": name, "path": str(path), "kind": kind,
                 "size": info.st_size if kind != "directory" else None, "modified": info.st_mtime,

@@ -88,16 +88,24 @@ export function analyticsSamples(
     );
     if (matches.length === 1 && !matches[0].multiqcName)
       matches[0].multiqcName = row.sample;
-    else
+    else {
+      const imports = Object.entries(run.report_input_map || {}).filter(
+        ([, mapping]) =>
+          mapping.multiqc_name === row.sample && mapping.source_report,
+      );
+      const imported = imports.length === 1 ? imports[0] : undefined;
       entities.push({
-        id: `multiqc:${row.sample}`,
+        id: imported?.[0] || `multiqc:${row.sample}`,
         name: row.sample,
         multiqcName: row.sample,
-        source: "MultiQC General Statistics; unique FASTQ mapping unavailable",
+        source: imported
+          ? `Imported QC report: ${imported[1].source_report}`
+          : "MultiQC General Statistics; unique FASTQ mapping unavailable",
         analysisId: run.id,
         tool: "MultiQC",
         version: multiqc?.version || run.tools?.multiqc?.version || null,
       });
+    }
   }
   return entities;
 }

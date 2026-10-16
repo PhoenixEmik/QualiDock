@@ -453,7 +453,9 @@ export default function App() {
     if (!(await prepareSamples())) return;
     if (
       selected.size &&
-      [...selected.values()].every((entry) => entry.kind === "fastqc")
+      [...selected.values()].every((entry) =>
+        ["fastqc", "qcreport"].includes(entry.kind),
+      )
     )
       setMode("multiqc");
     else if (mode === "multiqc") setMode("both");
@@ -486,7 +488,7 @@ export default function App() {
               : [...selected.values()]
                   .filter((entry) =>
                     mode === "multiqc"
-                      ? entry.kind === "fastqc"
+                      ? ["fastqc", "qcreport"].includes(entry.kind)
                       : entry.kind === "fastq",
                   )
                   .map((entry) => entry.path),

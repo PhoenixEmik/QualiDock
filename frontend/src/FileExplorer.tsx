@@ -374,7 +374,9 @@ export default function FileExplorer({
                               : "FASTQ"
                           : first.kind === "fastqc"
                             ? "FastQC report"
-                            : "File"}
+                            : first.kind === "qcreport"
+                              ? "QC JSON (validate on import)"
+                              : "File"}
                     </span>
                   </td>
                   <td>

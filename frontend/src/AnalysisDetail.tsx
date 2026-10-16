@@ -305,6 +305,36 @@ export default function AnalysisDetail({
             setTab("metrics");
           }}
         />
+        {!!currentRun.report_inputs?.length && (
+          <details className="analysis-inputs">
+            <summary>
+              Imported QC report provenance ({currentRun.report_inputs.length})
+            </summary>
+            <ul>
+              {currentRun.report_inputs.map((report, index) => (
+                <li key={index}>
+                  <span className="mono">{report.path}</span> ·{" "}
+                  {report.tool || "FastQC"} ·{" "}
+                  {report.version || "Version not reported"} ·{" "}
+                  {report.schema || "Historical FastQC import"}
+                  <small className="mono">
+                    Snapshot SHA-256:{" "}
+                    {report.snapshot_sha256 || "Not recorded in historical run"}
+                  </small>
+                </li>
+              ))}
+            </ul>
+            {!!currentRun.import_summary?.unsupported_files && (
+              <p className="inline-note">
+                Excluded {currentRun.import_summary.unsupported_files}{" "}
+                unsupported files (first 20 shown):{" "}
+                {currentRun.import_summary.exclusions
+                  .map((entry) => `${entry.filename}: ${entry.reason}`)
+                  .join("; ")}
+              </p>
+            )}
+          </details>
+        )}
         <details className="analysis-inputs">
           <summary>Input references ({currentRun.inputs.length})</summary>
           <ul>
@@ -644,7 +674,9 @@ export default function AnalysisDetail({
                   ? "Loading QC metrics"
                   : active(currentRun)
                     ? "Waiting for QC results"
-                    : "No normalized metrics available"
+                    : multiqc?.status === "available"
+                      ? "No FastQC module data"
+                      : "No normalized metrics available"
               }
               action={
                 <button className="button" onClick={() => setTab("overview")}>
@@ -657,7 +689,9 @@ export default function AnalysisDetail({
                 ? "Reading saved FastQC metrics."
                 : active(currentRun)
                   ? "QC metrics appear after FastQC produces parsed results."
-                  : currentRun.error || "Check the analysis log for details."}
+                  : multiqc?.status === "available"
+                    ? "These imported QC reports have no native FastQC modules. General Statistics and the official MultiQC report remain available."
+                    : currentRun.error || "Check the analysis log for details."}
             </Empty>
           ))}
       </div>
