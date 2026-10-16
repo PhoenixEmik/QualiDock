@@ -60,7 +60,7 @@ def test_manual_pair_output_rename_rerun_and_group_analytics(workspace,browser):
         expect(page.get_by_label('Select FASTQ sample',exact=True)).to_be_visible()
         page.get_by_role('button',name='R1 / R2 Comparison',exact=True).click()
         expect(page.get_by_label('Select confirmed pair',exact=True)).to_contain_text('L009')
-        page.get_by_role('button',name='Analyses',exact=True).click()
+        page.locator('#main-content').get_by_role('button',name='Analyses',exact=True).click()
         page.get_by_role('button',name='Rename Browser managed sample',exact=True).click()
         page.get_by_label('Analysis display name',exact=True).fill('Renamed managed sample')
         page.get_by_role('button',name='Save name',exact=True).click()
