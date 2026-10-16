@@ -288,3 +288,14 @@ def test_cancel_actual_synchronized_selector_never_publishes(tmp_path):
         restored=client.get(f'/api/runs/{identifier}').json()
         assert restored['state']=='cancelled' and not restored['derived_datasets']
     assert original=={p:hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+
+
+def test_record_capture_is_bounded_even_with_excessive_empty_wrapping(monkeypatch):
+    import io
+    from qualidock import integrity
+    # Small injected support bound exercises the same byte limit without a large fixture.
+    monkeypatch.setattr(integrity,'MAX_CAPTURE',64)
+    data=b'@wrapped/1\n'+b'\n'*100+b'ACGT\n+\nIIII\n'
+    with pytest.raises(integrity.Unsupported,match='representation'):
+        integrity.record(io.BytesIO(data),raw=[])
+    assert integrity.record(io.BytesIO(data))[1]==4  # read-only scanner contract is unchanged

@@ -145,7 +145,8 @@ Synchronized selection holds only the current two bounded records and requested-
 metadata. Exact sampling uses O(N) indices in the external tool; selecting a very
 large count still needs proportional index memory and remains subject to the
 existing memory limit. FASTQ lines/records retain the validator's existing 1 MiB /
-4 MiB support bounds. IDs with other conventions must be entered exactly; no
+4 MiB support bounds. Capturing original record bytes also has an 18 MiB per-record
+representation bound, including whitespace/wrapping overhead. IDs with other conventions must be entered exactly; no
 fuzzy normalization, repair or cross-lane merging is performed.
 
 Before/after charts reuse the existing exact FastQC modules and Raw Data exports;

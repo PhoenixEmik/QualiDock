@@ -12,6 +12,7 @@ import zlib
 VERSION = '1.0'
 MAX_LINE = 1024 * 1024
 MAX_READ = 4 * 1024 * 1024
+MAX_CAPTURE = 4 * MAX_READ + 2 * MAX_LINE
 IUPAC = frozenset(b'ACGTURYSWKMBDHVNacgturyswkmbdhvn')
 
 
@@ -55,9 +56,15 @@ def normalize_identifier(identifier):
 def record(stream, raw=None):
     # Optional bounded record capture lets synchronized selectors preserve the
     # original bytes without maintaining another FASTQ parser.
+    captured = 0
     def read_line():
+        nonlocal captured
         value = line(stream)
-        if raw is not None: raw.append(value)
+        if raw is not None:
+            captured += len(value)
+            if captured > MAX_CAPTURE:
+                raise Unsupported('FASTQ record representation exceeds the 18 MiB synchronized-selection limit')
+            raw.append(value)
         return value
 
     header = read_line()
