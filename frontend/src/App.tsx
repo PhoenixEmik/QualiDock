@@ -263,7 +263,7 @@ export default function App() {
     )
       .then((result) => {
         if (!cancelled) {
-          setMetrics(result);
+          setMetrics({ samples: result.samples, multiqc: result.multiqc });
         }
       })
       .catch((err) => {
