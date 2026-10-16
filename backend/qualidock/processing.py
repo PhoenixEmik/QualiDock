@@ -146,7 +146,7 @@ def seqkit_command(executable, mode, source, output, threads, value, ids):
     argv = [executable, command, '--threads', str(threads)]
     if mode == 'seqkit-stats': argv += ['--tabular']
     elif mode == 'seqkit-sample':
-        argv += (['--number', str(value['count']), '--two-pass'] if exact else ['--proportion', str(value['fraction'])]) + ['--rand-seed', str(value['seed'])]
+        argv += (['--number', str(value['count']), '--two-pass', '--line-width', '0'] if exact else ['--proportion', str(value['fraction'])]) + ['--rand-seed', str(value['seed'])]
     elif mode == 'seqkit-filter':
         argv += ['--min-len', str(value['min_length'])]
         if value['max_length'] is not None: argv += ['--max-len', str(value['max_length'])]

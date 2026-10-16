@@ -160,6 +160,7 @@ def test_exact_command_and_capability_validation():
     argv=seqkit_command('/tools/seqkit','seqkit-sample',Path('/input x.fastq.gz'),Path('/output.fastq.gz'),1,value,Path('/ids'))
     assert argv[:2]==['/tools/seqkit','sample2'] and '--two-pass' in argv and '--proportion' not in argv
     assert argv[argv.index('--number')+1]=='7' and argv[argv.index('--rand-seed')+1]=='73'
+    assert argv[argv.index('--line-width')+1]=='0'  # sample2 otherwise wraps FASTQ in SeqKit 2.14
     assert argv[-1]=='/input x.fastq.gz'
     for bad in (0,-1,True,1.5,9007199254740992):
         with pytest.raises(ValueError):options('seqkit-sample',{'count':bad})

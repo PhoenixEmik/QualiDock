@@ -89,7 +89,10 @@ SeqKit's older `sample --number` is not used: its result can be approximate and
 is not uniform fixed-size sampling. Exact mode is gated at request and execution
 time; older compatible installations still support fraction sampling. Independent
 Go reference indices and actual FASTQ content comparisons verify the pinned 2.14
-sampler. Go is only used to reproduce the test reference, not at runtime.
+sampler. The wrapper explicitly sets `--line-width 0` because SeqKit 2.14
+`sample2` otherwise wraps FASTQ sequence/quality lines; content and order remain
+unchanged, with conventional four-line output. Go is only used to reproduce the
+test reference, not at runtime.
 Statistics is read-only and produces no derived FASTQ. No reads are concatenated
 or automatically repaired.
 
