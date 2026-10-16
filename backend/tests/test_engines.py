@@ -50,7 +50,8 @@ def test_version_probe_never_receives_session_secret(tmp_path, monkeypatch):
 def test_tool_config_and_incompatible_preflight(client, setup):
     settings, root = setup
     config = client.get('/api/config').json()
-    assert config['tools'] == {'fastqc': True, 'multiqc': True}
+    assert {name: config['tools'][name] for name in ('fastqc','multiqc')} == {'fastqc': True, 'multiqc': True}
+    assert {'fastp','seqkit'} <= config['tool_details'].keys()
     assert config['tool_details']['fastqc']['version'] == '0.13.0'
     Path(settings.multiqc).write_text(f'#!{sys.executable}\nprint("multiqc, version 1.0")\n')
     response = client.post('/api/runs', json={'mode': 'both', 'paths': [str(next(root.glob('*.fastq')))]})

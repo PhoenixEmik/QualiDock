@@ -44,6 +44,8 @@ class Settings:
     output_roots: list[Path] = field(default_factory=list)
     secure_cookie: bool = False
     allow_root: bool = False  # Only injected by tests; never exposed as a production option.
+    fastp: str = "fastp"
+    seqkit: str = "seqkit"
     kraken2: str = "kraken2"
     screening_databases: list[dict] = field(default_factory=list)
     screening_error: str | None = None
@@ -72,5 +74,7 @@ class Settings:
             prefix=prefix, secure_cookie=os.environ.get("QUALIDOCK_SECURE_COOKIE") == "1",
             fastqc=os.environ.get("QUALIDOCK_FASTQC", "fastqc"),
             multiqc=os.environ.get("QUALIDOCK_MULTIQC", "multiqc"),
+            fastp=os.environ.get("QUALIDOCK_FASTP", "fastp"),
+            seqkit=os.environ.get("QUALIDOCK_SEQKIT", "seqkit"),
             kraken2=os.environ.get("QUALIDOCK_KRAKEN2", "kraken2"),screening_databases=screening_databases,screening_error=screening_error,
         )

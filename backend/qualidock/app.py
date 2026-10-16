@@ -129,12 +129,13 @@ class ScreeningRequest(BaseModel):
 
 class AnalysisRequest(BaseModel):
     name: str = Field(default="", max_length=120)
-    mode: Literal["both", "fastqc", "multiqc"] = "both"
+    mode: Literal["both", "fastqc", "multiqc", "fastp", "seqkit-stats", "seqkit-sample", "seqkit-filter", "seqkit-extract"] = "both"
     paths: list[str] = Field(min_length=1, max_length=500)
     threads: int = Field(default=1, ge=1, le=32)
     input_pairing: list[ReadAssignment] | None = Field(default=None, max_length=500)
     sample_groups: list[SampleGroup] | None = Field(default=None, max_length=500)
     output_root: str | None = Field(default=None, max_length=4096)
+    processing_options: dict | None = None
     rerun_of: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
 
 
@@ -252,7 +253,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return await manager.create(body.name, body.mode, body.paths, body.threads,
                                     input_pairing=[record.model_dump(exclude_unset=True) for record in body.input_pairing] if body.input_pairing is not None else None,
                                     sample_groups=[group.model_dump() for group in body.sample_groups] if body.sample_groups is not None else None,
-                                    output_root=body.output_root, rerun_of=body.rerun_of)
+                                    output_root=body.output_root, rerun_of=body.rerun_of, processing_options=body.processing_options)
 
     @app.get("/api/output-locations")
     async def output_locations():

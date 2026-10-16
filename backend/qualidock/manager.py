@@ -22,6 +22,7 @@ from .metrics import parse_report, parse_multiqc
 from .import_formats import fastp_metadata, source_mappings
 from .reports import discover, metadata
 from .tools import detect_tool
+from . import processing
 from .store import ResultStores
 from .sample_metadata import validate_configuration
 from .outcomes import plan, batches, stop, counts
@@ -109,6 +110,10 @@ class RunManager:
                         from .screening_jobs import interrupted as screening_interrupted
                         recovered_screening = screening_interrupted(run)
                         if run["state"] in ACTIVE:
+                            if run.get('processing'):
+                                run['derived_datasets'] = []
+                                for unit in run['processing']['units']:
+                                    if unit['state'] in ACTIVE: unit.update(state='interrupted', error='Previous session ended')
                             run.update(state="interrupted", finished_at=now(), stage="Session ended", error="The previous web session ended before this analysis finished.")
                             stop(run.get('input_outcomes', []), 'interrupted', 'Previous session ended before a complete outcome was recorded')
                             save_json(path, run)
@@ -142,7 +147,7 @@ class RunManager:
 
     async def detect_tools(self):
         signature = []
-        for name in (self.settings.fastqc, self.settings.multiqc):
+        for name in (self.settings.fastqc, self.settings.multiqc, self.settings.fastp, self.settings.seqkit):
             executable = shutil.which(name)
             try:
                 stat = Path(executable).stat() if executable else None
@@ -151,8 +156,9 @@ class RunManager:
                 signature.append((name, None, None))
         async with self.tool_lock:
             if signature != self.tool_signature or time.monotonic() - self.tool_checked_at >= 60:
-                fastqc, multiqc = await asyncio.gather(detect_tool("fastqc", self.settings.fastqc), detect_tool("multiqc", self.settings.multiqc))
-                self.tool_info = {"fastqc": fastqc, "multiqc": multiqc}
+                names = ("fastqc", "multiqc", "fastp", "seqkit")
+                detected = await asyncio.gather(*(detect_tool(name, getattr(self.settings, name)) for name in names))
+                self.tool_info = dict(zip(names, detected))
                 self.tool_signature = signature
                 self.tool_checked_at = time.monotonic()
         return self.tool_info
@@ -169,9 +175,10 @@ class RunManager:
             return FileAccess([fastqc])
         return self.files
 
-    async def create(self, name: str, mode: str, raw_paths: list[str], threads: int, source_run_id=None, *, input_pairing=None, sample_groups=None, output_root=None, rerun_of=None):
-        if mode not in {'both', 'fastqc', 'multiqc'}:
+    async def create(self, name: str, mode: str, raw_paths: list[str], threads: int, source_run_id=None, *, input_pairing=None, sample_groups=None, output_root=None, rerun_of=None, processing_options=None):
+        if mode not in {'both', 'fastqc', 'multiqc', *processing.MODES}:
             raise ValueError('Invalid analysis mode')
+        operation_options = processing.options(mode, processing_options)
         if self.closing:
             raise ValueError("Session is stopping")
         if self.settings.memory_mb < 1024:
@@ -213,7 +220,7 @@ class RunManager:
             input_pairing = deepcopy(source.get('input_pairing', []))
             normalized_groups = deepcopy(source.get('sample_groups', []))
             sample_input_paths = source.get('sample_input_paths', source['inputs'])
-        required = ["fastqc"] if mode == "fastqc" else ["multiqc"] if mode == "multiqc" else ["fastqc", "multiqc"]
+        required = processing.required(mode, operation_options) if mode in processing.MODES else ["fastqc"] if mode == "fastqc" else ["multiqc"] if mode == "multiqc" else ["fastqc", "multiqc"]
         for tool in required:
             info = self.tool_info.get(tool)
             executable = getattr(self.settings, tool)
@@ -228,17 +235,22 @@ class RunManager:
         for sub in ("fastqc", "multiqc", "inputs"):
             (directory / sub).mkdir(mode=0o700)
         (directory / "analysis.log").touch(mode=0o600)
-        run = {"schema_version": 2, "id": run_id, "name": name.strip() or "Untitled analysis", "mode": mode,
+        default_name = (mode + ' · ' + paths[0].name)[:120] if mode in processing.MODES else 'Untitled analysis'
+        default_name = ''.join(character for character in default_name if ord(character) >= 32)
+        run = {"schema_version": 2, "id": run_id, "name": name.strip() or default_name, "mode": mode,
                "state": "queued", "stage": "Waiting for resources", "created_at": now(), "updated_at": now(),
                "started_at": None, "finished_at": None, "threads": threads, "inputs": [str(p) for p in paths],
                "input_metadata": [{**metadata(p), "kind": "directory" if p.is_dir() else "file", "device": p.stat().st_dev, "inode": p.stat().st_ino} for p in paths],
                "input_pairing": input_pairing, "sample_groups": normalized_groups, "sample_input_paths": sample_input_paths,
-               "input_outcomes": plan(paths) if mode != 'multiqc' else [], "report_input_map": {},
+               "input_outcomes": plan(paths) if mode not in {'multiqc', *processing.MODES} else [], "report_input_map": {},
                "output_root": str(directory.parent), "output_directory": str(directory), "rerun_of": rerun_of,
                "pairing_note": pairing_note,
                "report_inputs": report_inputs, "import_summary": import_summary, "source_run_id": source_run_id, "tools": {tool: dict(self.tool_info.get(tool, {})) for tool in required},
                "executions": [], "parameters": {"threads": threads, "memory_mb": self.settings.memory_mb, "executor": "local"},
                "progress": 0, "error": None, "warnings": [], "reports": [], "sample_count": 0}
+        if mode in processing.MODES:
+            run['processing'] = {'schema_version': 1, 'options': operation_options, 'units': processing.units(run), 'quality_encoding': 'Phred+33' if mode == 'fastp' else None}
+            run['derived_datasets'] = []
         self.runs[run_id] = run
         self.update(run)
         self.tasks[run_id] = asyncio.create_task(self.execute(run))
@@ -305,7 +317,8 @@ class RunManager:
         self.stores.resolve(str(self.directory(run_id).parent))
         return {'name': (run['name'] + ' · rerun')[:120], 'mode': run['mode'], 'paths': [str(path) for path in paths], 'entries': entries,
                 'threads': min(run.get('threads', 1), self.settings.max_threads), 'input_pairing': run.get('input_pairing') or None,
-                'sample_groups': run.get('sample_groups') or None, 'output_root': str(self.directory(run_id).parent), 'rerun_of': run_id}
+                'sample_groups': run.get('sample_groups') or None, 'output_root': str(self.directory(run_id).parent), 'rerun_of': run_id,
+                'processing_options': deepcopy(run.get('processing', {}).get('options'))}
 
     def checked_inputs(self, run):
         paths = []
@@ -393,13 +406,20 @@ class RunManager:
                     return
                 self.update(run, state="running", stage="Preparing inputs", started_at=now())
                 tools = await self.detect_tools()
-                required = ["fastqc"] if run["mode"] == "fastqc" else ["multiqc"] if run["mode"] == "multiqc" else ["fastqc", "multiqc"]
+                required = processing.required(run["mode"], run["processing"]["options"]) if run.get("processing") else ["fastqc"] if run["mode"] == "fastqc" else ["multiqc"] if run["mode"] == "multiqc" else ["fastqc", "multiqc"]
                 self.update(run, tools={name: dict(tools[name]) for name in required})
                 with (directory / "analysis.log").open("a") as stream:
                     for name in required:
                         stream.write(f"{name}: {tools[name]['version'] or 'version unavailable'} ({tools[name]['executable']})\n")
                         if not tools[name]["compatible"]:
                             raise ValueError(tools[name]["error"])
+                if run.get('processing'):
+                    await processing.execute(self, run, metrics, errors)
+                    if run_id not in self.cancelled:
+                        completed = any(unit['state'] == 'completed' for unit in run['processing']['units'])
+                        self.update(run, state='partial' if completed and errors else 'failed' if errors or not completed else 'completed',
+                                    stage='Finished', progress=100, finished_at=now(), error=' '.join(errors) or None)
+                    return
                 paths = await asyncio.to_thread(self.checked_inputs, run)
                 if run_id in self.cancelled:
                     return
@@ -533,7 +553,7 @@ class RunManager:
                 self.update(run, state=state, stage="Finished", progress=100, finished_at=now(), error=" ".join(errors) or None)
         except Exception as exc:
             if run_id not in self.cancelled:
-                changes = dict(state="partial" if metrics["samples"] else "failed", sample_count=len(metrics["samples"]), stage="Stopped", error=str(exc), finished_at=now())
+                changes = dict(state="partial" if metrics["samples"] or any(unit["state"] == "completed" for unit in run.get("processing", {}).get("units", [])) else "failed", sample_count=len(metrics["samples"]), stage="Stopped", error=str(exc), finished_at=now())
                 try:
                     self.stores.resolve(str(self.directory(run_id).parent))
                     if metrics["samples"]:
@@ -547,6 +567,13 @@ class RunManager:
                     run.update(**changes, updated_at=now())
                     self.revision += 1
         finally:
+            if run.get('processing'):
+                for unit in run['processing']['units']:
+                    if unit['state'] in {'queued', 'running'}:
+                        unit.update(state=run['state'] if run['state'] in {'cancelled','interrupted'} else 'failed', error='Processing stopped before completion')
+                    for key in ('raw_qc', 'processed_qc'):
+                        stop(unit.get(key, []), run['state'], 'Analysis stopped before QC completion')
+                if run['state'] in {'cancelled','interrupted','failed'}: run['derived_datasets'] = []
             pending = run.get('input_outcomes', [])
             if any(record['state'] in {'queued', 'unknown', 'running'} for record in pending):
                 terminal = run['state'] if run['state'] in {'cancelled', 'interrupted'} else 'unknown'
@@ -566,6 +593,12 @@ class RunManager:
         for path in sorted(directory.rglob("*")):
             if path.is_file() and not path.is_symlink() and path.resolve().is_relative_to(directory.resolve()) and path.suffix in allowed:
                 relative = str(path.relative_to(directory))
+                if relative.startswith('processing/private/'):
+                    continue
+                if relative.startswith('processing/'):
+                    unit_id = Path(relative).parts[1]
+                    if not any(unit['id'] == unit_id and unit['state'] == 'completed' for unit in run.get('processing', {}).get('units', [])):
+                        continue
                 if relative.startswith('release-exports/') and path.suffix == '.zip' and relative not in export_artifacts:
                     continue  # Incomplete/orphan ZIPs never become registered downloads.
                 reports.append({"path": relative, "size": path.stat().st_size})
@@ -577,6 +610,7 @@ class RunManager:
             return run
         self.cancelled.add(run_id)
         await self.executor.cancel(run_id)
+        if run.get('processing'): run['derived_datasets'] = []
         stop(run.get('input_outcomes', []), 'cancelled', 'Analysis cancelled before a complete per-file outcome was recorded')
         self.update(run, state="cancelled", stage="Cancelled", finished_at=now())
         return run
@@ -601,6 +635,12 @@ class RunManager:
 
     def artifact(self, run_id, raw: str):
         run = self.runs[run_id]
+        derived = next((entry for entry in run.get('derived_datasets', []) if entry['path'] == raw), None)
+        if derived:
+            if run['state'] not in {'completed','partial'}: raise PathViolation('Derived dataset is not published')
+            path = processing.local_file(self.directory(run_id), raw)
+            if processing.snapshot(path.stat()) != derived['snapshot']: raise PathViolation('Derived dataset changed since processing completed')
+            return path
         if raw not in {report["path"] for report in run["reports"]}:
             raise PathViolation("File is not a registered result artifact")
         directory = self.directory(run_id)
