@@ -157,6 +157,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="QualiDock", version="0.1.0.dev0", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.manager = manager
     app.state.settings = settings
+    from .project_api import project_router
+    app.include_router(project_router(manager))
 
     @app.middleware("http")
     async def protect(request: Request, call_next):
@@ -199,7 +201,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.exception_handler(KeyError)
     async def missing(request, exc):
-        return Response("Analysis not found", status_code=404)
+        return Response("Analysis or project record not found", status_code=404)
 
     @app.exception_handler(DirectoryChanged)
     async def stale_directory(request, exc):

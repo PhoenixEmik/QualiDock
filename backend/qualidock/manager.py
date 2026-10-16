@@ -76,6 +76,8 @@ class RunManager:
         self.exports = ReleaseExports(self)
         from .screening_jobs import ScreeningJobs
         self.screening = ScreeningJobs(self)
+        from .catalog import ProjectCatalog
+        self.catalog = ProjectCatalog(self)
 
     def start(self):
         self.stores.start()
@@ -110,6 +112,7 @@ class RunManager:
                         self.runs[run["id"]] = run
                     except (OSError, ValueError, KeyError):
                         continue
+            self.catalog.start()
         except Exception:
             self.stores.close()
             raise

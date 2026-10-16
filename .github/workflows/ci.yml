@@ -62,7 +62,7 @@ jobs:
           path: validation/multiqc
       - run: python scripts/create-example-data.py --reads 1000
       - run: python scripts/smoke-real-qc.py
-      - run: pytest -q backend/tests/test_real_tools.py
+      - run: pytest -q backend/tests/test_real_tools.py backend/tests/test_catalog_real.py
       - name: Prepare genuine offline screening validation
         if: matrix.multiqc == '1.35'
         run: bash scripts/setup-screening-ci.sh
