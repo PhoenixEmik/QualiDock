@@ -51,7 +51,8 @@ async def report_names(directory, reports, statistics=None, *, sample_names=None
 async def alignment_sample_names(directory, mode):
     """Verified official MultiQC 1.x raw modules; RSeQC has no General Stats."""
     data = await asyncio.to_thread(bounded_text, directory/'multiqc/multiqc_data/multiqc_data.json')
-    raw = json.loads(data).get('report_saved_raw_data', {})
+    value = json.loads(data)
+    raw = value.get('report_saved_raw_data', {}) if isinstance(value,dict) else {}
     key = {'rseqc-infer':'multiqc_rseqc_infer_experiment',
            'rseqc-distribution':'multiqc_rseqc_read_distribution',
            'picard':'multiqc_picard_insertSize'}[mode]

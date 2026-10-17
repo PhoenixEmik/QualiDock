@@ -71,3 +71,10 @@ def test_execution_failure_and_cancellation_diagnostics(tmp_path):
     assert 'code 9' in asyncio.run(multiqc.execute(manager,run,[]))
     manager.cancelled.add('test')
     assert asyncio.run(multiqc.execute(manager,run,[])) is None
+
+
+@pytest.mark.parametrize('value',[[], {'report_saved_raw_data':[]}, {'report_saved_raw_data':{'multiqc_rseqc_infer_experiment':[]}}])
+def test_unknown_alignment_raw_schema_never_invents_sample_names(tmp_path,value):
+    path=tmp_path/'multiqc/multiqc_data/multiqc_data.json';path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(value))
+    assert asyncio.run(multiqc.alignment_sample_names(tmp_path,'rseqc-infer'))==set()
