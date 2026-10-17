@@ -30,6 +30,7 @@ def test_rseqc_original_values_accessible_setup_downloads_and_restart(workspace,
         playwright.expect(page.get_by_role('button',name='Run analysis',exact=True)).to_be_disabled()
         assert not page.get_by_text('Review read relationships (optional)',exact=True).is_visible()
         page.get_by_label('Gene annotation (BED12)',exact=True).select_option(label)
+        page.get_by_label('Aggregate original RSeQC reports with MultiQC',exact=True).check()
         page.get_by_text('Strandedness settings (optional)',exact=True).click()
         page.get_by_label('Maximum usable alignments',exact=False).fill('1000')
         name='RNA '+secrets.token_hex(3)
@@ -50,7 +51,12 @@ def test_rseqc_original_values_accessible_setup_downloads_and_restart(workspace,
         page.wait_for_function('() => document.documentElement.scrollWidth<=innerWidth+1')
         suffix=workspace.settings.prefix.replace('/','-') or '-root'
         page.screenshot(path='validation/rna-strandedness'+suffix+'.png',full_page=True)
+        page.get_by_role('tab',name='Reports',exact=True).click()
+        frame=page.locator('.report-preview[aria-busy=false] iframe').content_frame
+        frame.locator('a[href="#rseqc-infer_experiment"]').first.click()
+        frame.locator('#rseqc_infer_experiment_plot .main-svg').first.wait_for(timeout=30000)
         page.get_by_role('button',name='Rerun',exact=True).click()
+        playwright.expect(page.get_by_label('Aggregate original RSeQC reports with MultiQC',exact=True)).to_be_checked()
         playwright.expect(page.get_by_label('Gene annotation (BED12)',exact=True)).to_have_value(label)
         playwright.expect(page.get_by_label('Maximum usable alignments',exact=False)).to_have_value('1000')
         page.get_by_label('RSeQC operation',exact=True).select_option('rseqc-distribution')
@@ -58,7 +64,7 @@ def test_rseqc_original_values_accessible_setup_downloads_and_restart(workspace,
             page.get_by_role('button',name='Run analysis',exact=True).click()
         assert distribution.value.status==201
         with workspace.api() as api:drun=workspace.finish(api,distribution.value.json())
-        assert drun['qc']['options']=={'annotation':label}
+        assert drun['qc']['options']=={'annotation':label,'multiqc':True}
         page.get_by_role('tab',name='QC metrics',exact=True).click()
         panel=page.get_by_role('region',name='RSeQC results',exact=True)
         playwright.expect(panel.get_by_role('row',name='CDS_Exons 3000 7 2.33',exact=True)).to_be_visible()

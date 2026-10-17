@@ -16,6 +16,7 @@ ANNOTATION_LIMIT = 128 * 1024 * 1024
 
 class Options(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
+    multiqc: bool = False
     annotation: str = Field(min_length=1, max_length=64, pattern=r'^[A-Za-z][A-Za-z0-9_.-]*$')
 
 

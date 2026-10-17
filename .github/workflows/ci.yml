@@ -116,6 +116,17 @@ jobs:
         with:
           name: picard-qc-evidence
           path: validation/picard
+      - name: Official RSeQC, Picard and source-mapping MultiQC compatibility
+        env:
+          QUALIDOCK_REQUIRE_RNA_MULTIQC_TESTS: ${{ matrix.multiqc == '1.35' && '1' || '0' }}
+        run: pytest -q backend/tests/test_alignment_multiqc.py --junitxml=validation/rna-multiqc-tests.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rna-multiqc-${{ matrix.multiqc }}-evidence
+          path: |
+            validation/rna-multiqc
+            validation/rna-multiqc-tests.xml
       - name: Actual mosdepth coverage, references and indexed input
         if: matrix.multiqc == '1.35'
         env:

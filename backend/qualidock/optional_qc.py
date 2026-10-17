@@ -16,7 +16,10 @@ MODES = {'nanoq', 'fastq-screen', 'nanoplot', *alignment.MODES}
 
 def options(mode, supplied):
     if mode == 'picard':
-        return picard.Options.model_validate(supplied or {}).model_dump()
+        value = picard.Options.model_validate(supplied or {}).model_dump()
+        if value['by_library'] and value['multiqc']:
+            raise ValueError('MultiQC insert-size aggregation is unsupported for per-library reports: upstream combines overlapping populations. Original per-library reports remain available without MultiQC.')
+        return value
     if mode in rseqc.MODES:
         model = rseqc.InferOptions if mode == 'rseqc-infer' else rseqc.Options
         return model.model_validate(supplied or {}).model_dump()
@@ -35,9 +38,9 @@ def options(mode, supplied):
 
 def required(mode, value):
     if mode == 'picard':
-        return ['samtools','java','picard']
+        return ['samtools','java','picard', *(['multiqc'] if value['multiqc'] else [])]
     if mode in rseqc.MODES:
-        return ['samtools', 'rseqc_infer' if mode == 'rseqc-infer' else 'rseqc_distribution']
+        return ['samtools', 'rseqc_infer' if mode == 'rseqc-infer' else 'rseqc_distribution', *(['multiqc'] if value['multiqc'] else [])]
     if mode == 'mosdepth':
         return ['samtools', 'mosdepth']
     if mode == 'samtools':

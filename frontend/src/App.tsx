@@ -501,6 +501,7 @@ export default function App() {
           ? {
               qc_options: {
                 annotation: rnaOptions.annotation,
+                multiqc: !!rnaOptions.multiqc,
                 ...(mode === "rseqc-infer"
                   ? {
                       sample_size: rnaOptions.sample_size,
@@ -621,6 +622,7 @@ export default function App() {
       const value = draft.qc_options as Partial<RnaOptions>;
       setRnaOptions({
         annotation: value.annotation || "",
+        multiqc: value.multiqc ?? false,
         sample_size: value.sample_size ?? 200000,
         mapq: value.mapq ?? 30,
       });

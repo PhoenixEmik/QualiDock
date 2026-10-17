@@ -19,6 +19,22 @@ export default function PicardSettings({
         and numeric histogram, grouped by orientation. CRAM is not yet
         qualified; no sorting, duplicate marking or source editing.
       </p>
+      <label>
+        <input
+          type="checkbox"
+          checked={!!value.multiqc}
+          disabled={busy || value.by_library || !config?.tools.multiqc}
+          onChange={(e) => change({ ...value, multiqc: e.target.checked })}
+        />{" "}
+        Aggregate original insert-size reports with MultiQC
+      </label>
+      {value.by_library && (
+        <p role="status">
+          MultiQC is unavailable for per-library reports: its module combines
+          overlapping populations. Native metrics and original library reports
+          remain available.
+        </p>
+      )}
       <details className="processing-advanced">
         <summary>Insert-size settings (optional)</summary>
         <label>
@@ -26,7 +42,13 @@ export default function PicardSettings({
             type="checkbox"
             checked={value.by_library}
             disabled={busy}
-            onChange={(e) => change({ ...value, by_library: e.target.checked })}
+            onChange={(e) =>
+              change({
+                ...value,
+                by_library: e.target.checked,
+                multiqc: e.target.checked ? false : value.multiqc,
+              })
+            }
           />{" "}
           Also report individual libraries
         </label>

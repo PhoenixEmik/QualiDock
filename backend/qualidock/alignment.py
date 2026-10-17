@@ -258,23 +258,44 @@ async def execute(manager, run, metrics, errors):
         manager.update(run, sample_count=sum(r['state'] == 'completed' for r in run['qc']['results']))
     metrics['qc'] = run['qc']
     if run['id'] not in manager.cancelled and run['qc']['options'].get('multiqc'):
-        # Genuine 1.25.1 flagstat aggregation divides N/A (None) by total and
-        # crashes. Feed original stats only; never replace N/A or rewrite reports.
-        legacy = run['tools']['multiqc']['version'] == '1.25.1'
-        sections = {'stats'} if legacy else {'flagstat', 'stats'}
-        if legacy:
-            run['warnings'].append('MultiQC 1.25.1 aggregates SAMtools stats only: its flagstat module fails on N/A percentages. Original flagstat and native counts remain available.')
-        reports = [directory/path for row in run['qc']['results'] if row['state'] == 'completed' for name, path in row['alignment']['reports'].items() if name in sections]
+        config = None
+        if is_rna or is_picard:
+            key = 'rseqc' if is_rna else 'picard'
+            reports = [directory/row['report'] for row in run['qc']['results']
+                       if row['state']=='completed' and row[key].get('status','available')=='available']
+            for row in run['qc']['results']:
+                if row['state']=='completed' and row[key].get('status','available')!='available':
+                    run['warnings'].append(f"MultiQC omitted {row['name']}: no supported observations were reported; original diagnostics remain available.")
+            for path in reports:
+                row = next(r for r in run['qc']['results'] if r['report']==str(path.relative_to(directory)))
+                run['report_input_map'][row['report']] = {'id':row['id'],'path':row['path']}
+            if is_picard:
+                # Official options avoid INPUT=basename collisions without editing reports.
+                config = {'picard_config':{'s_name_filenames':True}} if run['tools']['multiqc']['version']=='1.25.1' else {'use_filename_as_sample_name':['picard']}
+        else:
+            # Genuine 1.25.1 flagstat module crashes on N/A. Preserve originals.
+            legacy = run['tools']['multiqc']['version'] == '1.25.1'
+            sections = {'stats'} if legacy else {'flagstat', 'stats'}
+            if legacy:
+                run['warnings'].append('MultiQC 1.25.1 aggregates SAMtools stats only: its flagstat module fails on N/A percentages. Original flagstat and native counts remain available.')
+            reports = [directory/path for row in run['qc']['results'] if row['state']=='completed' for name,path in row['alignment']['reports'].items() if name in sections]
         if reports:
-            problem = await multiqc.execute(manager, run, reports)
+            try:
+                problem = await multiqc.execute(manager, run, reports, config=config)
+            except (ValueError,OSError) as exc:
+                problem = f'MultiQC aggregation failed: {exc}; original reports remain available'
             if problem:
                 errors.append(problem)
             elif run['id'] not in manager.cancelled:
                 metrics['multiqc'] = await multiqc.summary(directory)
-                names = await multiqc.report_names(directory, reports, metrics['multiqc'])
-                for report, name in names.items():
-                    if name is None:
-                        errors.append(f'No unique MultiQC SAMtools source mapping for {report}')
-                    else:
-                        run['report_input_map'][report]['multiqc_name'] = name
+                try:
+                    samples = await multiqc.alignment_sample_names(directory,run['mode']) if is_rna or is_picard else None
+                    names = await multiqc.report_names(directory,reports,metrics['multiqc'],sample_names=samples)
+                    for report, name in names.items():
+                        if name is None:
+                            errors.append(f'No unique MultiQC {run["mode"]} source mapping for {report}; original reports remain available')
+                        else:
+                            run['report_input_map'][report]['multiqc_name'] = name
+                except (ValueError,OSError,TypeError,UnicodeError) as exc:
+                    errors.append(f'Cannot verify MultiQC source mapping: {exc}; original reports remain available')
     await asyncio.to_thread(save_json, directory/'metrics.json', metrics)

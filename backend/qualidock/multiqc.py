@@ -1,7 +1,8 @@
 """Shared MultiQC I/O; callers own input selection, naming policy and run state."""
 import asyncio
+import json
 from .import_formats import source_mappings
-from .metrics import parse_multiqc
+from .metrics import parse_multiqc, bounded_text
 from .store import save_json
 
 
@@ -45,3 +46,17 @@ async def report_names(directory, reports, statistics=None, *, sample_names=None
         candidates = sources.get(str(path), set()) & actual
         names[str(path.relative_to(directory))] = next(iter(candidates)) if len(candidates) == 1 else None
     return names
+
+
+async def alignment_sample_names(directory, mode):
+    """Verified official MultiQC 1.x raw modules; RSeQC has no General Stats."""
+    data = await asyncio.to_thread(bounded_text, directory/'multiqc/multiqc_data/multiqc_data.json')
+    raw = json.loads(data).get('report_saved_raw_data', {})
+    key = {'rseqc-infer':'multiqc_rseqc_infer_experiment',
+           'rseqc-distribution':'multiqc_rseqc_read_distribution',
+           'picard':'multiqc_picard_insertSize'}[mode]
+    rows = raw.get(key, {}) if isinstance(raw, dict) else {}
+    if not isinstance(rows, dict):return set()
+    if mode == 'picard':
+        return {row['SAMPLE_NAME'] for row in rows.values() if isinstance(row, dict) and isinstance(row.get('SAMPLE_NAME'),str)}
+    return {name for name, row in rows.items() if isinstance(name,str) and isinstance(row,dict) and row}

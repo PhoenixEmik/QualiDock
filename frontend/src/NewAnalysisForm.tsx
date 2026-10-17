@@ -104,11 +104,17 @@ export default function NewAnalysisForm({
   const configuredPaths = [...selected.values()].filter(suitable);
   const required =
     mode === "picard"
-      ? ["samtools", "java", "picard"]
+      ? [
+          "samtools",
+          "java",
+          "picard",
+          ...(picardOptions.multiqc ? ["multiqc"] : []),
+        ]
       : isRnaQC(mode)
         ? [
             "samtools",
             mode === "rseqc-infer" ? "rseqc_infer" : "rseqc_distribution",
+            ...(rnaOptions.multiqc ? ["multiqc"] : []),
           ]
         : mode === "mosdepth"
           ? ["samtools", "mosdepth"]

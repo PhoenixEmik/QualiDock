@@ -375,11 +375,13 @@ export interface MultiQCSummary {
   rows: { sample: string; values: Record<string, string | number> }[];
 }
 export interface PicardOptions {
+  multiqc?: boolean;
   by_library: boolean;
   include_duplicates: boolean;
   histogram_pdf: boolean;
 }
 export interface RnaOptions {
+  multiqc?: boolean;
   annotation: string;
   sample_size: number;
   mapq: number;

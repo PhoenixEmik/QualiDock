@@ -25,6 +25,7 @@ def test_native_insert_metrics_original_histogram_pdf_and_restart(workspace,brow
         page.get_by_role('button',name='Configure analysis',exact=True).click()
         page.get_by_role('button',name='Picard insert-size QC',exact=False).click()
         assert not page.get_by_text('Review read relationships (optional)',exact=True).is_visible()
+        page.get_by_label('Aggregate original insert-size reports with MultiQC',exact=True).check()
         page.get_by_text('Insert-size settings (optional)',exact=True).click()
         option=page.get_by_label('Generate original PDF histogram (Rscript)',exact=True)
         option.focus();page.keyboard.press('Space');playwright.expect(option).to_be_checked()
@@ -53,6 +54,10 @@ def test_native_insert_metrics_original_histogram_pdf_and_restart(workspace,brow
         page.wait_for_function('() => document.documentElement.scrollWidth<=innerWidth+1')
         suffix=workspace.settings.prefix.replace('/','-') or '-root'
         page.screenshot(path='validation/picard-native'+suffix+'.png',full_page=True)
+        page.get_by_role('tab',name='Reports',exact=True).click()
+        frame=page.locator('.report-preview[aria-busy=false] iframe').content_frame
+        frame.locator('#picard_insert_size').scroll_into_view_if_needed()
+        frame.locator('#picard_insert_size .main-svg').first.wait_for(timeout=30000)
         workspace.stop();workspace.start()
         page.goto(workspace.base+'?insert-restored='+secrets.token_hex(3)+'#token='+workspace.settings.token)
         page.get_by_role('button',name='Results',exact=True).click()
@@ -62,6 +67,7 @@ def test_native_insert_metrics_original_histogram_pdf_and_restart(workspace,brow
         playwright.expect(panel.get_by_role('region',name='Insert-size summary',exact=True).get_by_role('rowheader',name='TANDEM',exact=True)).to_be_visible()
         page.get_by_role('button',name='Rerun',exact=True).click()
         playwright.expect(page.get_by_label('Generate original PDF histogram (Rscript)',exact=True)).to_be_checked()
+        playwright.expect(page.get_by_label('Aggregate original insert-size reports with MultiQC',exact=True)).to_be_checked()
         assert hashlib.sha256(source.read_bytes()).hexdigest()==original
         assert not Path(str(source)+'.bai').exists() and not dialogs and page.locator('img[onerror]').count()==0
     finally:

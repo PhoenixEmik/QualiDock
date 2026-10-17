@@ -17,6 +17,19 @@ export default function RnaQcSettings({
 }) {
   return (
     <div className="form-section">
+      <label>
+        <input
+          type="checkbox"
+          checked={!!value.multiqc}
+          disabled={busy || !config?.tools.multiqc}
+          onChange={(e) => change({ ...value, multiqc: e.target.checked })}
+        />{" "}
+        Aggregate original RSeQC reports with MultiQC
+      </label>
+      <p className="inline-note">
+        Optional combined report in Reports. Missing General Statistics do not
+        mean missing RSeQC module results.
+      </p>
       <label className="field-label" htmlFor="rna-operation">
         RSeQC operation
       </label>

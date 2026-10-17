@@ -15,6 +15,7 @@ class Options(BaseModel):
     by_library: bool = False
     include_duplicates: bool = False
     histogram_pdf: bool = False
+    multiqc: bool = False
 
 
 COLUMNS = ['MEDIAN_INSERT_SIZE','MODE_INSERT_SIZE','MEDIAN_ABSOLUTE_DEVIATION','MIN_INSERT_SIZE','MAX_INSERT_SIZE',
