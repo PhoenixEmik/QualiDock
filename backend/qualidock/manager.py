@@ -19,7 +19,7 @@ from .metrics import parse_report
 from .import_formats import fastp_metadata
 from .reports import discover, metadata
 from .tools import detect_tool
-from . import processing, datasets, multiqc, optional_qc, fastq_screen
+from . import alignment, processing, datasets, multiqc, optional_qc, fastq_screen
 from .store import ResultStores, now, save_json
 from .sample_metadata import validate_configuration
 from .outcomes import plan, batches, stop, counts
@@ -108,7 +108,7 @@ class RunManager:
 
     async def detect_tools(self):
         signature = []
-        for name in (self.settings.fastqc, self.settings.multiqc, self.settings.fastp, self.settings.seqkit, self.settings.nanoq, self.settings.nanoplot, self.settings.fastq_screen, self.settings.bowtie2):
+        for name in (self.settings.fastqc, self.settings.multiqc, self.settings.fastp, self.settings.seqkit, self.settings.nanoq, self.settings.nanoplot, self.settings.fastq_screen, self.settings.bowtie2, self.settings.samtools):
             executable = shutil.which(name)
             try:
                 stat = Path(executable).stat() if executable else None
@@ -117,7 +117,7 @@ class RunManager:
                 signature.append((name, None, None))
         async with self.tool_lock:
             if signature != self.tool_signature or time.monotonic() - self.tool_checked_at >= 60:
-                names = ("fastqc", "multiqc", "fastp", "seqkit", "nanoq", "nanoplot", "fastq_screen", "bowtie2")
+                names = ("fastqc", "multiqc", "fastp", "seqkit", "nanoq", "nanoplot", "fastq_screen", "bowtie2", "samtools")
                 detected = await asyncio.gather(*(detect_tool(name, getattr(self.settings, name)) for name in names))
                 self.tool_info = dict(zip(names, detected))
                 self.tool_signature = signature
@@ -171,7 +171,12 @@ class RunManager:
         input_pairing = []
         normalized_groups = []
         pairing_note = None
-        if mode == "multiqc":
+        if mode == 'samtools':
+            if input_datasets or supplied_pairing or sample_groups:
+                raise ValueError('Alignment QC does not accept FASTQ datasets, pairing or sample grouping')
+            for path in paths:
+                await asyncio.to_thread(alignment.readable, path)
+        elif mode == "multiqc":
             try:
                 report_inputs = await asyncio.to_thread(discover, paths, access, import_summary)
             except OSError as exc:
@@ -183,7 +188,7 @@ class RunManager:
             input_pairing = configuration['input_pairing'] if not configuration.get('pairing_note') or supplied_pairing is not None else []
             normalized_groups = configuration['sample_groups']
             pairing_note = configuration.get('pairing_note')
-        sample_input_paths = [str(path) for path in paths] if mode != 'multiqc' else []
+        sample_input_paths = [str(path) for path in paths] if mode not in {'multiqc', 'samtools'} else []
         if mode == 'multiqc' and source_run_id:
             source = self.runs[source_run_id]
             input_pairing = deepcopy(source.get('input_pairing', []))
@@ -202,6 +207,12 @@ class RunManager:
                 raise ValueError(info["error"])
         processing.check_features(mode, operation_options, self.tool_info)
         screen_panel = None
+        approved_reference = None
+        if mode == 'samtools':
+            if qc_options['reference']:
+                approved_reference = await asyncio.to_thread(alignment.reference, self.settings, qc_options['reference'])
+            if any(path.suffix.lower() == '.cram' for path in paths) and not approved_reference:
+                raise ValueError('Select an administrator-approved local reference for CRAM')
         if mode == 'fastq-screen':
             screen_panel = await asyncio.to_thread(fastq_screen.panel, self.settings, qc_options['panel'])
             fastq_screen.safe_path(self.stores.resolve(output_root))
@@ -233,6 +244,8 @@ class RunManager:
             run['qc'] = {'tool': 'fastq_screen' if mode == 'fastq-screen' else mode, 'options': qc_options, 'results': optional_qc.records(paths, mode)}
             if screen_panel:
                 run['qc']['reference_panel'] = screen_panel
+            if approved_reference:
+                run['qc']['reference'] = approved_reference
         self.runs[run_id] = run
         self.update(run)
         self.tasks[run_id] = asyncio.create_task(self.execute(run))
@@ -300,7 +313,8 @@ class RunManager:
         paths = [datasets.resolve(self, path, derived) if not run.get('source_run_id') else access.resolve(path) for path in run['inputs']]
         entries = []
         for path in paths:
-            if run['mode'] != 'multiqc': self.readable_fastq(path)
+            if run['mode'] == 'samtools': alignment.readable(path)
+            elif run['mode'] != 'multiqc': self.readable_fastq(path)
             entry = access._entry(path.parent, path.name)
             if not entry: raise ValueError('An original input is unavailable')
             entries.append(entry)
@@ -321,19 +335,25 @@ class RunManager:
                     raise ValueError("Input directory is unavailable")
                 paths.append(path)
                 continue
-            self.readable_fastq(path) if run['mode'] != 'multiqc' else None
+            if run['mode'] == 'samtools': alignment.readable(path)
+            elif run['mode'] != 'multiqc': self.readable_fastq(path)
             stat = path.stat()
             if not path.is_file() or stat.st_size != metadata["size"] or stat.st_mtime_ns != metadata["mtime_ns"] or any(key in metadata and getattr(stat, attribute) != metadata[key] for key, attribute in (("device", "st_dev"), ("inode", "st_ino"))):
                 raise ValueError(f"Input changed while queued: {path.name}")
             paths.append(path)
         return paths
 
-    async def command(self, run, tool, argv, directory):
+    async def command(self, run, tool, argv, directory, *, stdout=None, env=None):
         execution = {"tool": tool, "argv": argv, "started_at": now(), "finished_at": None, "exit_code": None}
         run.setdefault("executions", []).append(execution)
+        if stdout is not None:
+            execution['stdout'] = str(stdout.relative_to(directory))
+        if env:
+            execution['environment'] = env
         self.update(run)
         try:
-            code = await self.executor.execute(run["id"], argv, directory, directory / "analysis.log", run["threads"])
+            options = {'stdout': stdout, 'env': env} if stdout is not None or env is not None else {}
+            code = await self.executor.execute(run["id"], argv, directory, directory / "analysis.log", run["threads"], **options)
             execution["exit_code"] = code
             return code
         finally:
@@ -593,11 +613,11 @@ class RunManager:
         if run["state"] not in ACTIVE:
             return run
         self.cancelled.add(run_id)
-        await self.executor.cancel(run_id)
         if run.get('processing'): run['derived_datasets'] = []
         stop(run.get('input_outcomes', []), 'cancelled', 'Analysis cancelled before a complete per-file outcome was recorded')
         stop(run.get('qc', {}).get('results', []), 'cancelled', 'QC cancelled before a verified result was recorded')
         self.update(run, state="cancelled", stage="Cancelled", finished_at=now())
+        await self.executor.cancel(run_id)
         return run
 
     async def close(self):
@@ -605,13 +625,14 @@ class RunManager:
         unfinished = [(run_id, run) for run_id, run in self.runs.items() if run["state"] in ACTIVE]
         self.cancelled.update(run_id for run_id, _ in unfinished)
         for run_id, run in unfinished:
-            await self.executor.cancel(run_id)
             stop(run.get('input_outcomes', []), 'interrupted', 'Session ended before a complete per-file outcome was recorded')
+            stop(run.get('qc', {}).get('results', []), 'interrupted', 'Session ended before QC completion')
             changes = dict(state="interrupted", stage="Session ended", finished_at=now(), error="The web session ended. Start a new analysis to rerun these inputs.")
             try:
                 self.update(run, **changes)
             except (OSError, ValueError):
                 run.update(**changes, updated_at=now())
+            await self.executor.cancel(run_id)
         await self.validation.close()
         if self.tasks:
             await asyncio.gather(*list(self.tasks.values()), return_exceptions=True)

@@ -256,3 +256,17 @@ test("allowlisted QC JSON remains selectable without pairing metadata", () => {
   assert.equal(rows[0].sample, false);
   assert.deepEqual(rowInputPaths(rows[0]), [report.path]);
 });
+
+test("BAM and CRAM remain independently selectable without FASTQ pairing", () => {
+  const alignments = [
+    entry("sample_R1.bam", { kind: "alignment" }),
+    entry("sample_R2.cram", { kind: "alignment" }),
+  ];
+  const rows = explorerRows(alignments, "samples");
+  assert.equal(rows.length, 2);
+  assert.ok(rows.every((row) => !row.sample && !row.pairing));
+  assert.deepEqual(
+    rows.flatMap(rowInputPaths),
+    alignments.map((e) => e.path),
+  );
+});

@@ -376,7 +376,11 @@ export default function FileExplorer({
                             ? "FastQC report"
                             : first.kind === "qcreport"
                               ? "QC JSON (validate on import)"
-                              : "File"}
+                              : first.kind === "alignment"
+                                ? first.name.toLowerCase().endsWith(".cram")
+                                  ? "CRAM"
+                                  : "BAM"
+                                : "File"}
                     </span>
                   </td>
                   <td>

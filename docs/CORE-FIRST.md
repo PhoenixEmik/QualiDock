@@ -221,3 +221,9 @@ requested, startup loads existing manifests, artifact discovery still walks resu
 directories, the ECharts bundle-size warning remains, and large/shared-storage/site
 acceptance is unverified. These do not justify a new cache, database or framework
 in this cleanup. See VALIDATION.md for evidence boundaries.
+
+Optional read-only SAMtools QC extends input authorization to BAM/CRAM. It is
+separate from FASTQ parsing, read pairing, structural validation and derived
+FASTQ operations. The existing QC resource slot, executor, JSON manifests and
+artifact access remain shared; approved CRAM references have an explicit local
+contract. See [alignment QC](OPTIONAL-QC.md#samtools-1221--read-only-alignment-qc).

@@ -9,6 +9,7 @@ from collections import OrderedDict
 from .sample_metadata import PAIR_NAME, describe
 
 FASTQ = re.compile(r"\.(?:fastq|fq)(?:\.gz)?$", re.I)
+ALIGNMENT = re.compile(r'\.(?:bam|cram)$', re.I)
 PAIR = PAIR_NAME
 
 
@@ -62,6 +63,8 @@ class FileAccess:
             return None
         kind = "directory" if file_stat.S_ISDIR(info.st_mode) else "fastq" if FASTQ.search(name) else "fastqc" if name.endswith("_fastqc.zip") or name == "fastqc_data.txt" else "qcreport" if name.lower() == "fastp.json" or name.lower().endswith(".fastp.json") else "file"
         pair = PAIR.match(FASTQ.sub("", name)) if kind == "fastq" else None
+        if kind == 'file' and ALIGNMENT.search(name):
+            kind = 'alignment'
         return {"name": name, "path": str(path), "kind": kind,
                 "size": info.st_size if kind != "directory" else None, "modified": info.st_mtime,
                 "read": f"R{pair[3]}" if pair else None,

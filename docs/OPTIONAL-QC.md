@@ -143,6 +143,88 @@ this is not a pixel-equivalence claim. Reproducible evidence is in the run's
 under ignored `validation/nanoplot-final-{linux,browser}`. #31 is accepted with
 its explicitly confirmed HTML-only output scope; no release is prepared.
 
+## SAMtools 1.22.1 — read-only alignment QC
+
+Set `QUALIDOCK_SAMTOOLS` or provide `samtools` on PATH. The initial explicit
+contract requires **SAMtools 1.22.1 with HTSlib 1.22.1**; older, prerelease and
+unqualified builds are unavailable without affecting FASTQ tools. No application
+runtime dependency is added. Test provisioning builds the original pinned source.
+
+BAM/CRAM appear as independently selectable alignment inputs in Workspace. Select
+an alignment and choose **SAMtools alignment QC** in the existing Quality Control
+form. FASTQ pairing, structural validation, integrity scans, derived FASTQ
+registration and sample grouping are deliberately separate. Mixed FASTQ inputs
+are excluded by the form and rejected by the alignment API. No BAM conversion,
+sorting, indexing, editing or derived alignment output is implemented.
+
+Each file executes original `samtools head -n 0` (metadata only), `quickcheck -v`,
+`flagstat` and `stats`. Thread arguments request **threads minus one** additional
+decoder threads. All commands share the existing executor/resource slot and
+cancellation. stdout goes directly to original owned report files; stderr remains
+in the analysis log. Report-writing subprocesses have a **128 MiB per-file OS
+limit**, not a run-wide storage quota. Parsed headers/FAI are at most 16 MiB /
+100,000 references; flagstat is at most 64 KiB; stats is streamed, with at most
+200 native summary rows and 1 MiB per line. Full original stats remains available.
+Incomplete or failed per-file namespaces are not registered as QC artifacts.
+Successful files remain accessible if another file fails.
+
+**quickcheck means header/EOF sanity only.** A deliberately internally corrupted
+BAM passes quickcheck but fails the subsequent scan regression. Neither this label
+nor filesystem snapshots claim exhaustive alignment integrity or content hashes.
+Source paths, size/mtime/device/inode, format, dictionary, flags, versions,
+command/exit/timestamps and reference evidence remain in the manifest. Independent
+tests hash inputs, existing indexes and references before/after to verify unchanged
+bytes. Opening results or rerunning configuration never executes a conversion.
+
+Native flagstat rows preserve original QC-passed/QC-failed segment counts and
+printed percentage labels, including `N/A`. Categories overlap. Total segments
+include primary/secondary/supplementary alignments and are **not independent read
+pairs**. Mapped percentages use each QC column's total segments; primary-mapped
+uses primary segments; properly-paired/singleton uses paired-in-sequencing
+segments. Original stats SN values/precision/notes are preserved separately;
+`raw total sequences` excludes secondary/supplementary. No Q20/Q30 base metric
+or overall biological quality classification is inferred. See the official
+[flagstat](https://www.htslib.org/doc/samtools-flagstat.html),
+[stats](https://www.htslib.org/doc/samtools-stats.html) and
+[quickcheck](https://www.htslib.org/doc/samtools-quickcheck.html) definitions.
+
+For CRAM, configure only approved existing **uncompressed** local references:
+
+```sh
+export QUALIDOCK_ALIGNMENT_REFERENCES='{"assembly":"/references/assembly.fa"}'
+```
+
+The FASTA and its existing `.fai` must be readable regular files without symlink
+components, owned by this user/root and not group/world writable. No FASTA/index
+is generated, downloaded or copied. Every alignment dictionary sequence must
+exist with matching length in the selected FAI before record decoding. Explicit
+`--input-fmt-option reference=<local FASTA>` is passed to both record scanners;
+reference MD5 checks remain enabled. Environment overrides `REF_PATH=/dev/null`,
+`REF_CACHE=/dev/null` and `HTS_PATH=` disable inherited reference search/cache and
+external plugins. Complete local dictionary coverage prevents missing-contig UR
+fallback; pinned HTSlib additionally rejects remote UR references. Reference
+snapshots and FAI SHA-256 are recorded/rechecked before/after execution; they are
+not a full FASTA checksum. Mismatched reference bases fail genuine decoding.
+Missing reference/index/contigs fail clearly. CRAM with embedded references still
+requires the same explicit approved contract in this initial integration.
+
+Optional **Generate MultiQC** uses the existing aggregation helper. Genuine stats
+and flagstat reports use stable input-ID filenames, avoiding basename collisions;
+source mappings are accepted only from the verified Samtools stats/flagstat
+sections. Original reports remain available if aggregation/mapping fails. This
+is separate from importing arbitrary external SAMtools directories; that new
+import workflow is not offered. MultiQC original HTML uses the unchanged isolated
+viewer. Initial version-matrix acceptance is recorded after required CI finishes.
+
+Small synthetic SAM/reference fixtures explicitly define 8 alignment records
+(primary 6, secondary 1, supplementary 1) and original SAMtools outputs. Tests
+verify actual report values, plain BAM and CRAM, corruption/truncation, wrong
+reference, source immutability, collision mapping, secure artifacts, cancellation
+and restart. A live HTTP canary test runs unchanged in Linux genuine-tool CI;
+the local managed macOS sandbox cannot bind a listening port. No representative
+large-alignment or NFS/Lustre performance acceptance is claimed. No release work
+is included. #33 remains gated on #32 validation.
+
 ## FastQ Screen 0.16.x (tested 0.16.0)
 
 Optional operator configuration:

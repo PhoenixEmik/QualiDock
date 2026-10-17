@@ -48,6 +48,8 @@ class Settings:
     seqkit: str = "seqkit"
     nanoq: str = "nanoq"
     nanoplot: str = "NanoPlot"
+    samtools: str = "samtools"
+    alignment_references: dict[str, str] = field(default_factory=dict)
     fastq_screen: str = "fastq_screen"
     bowtie2: str = "bowtie2"
     screen_panels: dict[str, str] = field(default_factory=dict)
@@ -75,6 +77,8 @@ class Settings:
             seqkit=os.environ.get("QUALIDOCK_SEQKIT", "seqkit"),
             nanoq=os.environ.get("QUALIDOCK_NANOQ", "nanoq"),
             nanoplot=os.environ.get("QUALIDOCK_NANOPLOT", "NanoPlot"),
+            samtools=os.environ.get("QUALIDOCK_SAMTOOLS", "samtools"),
+            alignment_references=json.loads(os.environ.get("QUALIDOCK_ALIGNMENT_REFERENCES", "{}")),
             fastq_screen=os.environ.get("QUALIDOCK_FASTQ_SCREEN", "fastq_screen"),
             bowtie2=os.environ.get("QUALIDOCK_BOWTIE2", "bowtie2"),
             screen_panels=json.loads(os.environ.get("QUALIDOCK_SCREEN_PANELS", "{}")),

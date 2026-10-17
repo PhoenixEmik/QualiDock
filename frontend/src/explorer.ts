@@ -13,6 +13,7 @@ export interface ExplorerRow {
 
 export const isInput = (entry: Entry) =>
   entry.kind === "fastq" ||
+  entry.kind === "alignment" ||
   entry.kind === "fastqc" ||
   entry.kind === "qcreport";
 

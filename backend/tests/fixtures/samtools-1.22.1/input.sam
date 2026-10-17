@@ -1,0 +1,11 @@
+@HD	VN:1.6	SO:coordinate
+@SQ	SN:chr1	LN:100
+@SQ	SN:chr2	LN:50
+pair	99	chr1	1	60	10M	=	6	15	AAAAAAAAAA	IIIIIIIIII
+pair	147	chr1	6	60	10M	=	1	-15	AAAAAAAAAA	IIIIIIIIII
+secondary	256	chr1	11	60	5M	*	0	0	AAAAA	IIIII
+supplementary	2048	chr1	21	60	5M	*	0	0	AAAAA	IIIII
+duplicate	1024	chr1	31	60	5M	*	0	0	AAAAA	IIIII
+qcfail	512	chr1	41	60	5M	*	0	0	AAAAA	IIIII
+single	0	chr1	51	60	5M	*	0	0	AAAAA	IIIII
+unmapped	4	*	0	0	*	*	0	0	AAAAA	IIIII

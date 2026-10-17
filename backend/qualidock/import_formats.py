@@ -46,8 +46,9 @@ def source_mappings(path):
     result = {}
     if not isinstance(sources,dict):return result
     for module,sections in sources.items():
-        if module.lower() not in {'fastqc','fastp','fastq screen'} or not isinstance(sections,dict):continue
-        for rows in sections.values():
+        if module.lower() not in {'fastqc','fastp','fastq screen','samtools'} or not isinstance(sections,dict):continue
+        for section,rows in sections.items():
+            if module.lower() == 'samtools' and section not in {'stats','flagstat'}:continue
             if not isinstance(rows,dict):continue
             for name,source in rows.items():
                 if isinstance(name,str) and isinstance(source,str):

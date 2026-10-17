@@ -29,6 +29,7 @@ import type {
   DatasetReference,
   ScreenOptions,
   NanoPlotOptions,
+  AlignmentOptions,
 } from "./types";
 import { Empty } from "./Feedback";
 import FileExplorer from "./FileExplorer";
@@ -90,6 +91,10 @@ export default function App() {
   const [nanoPlotOptions, setNanoPlotOptions] = useState<NanoPlotOptions>({
     loglength: false,
     individual_plots: false,
+  });
+  const [alignmentOptions, setAlignmentOptions] = useState<AlignmentOptions>({
+    reference: null,
+    multiqc: false,
   });
   const [qcOptions, setQcOptions] = useState<ScreenOptions>({
     panel: "",
@@ -442,7 +447,10 @@ export default function App() {
       )
     )
       setMode("multiqc");
-    else if (mode === "multiqc" || isProcessing(mode)) setMode("both");
+    else if ([...selected.values()].some((entry) => entry.kind === "alignment"))
+      setMode("samtools");
+    else if (mode === "multiqc" || mode === "samtools" || isProcessing(mode))
+      setMode("both");
     open("new");
   };
   const showRun = (run: Pick<Run, "id">) => {
@@ -463,11 +471,22 @@ export default function App() {
       const payload = {
         name,
         mode,
-        ...(mode === "fastq-screen"
-          ? { qc_options: qcOptions }
-          : mode === "nanoplot"
-            ? { qc_options: nanoPlotOptions }
-            : {}),
+        ...(mode === "samtools"
+          ? {
+              qc_options: {
+                ...alignmentOptions,
+                reference: [...selected.values()].some(
+                  (e) => e.kind === "alignment" && /\.cram$/i.test(e.name),
+                )
+                  ? alignmentOptions.reference
+                  : null,
+              },
+            }
+          : mode === "fastq-screen"
+            ? { qc_options: qcOptions }
+            : mode === "nanoplot"
+              ? { qc_options: nanoPlotOptions }
+              : {}),
         ...(isProcessing(mode)
           ? { processing_options: processingOptions }
           : {}),
@@ -478,17 +497,21 @@ export default function App() {
                 .filter((entry) =>
                   mode === "multiqc"
                     ? ["fastqc", "qcreport"].includes(entry.kind)
-                    : entry.kind === "fastq",
+                    : mode === "samtools"
+                      ? entry.kind === "alignment"
+                      : entry.kind === "fastq",
                 )
                 .map((entry) => entry.path),
         threads,
         output_root: outputRoot || null,
         rerun_of: rerunOf,
-        input_datasets: selectedReferences(
-          inputDatasets,
-          new Set(selected.keys()),
-        ),
-        ...(mode !== "multiqc" && currentSampleConfiguration
+        input_datasets:
+          mode === "samtools"
+            ? []
+            : selectedReferences(inputDatasets, new Set(selected.keys())),
+        ...(mode !== "multiqc" &&
+        mode !== "samtools" &&
+        currentSampleConfiguration
           ? {
               input_pairing: currentSampleConfiguration.input_pairing,
               sample_groups: currentSampleConfiguration.sample_groups,
@@ -552,6 +575,8 @@ export default function App() {
     setMode(draft.mode);
     if (draft.mode === "fastq-screen" && draft.qc_options)
       setQcOptions(draft.qc_options as ScreenOptions);
+    if (draft.mode === "samtools" && draft.qc_options)
+      setAlignmentOptions(draft.qc_options as AlignmentOptions);
     if (draft.mode === "nanoplot" && draft.qc_options)
       setNanoPlotOptions(draft.qc_options as NanoPlotOptions);
     if (isProcessing(draft.mode))
@@ -924,6 +949,8 @@ export default function App() {
           )}
           {view === "new" && (
             <NewAnalysisForm
+              alignmentOptions={alignmentOptions}
+              setAlignmentOptions={setAlignmentOptions}
               nanoPlotOptions={nanoPlotOptions}
               setNanoPlotOptions={setNanoPlotOptions}
               qcOptions={qcOptions}

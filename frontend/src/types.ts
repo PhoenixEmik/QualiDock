@@ -49,6 +49,7 @@ export interface Run {
     | "both"
     | "fastqc"
     | "multiqc"
+    | "samtools"
     | "nanoplot"
     | "nanoq"
     | "fastq-screen"
@@ -88,8 +89,14 @@ export interface Run {
   }[];
   processing?: ProcessingResult;
   qc?: {
-    tool: "nanoq" | "nanoplot" | "fastq_screen";
+    tool: "nanoq" | "nanoplot" | "fastq_screen" | "samtools";
     options: Record<string, unknown>;
+    reference?: {
+      id: string;
+      path: string;
+      identity: string;
+      fai_sha256: string;
+    };
     reference_panel?: {
       id: string;
       sha256: string;
@@ -104,6 +111,13 @@ export interface Run {
       error: string | null;
       report: string;
       source_sha256?: string;
+      alignment?: {
+        format: string;
+        quickcheck: string;
+        reports: Record<string, string>;
+        flagstat: { columns: string[]; rows: string[][] };
+        stats: { columns: string[]; rows: string[][] };
+      };
       nanoplot?: {
         columns: string[];
         rows: string[][];
@@ -240,7 +254,7 @@ export interface OutputLocation {
   error: string | null;
 }
 export interface RerunConfiguration extends SampleConfiguration {
-  qc_options?: ScreenOptions | NanoPlotOptions;
+  qc_options?: ScreenOptions | NanoPlotOptions | AlignmentOptions;
   input_datasets?: DatasetReference[];
   name: string;
   mode: Run["mode"];
@@ -267,7 +281,7 @@ export interface InputPairing {
 export interface Entry {
   name: string;
   path: string;
-  kind: "directory" | "fastq" | "fastqc" | "qcreport" | "file";
+  kind: "directory" | "fastq" | "fastqc" | "qcreport" | "alignment" | "file";
   size: number | null;
   modified: number;
   read: string | null;
@@ -316,6 +330,11 @@ export interface MultiQCSummary {
   rows: { sample: string; values: Record<string, string | number> }[];
 }
 export interface Config {
+  alignment_references?: {
+    id: string;
+    available: boolean;
+    error: string | null;
+  }[];
   screen_panels?: {
     id: string;
     available: boolean;
@@ -335,11 +354,16 @@ export interface Config {
     seqkit?: boolean;
     nanoq?: boolean;
     nanoplot?: boolean;
+    samtools?: boolean;
     fastq_screen?: boolean;
     bowtie2?: boolean;
   };
   prefix: string;
   tool_details?: Record<string, ToolInfo>;
+}
+export interface AlignmentOptions {
+  reference: string | null;
+  multiqc: boolean;
 }
 export interface NanoPlotOptions {
   loglength: boolean;

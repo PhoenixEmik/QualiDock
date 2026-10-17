@@ -7,6 +7,10 @@ import time
 
 
 def main():
+    limit = os.environ.pop('QUALIDOCK_MAX_FILE_BYTES', None)
+    if limit:
+        import resource
+        resource.setrlimit(resource.RLIMIT_FSIZE, (int(limit), int(limit)))
     cpus = int(sys.argv[1])
     if hasattr(os, "sched_setaffinity"):
         available = sorted(os.sched_getaffinity(0))

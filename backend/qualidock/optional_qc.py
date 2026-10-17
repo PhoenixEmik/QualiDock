@@ -9,12 +9,14 @@ from .outcomes import stop
 from .processing import local_file, validate
 from .metrics import bounded_text
 from .store import now, save_json
-from . import fastq_screen, multiqc, nanoplot
+from . import alignment, fastq_screen, multiqc, nanoplot
 
-MODES = {'nanoq', 'fastq-screen', 'nanoplot'}
+MODES = {'nanoq', 'fastq-screen', 'nanoplot', 'samtools'}
 
 
 def options(mode, supplied):
+    if mode == 'samtools':
+        return alignment.Options.model_validate(supplied or {}).model_dump()
     if mode == 'nanoplot':
         return nanoplot.Options.model_validate(supplied or {}).model_dump()
     if mode == 'fastq-screen':
@@ -25,6 +27,8 @@ def options(mode, supplied):
 
 
 def required(mode, value):
+    if mode == 'samtools':
+        return ['samtools', *(['multiqc'] if value['multiqc'] else [])]
     if mode == 'nanoplot':
         return ['nanoplot']
     return ['nanoq'] if mode == 'nanoq' else ['fastq_screen', 'bowtie2', *(['multiqc'] if value['multiqc'] else [])]
@@ -71,10 +75,12 @@ def parse_nanoq(path):
 def records(paths, tool):
     from .outcomes import plan
     return [{**{key: row[key] for key in ('id', 'path', 'name', 'state', 'error', 'exit_code', 'finished_at')},
-             'report': f'qc/{row["id"]}/{row["id"]}_screen.txt' if tool == 'fastq-screen' else f'qc/{row["id"]}/NanoStats.txt' if tool == 'nanoplot' else f'qc/{row["id"]}/{tool}.json', 'summary': None} for row in plan(paths)]
+             'report': f'qc/{row["id"]}/{row["id"]}.stats.txt' if tool == 'samtools' else f'qc/{row["id"]}/{row["id"]}_screen.txt' if tool == 'fastq-screen' else f'qc/{row["id"]}/NanoStats.txt' if tool == 'nanoplot' else f'qc/{row["id"]}/{tool}.json', 'summary': None} for row in plan(paths)]
 
 
 async def execute(manager, run, metrics, errors):
+    if run['mode'] == 'samtools':
+        return await alignment.execute(manager, run, metrics, errors)
     directory = manager.directory(run['id'])
     paths = await asyncio.to_thread(manager.checked_inputs, run)
     manager.update(run, stage='Validating FASTQ inputs')

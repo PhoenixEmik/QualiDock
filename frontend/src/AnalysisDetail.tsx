@@ -300,9 +300,13 @@ export default function AnalysisDetail({
           </p>
         ))}
         <AnalysisGroups run={currentRun} samples={samples} />
-        <FileOutcomes run={currentRun} />
-        <ProcessingLineage runId={currentRun.id} navigate={navigate} />
-        {!currentRun.processing && (
+        {currentRun.mode !== "samtools" && (
+          <>
+            <FileOutcomes run={currentRun} />
+            <ProcessingLineage runId={currentRun.id} navigate={navigate} />
+          </>
+        )}
+        {!currentRun.processing && currentRun.mode !== "samtools" && (
           <IntegrityReview run={currentRun} refresh={refresh} />
         )}
         {!!currentRun.report_inputs?.length && (

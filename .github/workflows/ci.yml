@@ -67,6 +67,19 @@ jobs:
         run: bash scripts/setup-processing-ci.sh
       - name: Provision optional QC tools
         run: bash scripts/setup-optional-qc-ci.sh ${{ matrix.multiqc == '1.35' && '--falco-benchmark --nanoplot' || '' }}
+      - name: Provision alignment QC tool
+        run: bash scripts/setup-alignment-ci.sh
+      - name: Actual SAMtools, CRAM reference safety and MultiQC compatibility
+        env:
+          QUALIDOCK_REQUIRE_ALIGNMENT_TESTS: '1'
+        run: pytest -q backend/tests/test_alignment.py backend/tests/test_alignment_real.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: alignment-${{ matrix.multiqc }}-evidence
+          path: |
+            validation/alignment
+            validation/alignment-tooling.txt
       - name: Actual FastQ Screen and MultiQC compatibility
         env:
           QUALIDOCK_REQUIRE_SCREEN_TESTS: '1'
@@ -161,6 +174,12 @@ jobs:
         run: bash scripts/setup-processing-ci.sh
       - name: Provision optional QC tools
         run: bash scripts/setup-optional-qc-ci.sh --nanoplot
+      - name: Provision alignment QC tool
+        run: bash scripts/setup-alignment-ci.sh
+      - name: Alignment selection, native statistics and restart
+        env:
+          QUALIDOCK_BROWSER: ${{ matrix.browser }}
+        run: pytest -q tests/browser/test_alignment_browser.py --junitxml=validation/alignment-browser.xml
       - name: NanoPlot original reports and native statistics
         env:
           QUALIDOCK_BROWSER: ${{ matrix.browser }}
@@ -186,7 +205,7 @@ jobs:
         if: matrix.browser == 'chromium'
         env:
           QUALIDOCK_BROWSER: ${{ matrix.browser }}
-        run: pytest -q tests/browser --ignore=tests/browser/test_nanoplot_browser.py --ignore=tests/browser/test_optional_qc_browser.py --ignore=tests/browser/test_processing_browser.py --ignore=tests/browser/test_inspector_browser.py --ignore=tests/browser/test_lineage_browser.py --junitxml=validation/report-browser.xml
+        run: pytest -q tests/browser --ignore=tests/browser/test_alignment_browser.py --ignore=tests/browser/test_nanoplot_browser.py --ignore=tests/browser/test_optional_qc_browser.py --ignore=tests/browser/test_processing_browser.py --ignore=tests/browser/test_inspector_browser.py --ignore=tests/browser/test_lineage_browser.py --junitxml=validation/report-browser.xml
       - name: Firefox critical report isolation and interaction
         if: matrix.browser == 'firefox'
         env:
@@ -197,6 +216,8 @@ jobs:
         with:
           name: report-browser-${{ matrix.browser }}
           path: |
+            validation/alignment-browser.xml
+            validation/alignment-native*.png
             validation/optional-qc-browser.xml
             validation/nanoplot-browser.xml
             validation/nanoplot-*.png

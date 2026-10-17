@@ -51,12 +51,16 @@ Optional [FastQ Screen](docs/OPTIONAL-QC.md#fastq-screen-016x-tested-0160) uses
 administrator-approved, prebuilt Bowtie2 reference panels for read-level source
 screening. Original reports and verified MultiQC aggregation remain available;
 mapping observations are not definitive contamination diagnoses.
+Optional [SAMtools 1.22.1 alignment QC](docs/OPTIONAL-QC.md#samtools-1221--read-only-alignment-qc)
+accepts BAM/CRAM in the same file explorer. It records original quickcheck,
+flagstat and stats reports without FASTQ pairing or source/index modification.
+CRAM requires an administrator-approved local FASTA and existing .fai.
 Falco 2.0.3 was [benchmarked](docs/FALCO-EVALUATION.md) and remains outside the
 application: required structural validation removes its measured throughput
 advantage on the million-read test input. FastQC stays the default.
 
 - **Workspace:** browse connected storage, navigate directories, and select inputs. Switch between **Samples** (grouped detected read pairs) and **Files** (individual files). Incomplete pairs and unrecognized names remain available. Search covers currently loaded sample names and filenames; load more to include additional entries.
-- **Quality Control:** configure FastQC-only, combined FastQC/MultiQC, or existing-report MultiQC runs.
+- **Quality Control:** configure FastQC, optional long-read/reference-screening tools, alignment QC, or existing-report MultiQC runs.
 - **Read Processing:** execute fastp, SeqKit statistics, seeded fraction or exact-count sampling, length filtering or exact read-ID extraction. Confirmed pairs can stay synchronized during filtering and extraction. Select FASTQs using the existing browser; advanced settings remain optional.
 - **Results:** find running, queued, completed, failed, partial, interrupted, or cancelled runs. Open an analysis for **Overview & logs**, **QC metrics**, and **Reports**. The UI displays the actual job state and stage, without estimated progress percentages.
 

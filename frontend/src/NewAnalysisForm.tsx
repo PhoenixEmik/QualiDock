@@ -20,9 +20,12 @@ import type {
   Run,
   ScreenOptions,
   NanoPlotOptions,
+  AlignmentOptions,
 } from "./types";
 
 interface Props {
+  alignmentOptions: AlignmentOptions;
+  setAlignmentOptions: (value: AlignmentOptions) => void;
   nanoPlotOptions: NanoPlotOptions;
   setNanoPlotOptions: (value: NanoPlotOptions) => void;
   qcOptions: ScreenOptions;
@@ -48,6 +51,8 @@ interface Props {
   submit: () => Promise<void>;
 }
 export default function NewAnalysisForm({
+  alignmentOptions,
+  setAlignmentOptions,
   nanoPlotOptions,
   setNanoPlotOptions,
   qcOptions,
@@ -75,20 +80,28 @@ export default function NewAnalysisForm({
   const suitable = (entry: Entry) =>
     mode === "multiqc"
       ? ["fastqc", "qcreport"].includes(entry.kind)
-      : entry.kind === "fastq";
+      : mode === "samtools"
+        ? entry.kind === "alignment"
+        : entry.kind === "fastq";
   const configuredPaths = [...selected.values()].filter(suitable);
   const required =
-    mode === "nanoplot"
-      ? ["nanoplot"]
-      : mode === "fastq-screen"
-        ? ["fastq_screen", "bowtie2", ...(qcOptions.multiqc ? ["multiqc"] : [])]
-        : mode === "nanoq"
-          ? ["nanoq"]
-          : mode === "fastqc"
-            ? ["fastqc"]
-            : mode === "multiqc"
-              ? ["multiqc"]
-              : ["fastqc", "multiqc"];
+    mode === "samtools"
+      ? ["samtools", ...(alignmentOptions.multiqc ? ["multiqc"] : [])]
+      : mode === "nanoplot"
+        ? ["nanoplot"]
+        : mode === "fastq-screen"
+          ? [
+              "fastq_screen",
+              "bowtie2",
+              ...(qcOptions.multiqc ? ["multiqc"] : []),
+            ]
+          : mode === "nanoq"
+            ? ["nanoq"]
+            : mode === "fastqc"
+              ? ["fastqc"]
+              : mode === "multiqc"
+                ? ["multiqc"]
+                : ["fastqc", "multiqc"];
   const unavailable = config
     ? required.filter((tool) => !config.tools[tool as keyof Config["tools"]])
     : [];
@@ -122,6 +135,11 @@ export default function NewAnalysisForm({
                 "nanoq",
                 "nanoplot",
                 "fastq-screen",
+                ...([...selected.values()].some(
+                  (entry) => entry.kind === "alignment",
+                )
+                  ? ["samtools" as const]
+                  : []),
               ] as const
             ).map((value) => (
               <button
@@ -134,22 +152,81 @@ export default function NewAnalysisForm({
                 <span className="radio-dot" />
                 <strong>{modeLabel(value)}</strong>
                 <small>
-                  {value === "both"
-                    ? "Individual read QC and a combined report"
-                    : value === "fastqc"
-                      ? "Individual read quality assessment"
-                      : value === "fastq-screen"
-                        ? "Read-source mapping against an approved reference panel"
-                        : value === "nanoplot"
-                          ? "Original long-read plots and NanoStats"
-                          : value === "nanoq"
-                            ? "Read-only long-read counts, N50 and quality summaries"
-                            : "Combine existing FastQC or fastp JSON reports"}
+                  {value === "samtools"
+                    ? "Read-only BAM/CRAM header/EOF, flagstat and stats"
+                    : value === "both"
+                      ? "Individual read QC and a combined report"
+                      : value === "fastqc"
+                        ? "Individual read quality assessment"
+                        : value === "fastq-screen"
+                          ? "Read-source mapping against an approved reference panel"
+                          : value === "nanoplot"
+                            ? "Original long-read plots and NanoStats"
+                            : value === "nanoq"
+                              ? "Read-only long-read counts, N50 and quality summaries"
+                              : "Combine existing FastQC or fastp JSON reports"}
                 </small>
                 {mode === value && <Check size={15} />}
               </button>
             ))}
           </div>
+          {mode === "samtools" && (
+            <>
+              <p className="inline-note">
+                BAM/CRAM files are independent alignment inputs. No FASTQ
+                pairing, sorting, indexing or editing. quickcheck checks
+                header/EOF only; flagstat and stats scan records separately.
+              </p>
+              {configuredPaths.some((entry) => /\.cram$/i.test(entry.name)) && (
+                <>
+                  <label className="field-label" htmlFor="alignment-reference">
+                    Local CRAM reference
+                  </label>
+                  <select
+                    id="alignment-reference"
+                    disabled={busy}
+                    value={alignmentOptions.reference || ""}
+                    onChange={(e) =>
+                      setAlignmentOptions({
+                        ...alignmentOptions,
+                        reference: e.target.value || null,
+                      })
+                    }
+                  >
+                    <option value="">Choose an approved existing FASTA</option>
+                    {config?.alignment_references?.map((ref) => (
+                      <option
+                        key={ref.id}
+                        value={ref.id}
+                        disabled={!ref.available}
+                      >
+                        {ref.id}
+                        {ref.error ? ` · ${ref.error}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="inline-note">
+                    Matching local FASTA and existing .fai required. No
+                    automatic reference download or index creation.
+                  </p>
+                </>
+              )}
+              <label>
+                <input
+                  type="checkbox"
+                  disabled={busy || !config?.tools.multiqc}
+                  checked={alignmentOptions.multiqc}
+                  onChange={(e) =>
+                    setAlignmentOptions({
+                      ...alignmentOptions,
+                      multiqc: e.target.checked,
+                    })
+                  }
+                />{" "}
+                Generate MultiQC
+              </label>
+            </>
+          )}
           {mode === "nanoplot" && (
             <div>
               <p className="inline-note">
@@ -331,9 +408,11 @@ export default function NewAnalysisForm({
               )}
               <div className="pair-summary">
                 <Dna size={17} />
-                {mode === "multiqc"
-                  ? "Supported QC reports will be snapshotted into this run."
-                  : `${sampleConfiguration ? sampleConfiguration.input_pairing.filter((record) => record.paired && record.read === "R1").length : pairCount} complete read pairs detected. Both reads are analyzed independently.`}
+                {mode === "samtools"
+                  ? "Alignment files are evaluated independently; read-pair metadata does not apply."
+                  : mode === "multiqc"
+                    ? "Supported QC reports will be snapshotted into this run."
+                    : `${sampleConfiguration ? sampleConfiguration.input_pairing.filter((record) => record.paired && record.read === "R1").length : pairCount} complete read pairs detected. Both reads are analyzed independently.`}
               </div>
             </>
           ) : (
@@ -344,14 +423,16 @@ export default function NewAnalysisForm({
             </Empty>
           )}
         </section>
-        {mode !== "multiqc" && configuredPaths.length > 0 && (
-          <ReadRelationships
-            value={sampleConfiguration}
-            change={setSampleConfiguration}
-            prepare={prepareSamples}
-            busy={busy}
-          />
-        )}
+        {mode !== "multiqc" &&
+          mode !== "samtools" &&
+          configuredPaths.length > 0 && (
+            <ReadRelationships
+              value={sampleConfiguration}
+              change={setSampleConfiguration}
+              prepare={prepareSamples}
+              busy={busy}
+            />
+          )}
         <details className="processing-advanced">
           <summary>Output and resource settings (optional)</summary>
           <OutputDirectory
@@ -437,6 +518,9 @@ export default function NewAnalysisForm({
           className="button primary"
           disabled={
             busy ||
+            (mode === "samtools" &&
+              configuredPaths.some((entry) => /\.cram$/i.test(entry.name)) &&
+              !alignmentOptions.reference) ||
             (!configuredPaths.length &&
               !(mode === "multiqc" && multiqcDirectory.trim())) ||
             unavailable.length > 0 ||
