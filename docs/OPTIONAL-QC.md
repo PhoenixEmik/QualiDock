@@ -271,6 +271,132 @@ inferred from these timings. Original evidence/tool compilation features are in
 under ignored `validation/alignment-final-linux`. Large alignment/shared-storage
 acceptance remains unmeasured.
 
+## mosdepth 0.3.14 — coverage QC
+
+Set `QUALIDOCK_MOSDEPTH` or provide `mosdepth` on PATH. The initial verified CLI
+contract is **0.3.14**, with the existing **SAMtools/HTSlib 1.22.1** preflight.
+Select BAM/CRAM and choose **mosdepth coverage QC** in the existing QC form.
+It uses the same alignment authorization, resource slot, executor, stdout limits,
+cancellation, per-file/partial results, JSON persistence and artifact protection.
+FASTQ pairing, processing and derived datasets remain separate. No new runtime
+package, tool installation, executor or database is introduced.
+
+Inputs must be coordinate sorted, with an existing matching BAI/CSI or CRAI.
+SAMtools metadata/EOF checks and a full stats scan verify actual sort order
+(`is sorted`) and CRAM decoding, not just the `SO:coordinate` header. This adds
+one full input scan before mosdepth's indexed queries. CRAM uses the same approved
+local FASTA/FAI policy above; no implicit remote reference search/cache, source
+conversion, sorting or index building is performed. Reference checks remain
+independent of coverage: mosdepth can avoid sequence decoding, so coverage alone
+would not validate the reference bases.
+
+Indexes are selected deterministically (CSI before BAI; full source suffix before
+basename alternatives), authorized under input roots, and explicitly supplied
+using upstream `source##idx##index` syntax. User paths containing the reserved
+delimiter are rejected. Index format prefixes and upstream decoding are checked;
+index/source snapshots are rechecked after execution. These snapshots **do not
+cryptographically bind an arbitrary valid/stale index to a BAM**. Operators must
+provide a matching index; no size/mtime-only immutability proof is claimed.
+Sources and existing indexes are independently hashed before/after genuine tests.
+
+The command always requests `--no-per-base`, explicit `--flag` and `--mapq`, and
+`--threads <allocated threads minus one>` decoder threads. Default mask **1796**
+excludes unmapped, secondary, QC-failed and duplicate records. An optional control
+also excludes supplementary alignments (mask **3844**). Default CIGAR and mate
+**overlap correction** remain enabled; fast/fragment modes are not offered.
+MAPQ is an aligner-specific alignment score, not base quality; 255 can mean
+unavailable. Source files remain unchanged; no FASTQs or alignment outputs are
+published. `MOSDEPTH_PRECISION=5` is explicit and recorded; reported decimal
+strings remain unchanged in tables/tooltips. No Phred quality bands are used.
+
+### Coverage scope and denominators
+
+**Genuine 0.3.14 behavior:** contigs with no alignment records can be omitted from
+summary and global CDF totals. In the explicit eight-record fixture, the header
+has 150 reference positions, but the tool reports 100 positions / depth sum 25 /
+mean 0.25000. Its CDF fraction at ≥1× is 0.25000. QualiDock shows that reported
+100-position denominator and lists the unreported 50-position chr2; it does not
+replace the denominator with 150 or invent a whole-assembly fraction. Unreported
+references are unavailable, not filled with zero. This limitation is prominent
+in the native results and tested independently of chart rendering.
+
+`summary.bases` is the **sum of aligned depths**, with the chosen filters and mate
+correction; it is not total sequenced FASTQ bases. Means/min/max and original
+precision come from mosdepth. Zero-length aggregate mean/min/max are unavailable
+for scientific interpretation even when the original report uses zero sentinels.
+The native global chart plots only actual reported `total` CDF points: fraction
+of reported reference positions covered at **at least** each depth. It neither
+fills missing tail depths nor normalizes to a different reference population.
+Original per-reference distributions remain downloadable. Changing views does
+not run tools again.
+
+### Approved BED targets
+
+```sh
+export QUALIDOCK_COVERAGE_PANELS='{"targets":"/references/targets.bed"}'
+```
+
+Initial panels are administrator-owned local **uncompressed** BED files, no
+symlink components or group/world writes, at most 2 MiB and 10,000 intervals.
+Only consistently three/four-column, nonempty, ordered, **nonoverlapping within
+each reference** intervals are accepted; no merging or clipping is performed.
+Optional names are preserved literally. Each contig/end must match the selected
+alignment dictionary; out-of-bounds/unknown targets fail before mosdepth.
+Panel SHA-256/snapshots and exact rows are persisted/revalidated. No upload,
+reference download, automatic interval generation or reference manager is added.
+
+BED execution always requests original threshold counts at **1×, 10×, 20×, 30×**.
+A threshold row counts positions in its original `[start,end)` interval, with
+**end minus start** as denominator; counts are not global percentages. Global
+and regional CDFs are distinct original files. Empty contigs can still produce
+zero-valued individual intervals while being absent from the regional aggregate:
+the fixture requests 40 BED positions, but mosdepth's regional denominator is 30.
+Both are displayed. QualiDock does not recompute a combined region statistic.
+If only unreported contigs are targeted, the regional aggregate can have length
+zero and an empty regional CDF, while actual per-region zero counts remain valid.
+
+### Native view and original reports
+
+The existing ECharts `NativePlot` supplies a compact global CDF, exact raw-value
+tooltips, zoom/reset, series visibility and PNG/SVG export. Existing application
+navigation is unchanged. A single alignment selector avoids rendering hundreds of
+charts by default. Summary/regions/thresholds/raw CDF are original-data tables,
+with source paths, filter mask, MAPQ and index provenance. Missing values are not
+changed into zeros. Summary and regional tables display at most 200 rows; original
+files retain every row. CDFs above 20,000 `total` points are downloadable without a
+native chart rather than silently resampled. Parsing is bounded to 4 KiB per line
+and 64 MiB decoded per report; normal report subprocesses retain the shared
+128 MiB per-file writing limit. Reserved `total`/`_region` naming collisions fail
+explicitly. Oversized/ambiguous/malformed reports are not successful native QC.
+
+Original summary, global/regional distributions, region/threshold BED.gz files,
+owned regional **report** CSI indexes and preflight/execution logs are registered
+only after successful validation. Source alignment indexes are never created or
+modified. Gzip/CSI download permission is limited to explicitly known completed
+coverage artifacts; arbitrary gzip files do not become artifacts. Downloads stay
+authenticated attachments. mosdepth does not create HTML reports, and no synthetic
+HTML is generated. Native MultiQC aggregation for mosdepth is not exposed in this
+initial contract; existing integrations and official viewer remain unchanged.
+
+Validation uses genuine mosdepth output and independently specified SAM intervals,
+including mate overlap, filtering, zero coverage and omitted contigs. Local
+source build: upstream 0.3.14, Nim 2.2.12 with `--mm:refc`, hts-nim 0.3.31 and
+HTSlib 1.22.1, no tool source patch. Linux CI separately tests the official static
+release with its published SHA-256. No representative large-BAM, peak-memory or
+NFS/Lustre acceptance is inferred from the eight-record fixture. Upstream's
+chromosome-sized depth arrays remain governed by existing process-tree/cgroup
+limits; regional selection is not a promise of bounded input I/O or small RAM.
+The existing `benchmark-analysis.py --mode mosdepth` records the actual app
+workflow rather than introducing another benchmark system. One local observation
+on a 531-byte / eight-record BAM + approved BED reported 2.330 s app analysis wall,
+0.283 s full-stats preflight and 0.275 s mosdepth stage (including guardian
+startup), 32,895 registered report bytes, and unchanged source SHA-256. Waited-child
+CPU was 1.110 s, including probes/guardians, not pure mosdepth CPU. These small,
+warmed/uncontrolled-cache observations are not performance acceptance. Portable
+process-tree RSS and kernel filesystem I/O are unavailable; original scope labels
+are retained. Linux CI records its separate evidence. Complete acceptance evidence
+is recorded after the required CI jobs finish.
+
 ## FastQ Screen 0.16.x (tested 0.16.0)
 
 Optional operator configuration:

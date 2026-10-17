@@ -151,6 +151,7 @@ export default function ResultsList({
               <option value="fastqc">FastQC only</option>
               <option value="both">FastQC + MultiQC</option>
               <option value="multiqc">MultiQC only</option>
+              <option value="mosdepth">mosdepth</option>
               <option value="samtools">SAMtools</option>
               <option value="nanoplot">NanoPlot</option>
               <option value="nanoq">nanoq long-read QC</option>

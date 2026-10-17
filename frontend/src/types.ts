@@ -49,6 +49,7 @@ export interface Run {
     | "both"
     | "fastqc"
     | "multiqc"
+    | "mosdepth"
     | "samtools"
     | "nanoplot"
     | "nanoq"
@@ -89,7 +90,7 @@ export interface Run {
   }[];
   processing?: ProcessingResult;
   qc?: {
-    tool: "nanoq" | "nanoplot" | "fastq_screen" | "samtools";
+    tool: "nanoq" | "nanoplot" | "fastq_screen" | "samtools" | "mosdepth";
     options: Record<string, unknown>;
     reference?: {
       id: string;
@@ -111,6 +112,7 @@ export interface Run {
       error: string | null;
       report: string;
       source_sha256?: string;
+      mosdepth?: CoverageMetrics;
       alignment?: {
         format: string;
         quickcheck: string;
@@ -254,7 +256,11 @@ export interface OutputLocation {
   error: string | null;
 }
 export interface RerunConfiguration extends SampleConfiguration {
-  qc_options?: ScreenOptions | NanoPlotOptions | AlignmentOptions;
+  qc_options?:
+    | ScreenOptions
+    | NanoPlotOptions
+    | AlignmentOptions
+    | (CoverageOptions & { reference: string | null });
   input_datasets?: DatasetReference[];
   name: string;
   mode: Run["mode"];
@@ -330,6 +336,12 @@ export interface MultiQCSummary {
   rows: { sample: string; values: Record<string, string | number> }[];
 }
 export interface Config {
+  coverage_panels?: {
+    id: string;
+    available: boolean;
+    intervals?: number;
+    error: string | null;
+  }[];
   alignment_references?: {
     id: string;
     available: boolean;
@@ -355,6 +367,7 @@ export interface Config {
     nanoq?: boolean;
     nanoplot?: boolean;
     samtools?: boolean;
+    mosdepth?: boolean;
     fastq_screen?: boolean;
     bowtie2?: boolean;
   };
@@ -471,4 +484,33 @@ export interface DerivedDataset {
   sha256: string;
   records: number;
   bases: number;
+}
+
+export interface CoverageOptions {
+  panel: string | null;
+  mapq: number;
+  exclude_supplementary: boolean;
+}
+export interface ReportedTable {
+  columns: string[];
+  rows: string[][];
+  total_rows: number;
+}
+export interface CoverageMetrics {
+  summary: ReportedTable;
+  total: string[];
+  distribution: ReportedTable;
+  regions?: ReportedTable;
+  thresholds?: ReportedTable;
+  requested_region_bases?: number;
+  reported_region_bases?: number | null;
+  reported_reference_bases: number;
+  header_reference_bases: number;
+  omitted_reference_count: number;
+  omitted_references: string[];
+  reports: Record<string, string>;
+  index: { path: string; identity: string };
+  mapq: number;
+  exclude_flags: number;
+  precision: number;
 }

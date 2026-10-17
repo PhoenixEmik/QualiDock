@@ -8,12 +8,14 @@ from pathlib import Path
 import re
 
 from pydantic import BaseModel, ConfigDict, Field
-from .files import ALIGNMENT
+from .files import ALIGNMENT, approved_file
 from .integrity import snapshot
 from .metrics import bounded_text
 from .processing import local_file
 from .store import now, save_json
-from . import multiqc
+from . import multiqc, coverage
+
+MODES = {'samtools', 'mosdepth'}
 
 
 class Options(BaseModel):
@@ -50,10 +52,7 @@ def reference(settings, identity):
         raise ValueError('Approved reference must be an absolute local FASTA path')
     files = [path, Path(str(path)+'.fai')]
     for file in files:
-        if '##idx##' in str(file) or file.resolve(strict=True) != file or not file.is_file() or not file.stat().st_mode & 0o444 or not os.access(file, os.R_OK):
-            raise ValueError('Reference FASTA and existing .fai must be local readable regular files without symlinks')
-        if file.stat().st_uid not in {0, os.geteuid()} or file.stat().st_mode & 0o022:
-            raise ValueError('Reference files must be owned by this user/root and not group/world writable')
+        approved_file(file)
     with path.open('rb') as stream:
         if stream.read(1) != b'>':
             raise ValueError('Only uncompressed local FASTA references are supported')
@@ -143,7 +142,7 @@ def parse_flagstat(path):
     return {'columns': ['Reported category', 'QC-passed segments', 'QC-failed segments'], 'rows': rows}
 
 
-def parse_stats(path, flagstat):
+def parse_stats(path, flagstat=None):
     # Stream only bounded summary rows; retain the untouched full report on disk.
     rows = []
     with path.open('rt', encoding='utf-8') as stream:
@@ -165,9 +164,10 @@ def parse_stats(path, flagstat):
     values = {r[0]: r[1] for r in rows}
     if len(values) != len(rows) or not {'raw total sequences:', 'reads mapped:', 'reads unmapped:', 'total length:'} <= values.keys():
         raise ValueError('Missing or duplicate SAMtools summary values')
-    primary = next(row for row in flagstat['rows'] if row[0] == 'primary')
-    if Decimal(values['raw total sequences:']) != int(primary[1]) + int(primary[2]):
-        raise ValueError('SAMtools stats and flagstat primary counts disagree')
+    if flagstat is not None:
+        primary = next(row for row in flagstat['rows'] if row[0] == 'primary')
+        if Decimal(values['raw total sequences:']) != int(primary[1]) + int(primary[2]):
+            raise ValueError('SAMtools stats and flagstat primary counts disagree')
     return {'columns': ['Original SAMtools metric', 'Reported value', 'Original note'], 'rows': rows}
 
 
@@ -180,6 +180,7 @@ async def execute(manager, run, metrics, errors):
     # Disables configured remote reference search/cache. The complete local FAI
     # dictionary is checked before any record decode; no missing-contig UR fallback.
     env = {'REF_PATH': '/dev/null', 'REF_CACHE': '/dev/null', 'HTS_PATH': ''}
+    is_coverage = run['mode'] == 'mosdepth'
     for row in run['qc']['results']:
         if run['id'] in manager.cancelled:
             break
@@ -187,6 +188,7 @@ async def execute(manager, run, metrics, errors):
             paths = await asyncio.to_thread(manager.checked_inputs, run)
             source = next(p for p in paths if str(p) == row['path'])
             before = snapshot(source.stat())
+            index = await asyncio.to_thread(coverage.index, manager, source) if is_coverage else None
             destination = manager.stores.subdirectory(run['id'], f'qc/{row["id"]}', exist_ok=True)
             row['state'] = 'running'
             manager.update(run, stage=f'SAMtools · {row["name"]}')
@@ -202,6 +204,8 @@ async def execute(manager, run, metrics, errors):
                 ('flagstat', ['flagstat', '-@', str(run['threads']-1), *decoding], '.flagstat.txt'),
                 ('stats', ['stats', '-@', str(run['threads']-1), *decoding], '.stats.txt'),
             ]:
+                if is_coverage and label == 'flagstat':
+                    continue
                 output = destination / (row['id']+suffix)
                 argv = [executable, *args, str(source)]
                 code = await manager.command(run, 'samtools', argv, directory, stdout=output, env=env)
@@ -213,24 +217,33 @@ async def execute(manager, run, metrics, errors):
                 outputs[label] = str(output.relative_to(directory))
                 if label == 'header':
                     contigs = await asyncio.to_thread(header, local_file(directory, outputs[label]), approved if cram else None)
-            flagstat = await asyncio.to_thread(parse_flagstat, local_file(directory, outputs['flagstat']))
+            flagstat = await asyncio.to_thread(parse_flagstat, local_file(directory, outputs['flagstat'])) if not is_coverage else None
             stats = await asyncio.to_thread(parse_stats, local_file(directory, outputs['stats']), flagstat)
+            result = None
+            if is_coverage:
+                result = await coverage.execute(manager, run, row, contigs, stats, outputs, index, env)
+                if run['id'] in manager.cancelled:
+                    return
             if snapshot(source.stat()) != before:
                 raise ValueError('Alignment changed during QC')
             await asyncio.to_thread(manager.checked_inputs, run)
             if approved and await asyncio.to_thread(reference, manager.settings, approved['id']) != approved:
                 raise ValueError('Approved reference changed during QC')
-            row.update(state='completed', error=None, alignment={'format': source.suffix[1:].upper(), 'quickcheck': 'passed (header/EOF only)',
-                'source_snapshot': before, 'contigs': contigs, 'reports': outputs, 'flagstat': flagstat, 'stats': stats})
-            for name in ('flagstat', 'stats'):
-                run['report_input_map'][outputs[name]] = {'id': row['id'], 'path': row['path']}
+            row.update(state='completed', error=None)
+            if is_coverage:
+                row['mosdepth'] = {**result, 'source_snapshot': before}
+            else:
+                row['alignment'] = {'format': source.suffix[1:].upper(), 'quickcheck': 'passed (header/EOF only)',
+                    'source_snapshot': before, 'contigs': contigs, 'reports': outputs, 'flagstat': flagstat, 'stats': stats}
+                for name in ('flagstat', 'stats'):
+                    run['report_input_map'][outputs[name]] = {'id': row['id'], 'path': row['path']}
         except (ValueError, OSError, KeyError, TypeError, UnicodeError) as exc:
             row.update(state='failed', error=str(exc))
             errors.append(f'{row["name"]}: {exc}')
         row['finished_at'] = now()
         manager.update(run, sample_count=sum(r['state'] == 'completed' for r in run['qc']['results']))
     metrics['qc'] = run['qc']
-    if run['id'] not in manager.cancelled and run['qc']['options']['multiqc']:
+    if run['id'] not in manager.cancelled and run['qc']['options'].get('multiqc'):
         # Genuine 1.25.1 flagstat aggregation divides N/A (None) by total and
         # crashes. Feed original stats only; never replace N/A or rewrite reports.
         legacy = run['tools']['multiqc']['version'] == '1.25.1'

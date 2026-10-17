@@ -15,3 +15,12 @@ tar -xjf "$alignment_tools/samtools.tar.bz2" -C "$alignment_tools"
 )
 "$alignment_tools/samtools-1.22.1/samtools" --version | tee validation/alignment-tooling.txt
 if [ -n "${GITHUB_PATH:-}" ]; then echo "$alignment_tools/samtools-1.22.1" >> "$GITHUB_PATH"; fi
+
+if [[ " $* " == *" --mosdepth "* ]]; then
+  curl -fsSL https://github.com/brentp/mosdepth/releases/download/v0.3.14/mosdepth -o "$alignment_tools/mosdepth"
+  echo "c5182b74a8f1b66710efa16e122cbc8a197834874b103e7c5c0bd9a6265ae7b6  $alignment_tools/mosdepth" | sha256sum --check --status
+  chmod 700 "$alignment_tools/mosdepth"
+  "$alignment_tools/mosdepth" --version | tee validation/mosdepth-tooling.txt
+  "$alignment_tools/mosdepth" --help >> validation/mosdepth-tooling.txt
+  if [ -n "${GITHUB_PATH:-}" ]; then echo "$alignment_tools" >> "$GITHUB_PATH"; fi
+fi

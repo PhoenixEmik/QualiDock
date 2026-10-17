@@ -1,0 +1,5 @@
+chr1	0	15	pair
+chr1	20	25	supplementary
+chr1	30	35	duplicate
+chr1	50	55	single
+chr2	0	10	zero

@@ -154,3 +154,31 @@ no FASTQs. Evidence includes actual full validation bytes and registered report
 size. CPU/RSS/I/O retain the same measurement scopes above; no source throughput
 or initial-memory reduction is inferred from plot downsampling. NanoPlot reads
 the complete input first. See [supported plotting and PNG limitations](OPTIONAL-QC.md#nanoplot-1480).
+
+## Indexed alignment coverage
+
+The same benchmark supports `--mode mosdepth` (no separate performance framework):
+
+```sh
+QUALIDOCK_SAMTOOLS=/tools/samtools QUALIDOCK_MOSDEPTH=/tools/mosdepth \
+  python scripts/benchmark-analysis.py --mode mosdepth --input /authorized/sample.bam \
+  --output /authorized/new-coverage-evidence --threads 1 --hash-inputs
+```
+
+Provide existing matching alignment indexes; the application never sorts/builds
+indexes. Optional `--alignment-reference <ID>` and `--coverage-panel <ID>` use
+`QUALIDOCK_ALIGNMENT_REFERENCES` / `QUALIDOCK_COVERAGE_PANELS`, the same approved
+local contracts as the UI. Exact arguments/stdout paths distinguish SAMtools
+header/EOF/full-stats preflight from mosdepth. Report bytes, source fingerprint
+checks, API latency, waited-child CPU and labeled existing RSS/I/O observations
+are retained. SHA-256 before/after adds two separately timed whole-source reads;
+no derived FASTQ output is expected or invented. Input scans are not mistaken for
+FASTQ validation: alignment evidence explicitly records the SAMtools preflight.
+
+The genuine eight-record fixture tests the implementation; it does not establish
+large-BAM or NFS/Lustre throughput. Reported coverage denominators can exclude
+empty contigs in mosdepth 0.3.14; see [coverage semantics](OPTIONAL-QC.md#coverage-scope-and-denominators).
+Kernel counters and cumulative child high-water RSS retain their existing scope
+labels; they are not pure-tool CPU, exact simultaneous tree peak or logical
+source-byte throughput. Local macOS sandbox resource restrictions are not hidden
+by reporting zero memory. Representative shared-storage acceptance remains open.

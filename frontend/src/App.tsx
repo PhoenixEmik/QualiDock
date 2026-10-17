@@ -13,7 +13,7 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
-import { api, AuthError, date, url } from "./api";
+import { api, AuthError, date, url, isAlignmentQC } from "./api";
 import type {
   Config,
   DetailTab,
@@ -30,6 +30,7 @@ import type {
   ScreenOptions,
   NanoPlotOptions,
   AlignmentOptions,
+  CoverageOptions,
 } from "./types";
 import { Empty } from "./Feedback";
 import FileExplorer from "./FileExplorer";
@@ -91,6 +92,11 @@ export default function App() {
   const [nanoPlotOptions, setNanoPlotOptions] = useState<NanoPlotOptions>({
     loglength: false,
     individual_plots: false,
+  });
+  const [coverageOptions, setCoverageOptions] = useState<CoverageOptions>({
+    panel: null,
+    mapq: 0,
+    exclude_supplementary: false,
   });
   const [alignmentOptions, setAlignmentOptions] = useState<AlignmentOptions>({
     reference: null,
@@ -449,7 +455,7 @@ export default function App() {
       setMode("multiqc");
     else if ([...selected.values()].some((entry) => entry.kind === "alignment"))
       setMode("samtools");
-    else if (mode === "multiqc" || mode === "samtools" || isProcessing(mode))
+    else if (mode === "multiqc" || isAlignmentQC(mode) || isProcessing(mode))
       setMode("both");
     open("new");
   };
@@ -471,10 +477,10 @@ export default function App() {
       const payload = {
         name,
         mode,
-        ...(mode === "samtools"
+        ...(isAlignmentQC(mode)
           ? {
               qc_options: {
-                ...alignmentOptions,
+                ...(mode === "mosdepth" ? coverageOptions : alignmentOptions),
                 reference: [...selected.values()].some(
                   (e) => e.kind === "alignment" && /\.cram$/i.test(e.name),
                 )
@@ -497,7 +503,7 @@ export default function App() {
                 .filter((entry) =>
                   mode === "multiqc"
                     ? ["fastqc", "qcreport"].includes(entry.kind)
-                    : mode === "samtools"
+                    : isAlignmentQC(mode)
                       ? entry.kind === "alignment"
                       : entry.kind === "fastq",
                 )
@@ -505,12 +511,11 @@ export default function App() {
         threads,
         output_root: outputRoot || null,
         rerun_of: rerunOf,
-        input_datasets:
-          mode === "samtools"
-            ? []
-            : selectedReferences(inputDatasets, new Set(selected.keys())),
+        input_datasets: isAlignmentQC(mode)
+          ? []
+          : selectedReferences(inputDatasets, new Set(selected.keys())),
         ...(mode !== "multiqc" &&
-        mode !== "samtools" &&
+        !isAlignmentQC(mode) &&
         currentSampleConfiguration
           ? {
               input_pairing: currentSampleConfiguration.input_pairing,
@@ -575,6 +580,17 @@ export default function App() {
     setMode(draft.mode);
     if (draft.mode === "fastq-screen" && draft.qc_options)
       setQcOptions(draft.qc_options as ScreenOptions);
+    if (draft.mode === "mosdepth" && draft.qc_options) {
+      const value = draft.qc_options as CoverageOptions & {
+        reference: string | null;
+      };
+      setCoverageOptions({
+        panel: value.panel,
+        mapq: value.mapq,
+        exclude_supplementary: value.exclude_supplementary,
+      });
+      setAlignmentOptions({ reference: value.reference, multiqc: false });
+    }
     if (draft.mode === "samtools" && draft.qc_options)
       setAlignmentOptions(draft.qc_options as AlignmentOptions);
     if (draft.mode === "nanoplot" && draft.qc_options)
@@ -889,7 +905,9 @@ export default function App() {
                   <strong aria-live="polite">
                     {selected.size} files selected
                   </strong>
-                  <span>{pairCount} complete read pairs</span>
+                  {fastqPaths.length > 0 && (
+                    <span>{pairCount} complete read pairs</span>
+                  )}
                   <button
                     className="text-button"
                     disabled={busy}
@@ -949,6 +967,8 @@ export default function App() {
           )}
           {view === "new" && (
             <NewAnalysisForm
+              coverageOptions={coverageOptions}
+              setCoverageOptions={setCoverageOptions}
               alignmentOptions={alignmentOptions}
               setAlignmentOptions={setAlignmentOptions}
               nanoPlotOptions={nanoPlotOptions}

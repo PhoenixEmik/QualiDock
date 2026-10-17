@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Private benchmark of authorized FASTQ paths using the existing application API."""
+"""Private benchmark of authorized sequencing inputs using the existing application API."""
 import argparse
 import asyncio
 import hashlib
@@ -73,7 +73,9 @@ def parser():
     result=argparse.ArgumentParser(description=__doc__)
     result.add_argument('--input',type=Path,nargs='+',required=True)
     result.add_argument('--output',type=Path,required=True,help='New private directory; must not already exist')
-    result.add_argument('--mode',choices=['fastqc','both','nanoplot',*sorted(processing.MODES)],default='both')
+    result.add_argument('--mode',choices=['fastqc','both','nanoplot','mosdepth',*sorted(processing.MODES)],default='both')
+    result.add_argument('--alignment-reference', help='Approved local reference ID for a CRAM coverage benchmark')
+    result.add_argument('--coverage-panel', help='Approved BED panel ID for coverage benchmarking')
     result.add_argument('--nanoplot-loglength',action='store_true')
     result.add_argument('--nanoplot-individual-plots',action='store_true')
     result.add_argument('--threads',type=int,default=1)
@@ -132,11 +134,13 @@ def main(args):
     options=processing_options(args)
     if (args.nanoplot_loglength or args.nanoplot_individual_plots) and args.mode != 'nanoplot':
         raise ValueError('NanoPlot plotting options require --mode nanoplot')
-    qc_options={'loglength':args.nanoplot_loglength,'individual_plots':args.nanoplot_individual_plots} if args.mode=='nanoplot' else None
+    if (args.alignment_reference or args.coverage_panel) and args.mode != 'mosdepth':
+        raise ValueError('Alignment reference and coverage panel require --mode mosdepth')
+    qc_options={'loglength':args.nanoplot_loglength,'individual_plots':args.nanoplot_individual_plots} if args.mode=='nanoplot' else {'reference':args.alignment_reference,'panel':args.coverage_panel} if args.mode=='mosdepth' else None
     args.output.mkdir(parents=True,mode=0o700)  # Refuse to overwrite any previous evidence/results.
     fingerprint_started=time.monotonic()
     before=[fingerprint(path,args.hash_inputs) for path in files]
-    settings=Settings(roots=list(dict.fromkeys(path.parent for path in files)),output=args.output/'results',frontend=args.output/'frontend',cpus=capacity,memory_mb=budget,fastqc=os.environ.get('QUALIDOCK_FASTQC','fastqc'),multiqc=os.environ.get('QUALIDOCK_MULTIQC','multiqc'),fastp=os.environ.get('QUALIDOCK_FASTP','fastp'),seqkit=os.environ.get('QUALIDOCK_SEQKIT','seqkit'),nanoplot=os.environ.get('QUALIDOCK_NANOPLOT','NanoPlot'))
+    settings=Settings(roots=list(dict.fromkeys(path.parent for path in files)),output=args.output/'results',frontend=args.output/'frontend',cpus=capacity,memory_mb=budget,fastqc=os.environ.get('QUALIDOCK_FASTQC','fastqc'),multiqc=os.environ.get('QUALIDOCK_MULTIQC','multiqc'),fastp=os.environ.get('QUALIDOCK_FASTP','fastp'),seqkit=os.environ.get('QUALIDOCK_SEQKIT','seqkit'),nanoplot=os.environ.get('QUALIDOCK_NANOPLOT','NanoPlot'),samtools=os.environ.get('QUALIDOCK_SAMTOOLS','samtools'),mosdepth=os.environ.get('QUALIDOCK_MOSDEPTH','mosdepth'),alignment_references=json.loads(os.environ.get('QUALIDOCK_ALIGNMENT_REFERENCES','{}')),coverage_panels=json.loads(os.environ.get('QUALIDOCK_COVERAGE_PANELS','{}')))
     evidence={'scope':'actual tools; in-process HTTP latency, not browser/SSE/network acceptance','platform':sys.platform,
               'filesystems':[filesystem(path) for path in files], 'output_filesystem':filesystem(args.output), 'inputs':before,'input_bytes':sum(row['size'] for row in before),
               'input_integrity_evidence':'sha256_before_after' if args.hash_inputs else 'metadata_only_not_content_proof',
@@ -208,9 +212,13 @@ def main(args):
                 validation=json.loads(bounded_text(validation_file)) if validation_file.exists() else {}
                 evidence['qc_options']=qc_options
                 evidence['registered_report_bytes']=sum(r['size'] for r in run['reports'])
+            if args.mode=='mosdepth':
+                evidence['qc_options']=run['qc']['options']
+                evidence['registered_report_bytes']=sum(r['size'] for r in run['reports'])
+                evidence['alignment_validation']='SAMtools header/EOF and full stats scan; not a fresh cryptographic source/index binding'
             checks=[('source',validation), *[(unit['id'],unit.get('output_validation',{})) for unit in run.get('processing',{}).get('units',[])]]
             evidence['validation_scans']=[{'stage':stage,'path':row['path'],'bytes_read':row['compressed_bytes_read'],'coverage':row['coverage'],'state':row['state'],'sha256':row['sha256']} for stage,check in checks for row in check.get('files',[])]
-            evidence['execution_stages']=[{'tool':row['tool'],'started_at':row['started_at'],'finished_at':row['finished_at'],'exit_code':row['exit_code'],'resources':row.get('resources')} for row in run.get('executions',[])]
+            evidence['execution_stages']=[{'tool':row['tool'],'stdout':row.get('stdout'),'argv':row['argv'],'started_at':row['started_at'],'finished_at':row['finished_at'],'exit_code':row['exit_code'],'resources':row.get('resources')} for row in run.get('executions',[])]
             if sys.platform!='linux':
                 for stage in evidence['execution_stages']:
                     if stage['resources']:

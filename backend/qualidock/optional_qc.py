@@ -9,12 +9,14 @@ from .outcomes import stop
 from .processing import local_file, validate
 from .metrics import bounded_text
 from .store import now, save_json
-from . import alignment, fastq_screen, multiqc, nanoplot
+from . import coverage, alignment, fastq_screen, multiqc, nanoplot
 
-MODES = {'nanoq', 'fastq-screen', 'nanoplot', 'samtools'}
+MODES = {'nanoq', 'fastq-screen', 'nanoplot', *alignment.MODES}
 
 
 def options(mode, supplied):
+    if mode == 'mosdepth':
+        return coverage.Options.model_validate(supplied or {}).model_dump()
     if mode == 'samtools':
         return alignment.Options.model_validate(supplied or {}).model_dump()
     if mode == 'nanoplot':
@@ -27,6 +29,8 @@ def options(mode, supplied):
 
 
 def required(mode, value):
+    if mode == 'mosdepth':
+        return ['samtools', 'mosdepth']
     if mode == 'samtools':
         return ['samtools', *(['multiqc'] if value['multiqc'] else [])]
     if mode == 'nanoplot':
@@ -74,12 +78,17 @@ def parse_nanoq(path):
 
 def records(paths, tool):
     from .outcomes import plan
-    return [{**{key: row[key] for key in ('id', 'path', 'name', 'state', 'error', 'exit_code', 'finished_at')},
-             'report': f'qc/{row["id"]}/{row["id"]}.stats.txt' if tool == 'samtools' else f'qc/{row["id"]}/{row["id"]}_screen.txt' if tool == 'fastq-screen' else f'qc/{row["id"]}/NanoStats.txt' if tool == 'nanoplot' else f'qc/{row["id"]}/{tool}.json', 'summary': None} for row in plan(paths)]
+    result = []
+    for row in plan(paths):
+        filename = {'samtools':row['id']+'.stats.txt', 'mosdepth':row['id']+'.mosdepth.summary.txt',
+                    'fastq-screen':row['id']+'_screen.txt', 'nanoplot':'NanoStats.txt', 'nanoq':'nanoq.json'}[tool]
+        result.append({**{key:row[key] for key in ('id','path','name','state','error','exit_code','finished_at')},
+                       'report':f'qc/{row["id"]}/{filename}', 'summary':None})
+    return result
 
 
 async def execute(manager, run, metrics, errors):
-    if run['mode'] == 'samtools':
+    if run['mode'] in alignment.MODES:
         return await alignment.execute(manager, run, metrics, errors)
     directory = manager.directory(run['id'])
     paths = await asyncio.to_thread(manager.checked_inputs, run)

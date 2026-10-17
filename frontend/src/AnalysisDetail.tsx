@@ -14,7 +14,7 @@ import {
   Square,
   Terminal,
 } from "lucide-react";
-import { bytes, date, modeLabel, url } from "./api";
+import { bytes, date, modeLabel, url, isAlignmentQC } from "./api";
 import { Empty, State } from "./Feedback";
 import type { DetailTab, Run, Sample, MultiQCSummary } from "./types";
 import OptionalQcResults from "./OptionalQcResults";
@@ -300,13 +300,13 @@ export default function AnalysisDetail({
           </p>
         ))}
         <AnalysisGroups run={currentRun} samples={samples} />
-        {currentRun.mode !== "samtools" && (
+        {!isAlignmentQC(currentRun.mode) && (
           <>
             <FileOutcomes run={currentRun} />
             <ProcessingLineage runId={currentRun.id} navigate={navigate} />
           </>
         )}
-        {!currentRun.processing && currentRun.mode !== "samtools" && (
+        {!currentRun.processing && !isAlignmentQC(currentRun.mode) && (
           <IntegrityReview run={currentRun} refresh={refresh} />
         )}
         {!!currentRun.report_inputs?.length && (

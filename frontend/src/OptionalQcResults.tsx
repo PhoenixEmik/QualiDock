@@ -1,3 +1,4 @@
+import CoverageResults from "./CoverageResults";
 import AlignmentResults from "./AlignmentResults";
 import { url } from "./api";
 import type { Run } from "./types";
@@ -15,6 +16,7 @@ const metrics: [string, string, string][] = [
 ];
 
 export default function OptionalQcResults({ run }: { run: Run }) {
+  if (run.qc?.tool === "mosdepth") return <CoverageResults run={run} />;
   if (run.qc?.tool === "samtools") return <AlignmentResults run={run} />;
   if (run.qc?.tool === "fastq_screen") return <ScreenResults run={run} />;
   if (run.qc?.tool === "nanoplot") return <NanoPlotResults run={run} />;

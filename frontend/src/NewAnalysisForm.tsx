@@ -9,7 +9,7 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
-import { bytes, modeLabel } from "./api";
+import { bytes, modeLabel, isAlignmentQC } from "./api";
 import { Empty } from "./Feedback";
 import { ReadRelationships } from "./SampleEditor";
 import OutputDirectory from "./OutputDirectory";
@@ -21,9 +21,12 @@ import type {
   ScreenOptions,
   NanoPlotOptions,
   AlignmentOptions,
+  CoverageOptions,
 } from "./types";
 
 interface Props {
+  coverageOptions: CoverageOptions;
+  setCoverageOptions: (value: CoverageOptions) => void;
   alignmentOptions: AlignmentOptions;
   setAlignmentOptions: (value: AlignmentOptions) => void;
   nanoPlotOptions: NanoPlotOptions;
@@ -51,6 +54,8 @@ interface Props {
   submit: () => Promise<void>;
 }
 export default function NewAnalysisForm({
+  coverageOptions,
+  setCoverageOptions,
   alignmentOptions,
   setAlignmentOptions,
   nanoPlotOptions,
@@ -80,28 +85,30 @@ export default function NewAnalysisForm({
   const suitable = (entry: Entry) =>
     mode === "multiqc"
       ? ["fastqc", "qcreport"].includes(entry.kind)
-      : mode === "samtools"
+      : isAlignmentQC(mode)
         ? entry.kind === "alignment"
         : entry.kind === "fastq";
   const configuredPaths = [...selected.values()].filter(suitable);
   const required =
-    mode === "samtools"
-      ? ["samtools", ...(alignmentOptions.multiqc ? ["multiqc"] : [])]
-      : mode === "nanoplot"
-        ? ["nanoplot"]
-        : mode === "fastq-screen"
-          ? [
-              "fastq_screen",
-              "bowtie2",
-              ...(qcOptions.multiqc ? ["multiqc"] : []),
-            ]
-          : mode === "nanoq"
-            ? ["nanoq"]
-            : mode === "fastqc"
-              ? ["fastqc"]
-              : mode === "multiqc"
-                ? ["multiqc"]
-                : ["fastqc", "multiqc"];
+    mode === "mosdepth"
+      ? ["samtools", "mosdepth"]
+      : mode === "samtools"
+        ? ["samtools", ...(alignmentOptions.multiqc ? ["multiqc"] : [])]
+        : mode === "nanoplot"
+          ? ["nanoplot"]
+          : mode === "fastq-screen"
+            ? [
+                "fastq_screen",
+                "bowtie2",
+                ...(qcOptions.multiqc ? ["multiqc"] : []),
+              ]
+            : mode === "nanoq"
+              ? ["nanoq"]
+              : mode === "fastqc"
+                ? ["fastqc"]
+                : mode === "multiqc"
+                  ? ["multiqc"]
+                  : ["fastqc", "multiqc"];
   const unavailable = config
     ? required.filter((tool) => !config.tools[tool as keyof Config["tools"]])
     : [];
@@ -138,7 +145,7 @@ export default function NewAnalysisForm({
                 ...([...selected.values()].some(
                   (entry) => entry.kind === "alignment",
                 )
-                  ? ["samtools" as const]
+                  ? (["samtools", "mosdepth"] as const)
                   : []),
               ] as const
             ).map((value) => (
@@ -152,30 +159,34 @@ export default function NewAnalysisForm({
                 <span className="radio-dot" />
                 <strong>{modeLabel(value)}</strong>
                 <small>
-                  {value === "samtools"
-                    ? "Read-only BAM/CRAM header/EOF, flagstat and stats"
-                    : value === "both"
-                      ? "Individual read QC and a combined report"
-                      : value === "fastqc"
-                        ? "Individual read quality assessment"
-                        : value === "fastq-screen"
-                          ? "Read-source mapping against an approved reference panel"
-                          : value === "nanoplot"
-                            ? "Original long-read plots and NanoStats"
-                            : value === "nanoq"
-                              ? "Read-only long-read counts, N50 and quality summaries"
-                              : "Combine existing FastQC or fastp JSON reports"}
+                  {value === "mosdepth"
+                    ? "Original depth distribution and approved-region coverage"
+                    : value === "samtools"
+                      ? "Read-only BAM/CRAM header/EOF, flagstat and stats"
+                      : value === "both"
+                        ? "Individual read QC and a combined report"
+                        : value === "fastqc"
+                          ? "Individual read quality assessment"
+                          : value === "fastq-screen"
+                            ? "Read-source mapping against an approved reference panel"
+                            : value === "nanoplot"
+                              ? "Original long-read plots and NanoStats"
+                              : value === "nanoq"
+                                ? "Read-only long-read counts, N50 and quality summaries"
+                                : "Combine existing FastQC or fastp JSON reports"}
                 </small>
                 {mode === value && <Check size={15} />}
               </button>
             ))}
           </div>
-          {mode === "samtools" && (
+          {isAlignmentQC(mode) && (
             <>
               <p className="inline-note">
                 BAM/CRAM files are independent alignment inputs. No FASTQ
-                pairing, sorting, indexing or editing. quickcheck checks
-                header/EOF only; flagstat and stats scan records separately.
+                pairing, sorting, indexing or editing.{" "}
+                {mode === "samtools"
+                  ? "quickcheck checks header/EOF only; flagstat and stats scan records separately."
+                  : "An existing matching index and coordinate-sorted input are required. A SAMtools stats scan checks actual sorting and CRAM decoding before coverage."}
               </p>
               {configuredPaths.some((entry) => /\.cram$/i.test(entry.name)) && (
                 <>
@@ -211,20 +222,90 @@ export default function NewAnalysisForm({
                   </p>
                 </>
               )}
-              <label>
+              {mode === "samtools" && (
+                <label>
+                  <input
+                    type="checkbox"
+                    disabled={busy || !config?.tools.multiqc}
+                    checked={alignmentOptions.multiqc}
+                    onChange={(e) =>
+                      setAlignmentOptions({
+                        ...alignmentOptions,
+                        multiqc: e.target.checked,
+                      })
+                    }
+                  />{" "}
+                  Generate MultiQC
+                </label>
+              )}
+            </>
+          )}
+          {mode === "mosdepth" && (
+            <>
+              <label className="field-label" htmlFor="coverage-panel">
+                Target regions (optional)
+              </label>
+              <select
+                id="coverage-panel"
+                disabled={busy}
+                value={coverageOptions.panel || ""}
+                onChange={(e) =>
+                  setCoverageOptions({
+                    ...coverageOptions,
+                    panel: e.target.value || null,
+                  })
+                }
+              >
+                <option value="">Reported global coverage only</option>
+                {config?.coverage_panels?.map((p) => (
+                  <option key={p.id} value={p.id} disabled={!p.available}>
+                    {p.id}
+                    {p.error ? ` · ${p.error}` : ` · ${p.intervals} intervals`}
+                  </option>
+                ))}
+              </select>
+              <p className="inline-note">
+                Approved local BED only. Region outputs include actual counts of
+                bases at ≥1×, ≥10×, ≥20× and ≥30×. Per-base output is always
+                disabled.
+              </p>
+              <details className="processing-advanced">
+                <summary>Coverage filters (optional)</summary>
+                <label htmlFor="coverage-mapq">Minimum alignment MAPQ</label>
                 <input
-                  type="checkbox"
-                  disabled={busy || !config?.tools.multiqc}
-                  checked={alignmentOptions.multiqc}
+                  id="coverage-mapq"
+                  type="number"
+                  min={0}
+                  max={255}
+                  disabled={busy}
+                  value={coverageOptions.mapq}
                   onChange={(e) =>
-                    setAlignmentOptions({
-                      ...alignmentOptions,
-                      multiqc: e.target.checked,
+                    setCoverageOptions({
+                      ...coverageOptions,
+                      mapq: Number(e.target.value),
                     })
                   }
-                />{" "}
-                Generate MultiQC
-              </label>
+                />
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={coverageOptions.exclude_supplementary}
+                    disabled={busy}
+                    onChange={(e) =>
+                      setCoverageOptions({
+                        ...coverageOptions,
+                        exclude_supplementary: e.target.checked,
+                      })
+                    }
+                  />{" "}
+                  Exclude supplementary alignments
+                </label>
+                <p className="inline-note">
+                  Unmapped, secondary, QC-failed and duplicate alignments are
+                  excluded. Default mosdepth CIGAR and mate-overlap handling is
+                  retained. MAPQ is aligner-specific; 255 can mean unavailable.
+                </p>
+              </details>
             </>
           )}
           {mode === "nanoplot" && (
@@ -408,7 +489,7 @@ export default function NewAnalysisForm({
               )}
               <div className="pair-summary">
                 <Dna size={17} />
-                {mode === "samtools"
+                {isAlignmentQC(mode)
                   ? "Alignment files are evaluated independently; read-pair metadata does not apply."
                   : mode === "multiqc"
                     ? "Supported QC reports will be snapshotted into this run."
@@ -424,7 +505,7 @@ export default function NewAnalysisForm({
           )}
         </section>
         {mode !== "multiqc" &&
-          mode !== "samtools" &&
+          !isAlignmentQC(mode) &&
           configuredPaths.length > 0 && (
             <ReadRelationships
               value={sampleConfiguration}
@@ -518,7 +599,7 @@ export default function NewAnalysisForm({
           className="button primary"
           disabled={
             busy ||
-            (mode === "samtools" &&
+            (isAlignmentQC(mode) &&
               configuredPaths.some((entry) => /\.cram$/i.test(entry.name)) &&
               !alignmentOptions.reference) ||
             (!configuredPaths.length &&

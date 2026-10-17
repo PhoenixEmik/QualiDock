@@ -49,6 +49,8 @@ class Settings:
     nanoq: str = "nanoq"
     nanoplot: str = "NanoPlot"
     samtools: str = "samtools"
+    mosdepth: str = "mosdepth"
+    coverage_panels: dict[str, str] = field(default_factory=dict)
     alignment_references: dict[str, str] = field(default_factory=dict)
     fastq_screen: str = "fastq_screen"
     bowtie2: str = "bowtie2"
@@ -78,6 +80,8 @@ class Settings:
             nanoq=os.environ.get("QUALIDOCK_NANOQ", "nanoq"),
             nanoplot=os.environ.get("QUALIDOCK_NANOPLOT", "NanoPlot"),
             samtools=os.environ.get("QUALIDOCK_SAMTOOLS", "samtools"),
+            mosdepth=os.environ.get("QUALIDOCK_MOSDEPTH", "mosdepth"),
+            coverage_panels=json.loads(os.environ.get("QUALIDOCK_COVERAGE_PANELS", "{}")),
             alignment_references=json.loads(os.environ.get("QUALIDOCK_ALIGNMENT_REFERENCES", "{}")),
             fastq_screen=os.environ.get("QUALIDOCK_FASTQ_SCREEN", "fastq_screen"),
             bowtie2=os.environ.get("QUALIDOCK_BOWTIE2", "bowtie2"),

@@ -17,6 +17,7 @@ TOOL_SPECS = {
     'seqkit': ('version', (2, 6, 0), (3, 0, 0), '2.6 or newer, below 3'),
     'nanoq': ('--version', (0, 10, 0), (0, 10, 1), 'tested nanoq 0.10.0'),
     'nanoplot': (None, (1, 48, 0), (1, 48, 1), 'tested NanoPlot 1.48.0'),
+    'mosdepth': ('--version', (0, 3, 14), (0, 3, 15), 'tested mosdepth 0.3.14'),
     'samtools': ('--version', (1, 22, 1), (1, 22, 2), 'tested SAMtools/HTSlib 1.22.1'),
     'fastq_screen': ('--version', (0, 16, 0), (0, 17, 0), 'FastQ Screen 0.16.x'),
     'bowtie2': ('--version', (2, 4, 0), (3, 0, 0), 'Bowtie2 2.4 or newer, below 3'),
@@ -77,6 +78,8 @@ async def detect_tool(name: str, executable: str) -> dict:
         if name == 'nanoplot':
             # Do not truncate e.g. 1.48.1rc1 to 1.48 and admit an untested build.
             match = re.fullmatch(r'NanoPlot\s+([0-9]+\.[0-9]+\.[0-9]+)', response, re.IGNORECASE)
+        if name == 'mosdepth':
+            match = re.fullmatch(r'mosdepth ([0-9]+\.[0-9]+\.[0-9]+)', response)
         if name == 'samtools':
             match = re.search(r'(?m)^samtools ([0-9]+\.[0-9]+\.[0-9]+)$', response)
         if name == 'falco' and not match:

@@ -55,6 +55,10 @@ Optional [SAMtools 1.22.1 alignment QC](docs/OPTIONAL-QC.md#samtools-1221--read-
 accepts BAM/CRAM in the same file explorer. It records original quickcheck,
 flagstat and stats reports without FASTQ pairing or source/index modification.
 CRAM requires an administrator-approved local FASTA and existing .fai.
+Optional [mosdepth 0.3.14](docs/OPTIONAL-QC.md#mosdepth-0314--coverage-qc) adds
+native coverage CDFs and approved BED target/threshold reports for sorted, indexed
+BAM/CRAM. Source alignments/indexes remain unchanged. Reported and omitted
+reference denominators are explicit; per-base output is disabled by default.
 Falco 2.0.3 was [benchmarked](docs/FALCO-EVALUATION.md) and remains outside the
 application: required structural validation removes its measured throughput
 advantage on the million-read test input. FastQC stays the default.

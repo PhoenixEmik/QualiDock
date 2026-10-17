@@ -21,6 +21,16 @@ class DirectoryChanged(ValueError):
     pass
 
 
+def approved_file(path):
+    """Operator-owned local reference/panel; source input roots use FileAccess."""
+    if not path.is_absolute() or '##idx##' in str(path) or path.resolve(strict=True) != path or not path.is_file() or not path.stat().st_mode & 0o444 or not os.access(path, os.R_OK):
+        raise ValueError('Approved reference/panel files must be local readable regular files without symlinks')
+    info = path.stat()
+    if info.st_uid not in {0, os.geteuid()} or info.st_mode & 0o022:
+        raise ValueError('Approved files must be owned by this user/root and not group/world writable')
+    return path
+
+
 MAX_INDEX_ENTRIES = 200000
 MAX_CACHED_DIRECTORIES = 8
 CACHE_IDLE_SECONDS = 300

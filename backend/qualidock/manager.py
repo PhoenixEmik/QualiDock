@@ -19,7 +19,7 @@ from .metrics import parse_report
 from .import_formats import fastp_metadata
 from .reports import discover, metadata
 from .tools import detect_tool
-from . import alignment, processing, datasets, multiqc, optional_qc, fastq_screen
+from . import coverage, alignment, processing, datasets, multiqc, optional_qc, fastq_screen
 from .store import ResultStores, now, save_json
 from .sample_metadata import validate_configuration
 from .outcomes import plan, batches, stop, counts
@@ -108,7 +108,7 @@ class RunManager:
 
     async def detect_tools(self):
         signature = []
-        for name in (self.settings.fastqc, self.settings.multiqc, self.settings.fastp, self.settings.seqkit, self.settings.nanoq, self.settings.nanoplot, self.settings.fastq_screen, self.settings.bowtie2, self.settings.samtools):
+        for name in (self.settings.fastqc, self.settings.multiqc, self.settings.fastp, self.settings.seqkit, self.settings.nanoq, self.settings.nanoplot, self.settings.fastq_screen, self.settings.bowtie2, self.settings.samtools, self.settings.mosdepth):
             executable = shutil.which(name)
             try:
                 stat = Path(executable).stat() if executable else None
@@ -117,7 +117,7 @@ class RunManager:
                 signature.append((name, None, None))
         async with self.tool_lock:
             if signature != self.tool_signature or time.monotonic() - self.tool_checked_at >= 60:
-                names = ("fastqc", "multiqc", "fastp", "seqkit", "nanoq", "nanoplot", "fastq_screen", "bowtie2", "samtools")
+                names = ("fastqc", "multiqc", "fastp", "seqkit", "nanoq", "nanoplot", "fastq_screen", "bowtie2", "samtools", "mosdepth")
                 detected = await asyncio.gather(*(detect_tool(name, getattr(self.settings, name)) for name in names))
                 self.tool_info = dict(zip(names, detected))
                 self.tool_signature = signature
@@ -171,7 +171,7 @@ class RunManager:
         input_pairing = []
         normalized_groups = []
         pairing_note = None
-        if mode == 'samtools':
+        if mode in alignment.MODES:
             if input_datasets or supplied_pairing or sample_groups:
                 raise ValueError('Alignment QC does not accept FASTQ datasets, pairing or sample grouping')
             for path in paths:
@@ -188,7 +188,7 @@ class RunManager:
             input_pairing = configuration['input_pairing'] if not configuration.get('pairing_note') or supplied_pairing is not None else []
             normalized_groups = configuration['sample_groups']
             pairing_note = configuration.get('pairing_note')
-        sample_input_paths = [str(path) for path in paths] if mode not in {'multiqc', 'samtools'} else []
+        sample_input_paths = [str(path) for path in paths] if mode not in {'multiqc', *alignment.MODES} else []
         if mode == 'multiqc' and source_run_id:
             source = self.runs[source_run_id]
             input_pairing = deepcopy(source.get('input_pairing', []))
@@ -207,8 +207,11 @@ class RunManager:
                 raise ValueError(info["error"])
         processing.check_features(mode, operation_options, self.tool_info)
         screen_panel = None
+        bed_panel = None
+        if mode == "mosdepth" and qc_options["panel"]:
+            bed_panel = await asyncio.to_thread(coverage.panel, self.settings, qc_options["panel"])
         approved_reference = None
-        if mode == 'samtools':
+        if mode in alignment.MODES:
             if qc_options['reference']:
                 approved_reference = await asyncio.to_thread(alignment.reference, self.settings, qc_options['reference'])
             if any(path.suffix.lower() == '.cram' for path in paths) and not approved_reference:
@@ -246,6 +249,8 @@ class RunManager:
                 run['qc']['reference_panel'] = screen_panel
             if approved_reference:
                 run['qc']['reference'] = approved_reference
+            if bed_panel:
+                run['qc']['bed_panel'] = bed_panel
         self.runs[run_id] = run
         self.update(run)
         self.tasks[run_id] = asyncio.create_task(self.execute(run))
@@ -313,7 +318,7 @@ class RunManager:
         paths = [datasets.resolve(self, path, derived) if not run.get('source_run_id') else access.resolve(path) for path in run['inputs']]
         entries = []
         for path in paths:
-            if run['mode'] == 'samtools': alignment.readable(path)
+            if run['mode'] in alignment.MODES: alignment.readable(path)
             elif run['mode'] != 'multiqc': self.readable_fastq(path)
             entry = access._entry(path.parent, path.name)
             if not entry: raise ValueError('An original input is unavailable')
@@ -335,7 +340,7 @@ class RunManager:
                     raise ValueError("Input directory is unavailable")
                 paths.append(path)
                 continue
-            if run['mode'] == 'samtools': alignment.readable(path)
+            if run['mode'] in alignment.MODES: alignment.readable(path)
             elif run['mode'] != 'multiqc': self.readable_fastq(path)
             stat = path.stat()
             if not path.is_file() or stat.st_size != metadata["size"] or stat.st_mtime_ns != metadata["mtime_ns"] or any(key in metadata and getattr(stat, attribute) != metadata[key] for key, attribute in (("device", "st_dev"), ("inode", "st_ino"))):
@@ -591,8 +596,10 @@ class RunManager:
         allowed = {".html", ".zip", ".json", ".log", ".txt", ".tsv", ".csv", ".yaml", ".parquet", ".png", ".svg"}
         reports = []
         registered = {record['path'] for record in run.get('reports', [])}
+        coverage_reports = {path for row in run.get('qc', {}).get('results', []) if row['state'] == 'completed' for path in row.get('mosdepth', {}).get('reports', {}).values()}
         for path in sorted(directory.rglob("*")):
-            if path.is_file() and not path.is_symlink() and path.resolve().is_relative_to(directory.resolve()) and path.suffix in allowed:
+            coverage_report = path.suffix in {'.gz','.csi'} and str(path.relative_to(directory)) in coverage_reports
+            if path.is_file() and not path.is_symlink() and path.resolve().is_relative_to(directory.resolve()) and (path.suffix in allowed or coverage_report):
                 relative = str(path.relative_to(directory))
                 if relative.startswith('processing/private/'):
                     continue
