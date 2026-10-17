@@ -80,7 +80,8 @@ preventing FastQC/nanoq/processing. QualiDock never downloads or builds referenc
 `scripts/prepare-screen-test.py` explicitly builds **test-only** synthetic indexes;
 it is never called by the application.
 
-Initial aligner support is Bowtie2 2.4–2.x (genuine tests: **2.5.4**); no arbitrary
+Initial aligner support is Bowtie2 2.4–2.x (genuine tests: **2.5.4** locally,
+**2.5.2** in Linux CI); no arbitrary
 aligner options, bisulfite mode or alternative aligners are exposed. FastQ Screen
 0.16.0 removed actual paired alignment: **R1/R2 files are separate SE observations**.
 Metadata can retain pair/lane identities, but this operation neither asserts nor
@@ -134,3 +135,72 @@ Reports use unique, stable input-ID filenames. Genuine MultiQC 1.25.1 file-list
 testing showed that `--dirs` did not preserve namespaces for identical basenames;
 unique filenames prevent silent replacement independently of that older behavior.
 Both original report values and verified source mappings must survive aggregation.
+
+## Implementation and acceptance record
+
+- #29 nanoq: completed. [Acceptance CI](https://github.com/PhoenixEmik/QualiDock/actions/runs/38981897664)
+  passed all eight jobs on implementation commit `76c749b`.
+- #28 FastQ Screen: completed. [Acceptance CI](https://github.com/PhoenixEmik/QualiDock/actions/runs/38984777060)
+  passed all eight jobs on collision-fix commit `d73cdcc`.
+- #30 Falco: evaluated separately; no application engine was added. See the
+  [measured correctness/performance gate](FALCO-EVALUATION.md).
+
+The complete local backend suite with all genuine tools and the million-read
+evaluation input passed **399 tests** in 379.99 seconds, with no skips. Frontend
+tests passed **142 tests**, and TypeScript/Vite built successfully. The existing
+large ECharts bundle warning remains. Actual local versions were FastQC 0.13.0,
+MultiQC 1.35 (plus a separate genuine 1.25.1 collision regression), nanoq 0.10.0,
+FastQ Screen 0.16.0, Bowtie2 2.5.4, fastp 1.4.0 and SeqKit 2.14.0.
+
+Linux genuine-tool CI independently runs MultiQC 1.25.1, 1.35 and latest 1.x;
+processing regressions use fastp 0.23.4 and SeqKit 2.14.0, screening uses
+Bowtie2 2.5.2. The dependency-light
+backend job intentionally skips unavailable tool cases; dedicated required-tool
+jobs run them with actual installations. They do not substitute mocked scientific
+success. Linux resource/cgroup, cancellation, secure artifacts, report isolation,
+restart, derived reuse and original FastQC/MultiQC regressions remain enabled.
+
+Browser evidence on `d73cdcc` contains **57 Chromium** and **33 Firefox** cases,
+zero failures/errors/skips. This includes six new optional-QC cases per browser:
+nanoq and FastQ Screen at `/`, `/node/compute/8765`, and `/rnode/compute/8765`.
+Real execution, restored results, original JSON/HTML, interactive Screen Plotly,
+MultiQC identity, mobile horizontal scrolling and keyboard access are exercised.
+Screenshots were visually reviewed; they are not a pixel-equivalence claim.
+Downloaded evidence is under ignored `validation/qc-ecosystem/{chromium,firefox}`;
+the reproducible upstream artifacts are `report-browser-chromium` and
+`report-browser-firefox` on the acceptance CI run.
+
+### Scope of code changes
+
+Relative to pre-integration commit `58d477e`, application production code
+(`backend/qualidock` and `frontend/src`) adds **934** lines and removes **140**
+(net **+794**), including formatting. There are no new runtime dependencies,
+database, execution engine, top-level pages or deleted production files.
+Developer benchmark/provisioning scripts add another 179 lines, counted
+separately from the application. Tests, fixtures, documentation and CI are not
+included in those application production totals.
+
+Added application files: `backend/qualidock/optional_qc.py` (shared optional
+report-only QC lifecycle/JSON adapter), `backend/qualidock/fastq_screen.py`
+(approved references, real aligner evidence and original summary adapter),
+`frontend/src/OptionalQcResults.tsx` (small native tables and provenance).
+
+Modified backend files: `app.py`, `config.py`, `history.py`, `import_formats.py`,
+`integrity.py`, `manager.py`, `multiqc.py`, `processing.py`, `tools.py`.
+Modified frontend files: `AnalysisDetail.tsx`, `App.tsx`, `NewAnalysisForm.tsx`,
+`ResultsList.tsx`, `api.ts`, `types.ts`. The existing scientific charts and report
+sandbox are reused unchanged.
+
+Added tests are `test_optional_qc.py`, `test_nanoq_real.py`, `test_screen.py`,
+`test_screen_real.py`, `test_falco_evaluation.py`, genuine optional-QC fixtures,
+and `tests/browser/test_optional_qc_browser.py`. Test-only provisioning uses
+`scripts/setup-optional-qc-ci.sh` and `scripts/prepare-screen-test.py`.
+The existing benchmark script and CI are extended, with README, this document,
+`BENCHMARKING.md` and `FALCO-EVALUATION.md` recording supported behavior.
+
+API additions are optional `nanoq`/`fastq-screen` modes, `qc_options` for approved
+screening settings and corresponding `/api/config` tool/panel availability.
+Manifests add optional `qc` metadata with per-file results/provenance. Existing
+manifest fields, report IDs, API modes and derived-input authorization remain
+compatible; historical analyses need no migration. There is deliberately no
+`falco` application mode. No release was tagged or published.

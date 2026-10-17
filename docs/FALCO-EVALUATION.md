@@ -47,6 +47,22 @@ used for local measurements cannot validate process-tree RSS enforcement. Actual
 tool execution and `wait4` CPU/RSS/block counters were retained. Production
 LocalExecutor enforcement is unchanged and Linux CI uses its actual observer.
 
+The Linux Actions evaluation independently confirms the gate on the same
+1,000,000-read, 36,417,994-byte input (one requested thread, three repetitions):
+
+| Command | Median wall (s) | Median CPU (s) | Median waited high-water RSS (MiB) |
+| --- | ---: | ---: | ---: |
+| FastQC 0.13.0 | 7.253 | 6.336 | 193.13 |
+| Falco 2.0.3 | 0.992 | 0.991 | 21.97 |
+| Full structural/gzip/SHA validation | 24.819 | 24.797 | 18.51 |
+
+The consecutive validation → Falco command pair took **26.387 s**. Linux also
+reproduced Falco accepting the malformed separator, while independent validation
+failed and FastQC produced no ZIP. Source SHA-256 was unchanged. These are hosted
+runner observations with uncontrolled cache and shared hardware, not a controlled
+large-file benchmark. Raw isolated-tool speed and memory benefits are real, but
+the validated path does not justify another engine under the current contract.
+
 Both tools' local kernel block-I/O counts were zero with uncontrolled cache.
 That does **not** mean no reads occurred. Linux `/proc` observations are preserved
 without summing parent/child counters. No physical-byte throughput, cold-cache,
@@ -98,7 +114,9 @@ Genuine tests cover the small fixture, pinned million-read input, original-sourc
 immutability, actual report/count differences, the malformed-separator behavior,
 and intentional absence of an application Falco mode. Test tooling explicitly
 downloads the pinned Linux binary and public input; the application installs
-nothing. CI evidence will be linked after the final evaluation job passes.
+nothing. Linux measurements and original reports are retained in the
+`falco-engine-evaluation` artifact of
+[CI run 38986069142](https://github.com/PhoenixEmik/QualiDock/actions/runs/38986069142).
 
 Revisit only after upstream parsing rejects these malformed inputs, or after
 separately justified, measured validator improvements remove the added bottleneck.
