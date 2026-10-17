@@ -58,7 +58,8 @@ dependencies; CI uses an isolated environment and records installed versions.
 Runtime detection reads Python distribution metadata in the console entrypoint's
 own interpreter, without importing NanoPlot: some older versions install Chrome
 during CLI import, even for `--version`. A standard pip/conda Python console script
-is required; shell/binary wrappers and nonstandard launchers are unavailable with
+in an isolated virtualenv/Conda environment is required (user-site/PYTHONPATH-only
+installs are not exposed by the isolated metadata probe); shell/binary wrappers and nonstandard launchers are unavailable with
 an explicit diagnostic. Load the environment first and configure its direct
 `NanoPlot` entrypoint. Scientific input paths with spaces remain supported. The
 recorded tool information includes this version-source distinction; genuine CLI
@@ -108,7 +109,9 @@ and after. Evidence under `validation/nanoplot/{baseline,advanced}/benchmark.jso
 retains scan bytes, stage timings, waited-child CPU and labeled memory/I/O.
 Local macOS cannot validate process-tree RSS enforcement; Linux CI supplies its
 own observation. No giant-input, NFS/Lustre or 11 GB summary acceptance is claimed;
-#5 stays open. PNG is the only intentionally deferred output format for #31.
+#5 stays open. Existing FASTQ validation bounds (1 MiB per line, 4 MiB per
+record) also apply; this is not a claim of unrestricted ultra-long read support.
+PNG is the only intentionally deferred output format for #31.
 
 Linux hosted-runner observations on the same input: 2.718 s baseline / 3.117 s
 advanced analysis wall time; actual NanoPlot stage 1.225 / 1.427 s, source
@@ -119,18 +122,26 @@ CPU. The source SHA-256 was unchanged. Evidence and dependency versions are in
 `nanoplot-real-evidence` on [CI 38997343347](https://github.com/PhoenixEmik/QualiDock/actions/runs/38997343347).
 
 Implementation inventory relative to `fe0e57d`: 6 files added, 20 modified,
-none deleted. Application code adds 334 lines/removes 46 (net +288, including
+none deleted. Application code adds 357 lines/removes 47 (net +310, including
 formatting). Added `nanoplot.py` is an 81-line explicit adapter; modified existing
 QC lifecycle/config/API/history and setup/results/types/report-selection files
 reuse the same manager, validator and viewer. Genuine NanoStats and its provenance
-README, 21 unit cases, 13 real-tool cases, one frontend report-order regression
+README, 23 unit cases, 13 real-tool cases, one frontend report-order regression
 and browser cases are added. Benchmark, test provisioning, CI and the existing
 guides are extended. No runtime dependency, executor, database or chart framework
 is introduced. Manifests add optional `qc.results[].nanoplot` raw rows/HTML paths;
-old analysis fields/formats remain unchanged. Initial full local backend: 426 passed, then 34 focused NanoPlot checks passed
-after version/completeness hardening; frontend: 143 passed and TypeScript/Vite
-build. CI acceptance is recorded after
-all required jobs finish; no release is prepared.
+old analysis fields/formats remain unchanged. Final full local backend: **435 passed**
+without skips; 36 focused NanoPlot checks also passed after version/completeness
+hardening. Frontend: **143 passed** and TypeScript/Vite build passed.
+[Final acceptance CI 38998848956](https://github.com/PhoenixEmik/QualiDock/actions/runs/38998848956)
+on implementation commit `313dad6` passed all eight jobs, including genuine tools,
+MultiQC 1.25.1/1.35/latest-1.x and Linux resources. Browser artifacts contain
+**60 Chromium / 36 Firefox** cases, zero failures/errors/skips. Screenshots of
+native NanoStats and original interactive reports were visually reviewed;
+this is not a pixel-equivalence claim. Reproducible evidence is in the run's
+`nanoplot-real-evidence` and `report-browser-*` artifacts; downloaded copies are
+under ignored `validation/nanoplot-final-{linux,browser}`. #31 is accepted with
+its explicitly confirmed HTML-only output scope; no release is prepared.
 
 ## FastQ Screen 0.16.x (tested 0.16.0)
 
