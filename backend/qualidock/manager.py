@@ -19,7 +19,7 @@ from .metrics import parse_report
 from .import_formats import fastp_metadata
 from .reports import discover, metadata
 from .tools import detect_tool
-from . import coverage, alignment, processing, datasets, multiqc, optional_qc, fastq_screen
+from . import coverage, alignment, processing, datasets, multiqc, optional_qc, fastq_screen, rseqc
 from .store import ResultStores, now, save_json
 from .sample_metadata import validate_configuration
 from .outcomes import plan, batches, stop, counts
@@ -108,7 +108,7 @@ class RunManager:
 
     async def detect_tools(self):
         signature = []
-        for name in (self.settings.fastqc, self.settings.multiqc, self.settings.fastp, self.settings.seqkit, self.settings.nanoq, self.settings.nanoplot, self.settings.fastq_screen, self.settings.bowtie2, self.settings.samtools, self.settings.mosdepth):
+        for name in (self.settings.fastqc, self.settings.multiqc, self.settings.fastp, self.settings.seqkit, self.settings.nanoq, self.settings.nanoplot, self.settings.fastq_screen, self.settings.bowtie2, self.settings.samtools, self.settings.mosdepth, self.settings.rseqc_infer, self.settings.rseqc_distribution):
             executable = shutil.which(name)
             try:
                 stat = Path(executable).stat() if executable else None
@@ -117,7 +117,7 @@ class RunManager:
                 signature.append((name, None, None))
         async with self.tool_lock:
             if signature != self.tool_signature or time.monotonic() - self.tool_checked_at >= 60:
-                names = ("fastqc", "multiqc", "fastp", "seqkit", "nanoq", "nanoplot", "fastq_screen", "bowtie2", "samtools", "mosdepth")
+                names = ("fastqc", "multiqc", "fastp", "seqkit", "nanoq", "nanoplot", "fastq_screen", "bowtie2", "samtools", "mosdepth", "rseqc_infer", "rseqc_distribution")
                 detected = await asyncio.gather(*(detect_tool(name, getattr(self.settings, name)) for name in names))
                 self.tool_info = dict(zip(names, detected))
                 self.tool_signature = signature
@@ -176,6 +176,8 @@ class RunManager:
                 raise ValueError('Alignment QC does not accept FASTQ datasets, pairing or sample grouping')
             for path in paths:
                 await asyncio.to_thread(alignment.readable, path)
+                if mode in rseqc.MODES and path.suffix.lower() != '.bam':
+                    raise ValueError('RSeQC currently supports BAM only; CRAM is not qualified')
         elif mode == "multiqc":
             try:
                 report_inputs = await asyncio.to_thread(discover, paths, access, import_summary)
@@ -210,9 +212,10 @@ class RunManager:
         bed_panel = None
         if mode == "mosdepth" and qc_options["panel"]:
             bed_panel = await asyncio.to_thread(coverage.panel, self.settings, qc_options["panel"])
+        approved_annotation = await asyncio.to_thread(rseqc.annotation, self.settings, qc_options['annotation']) if mode in rseqc.MODES else None
         approved_reference = None
         if mode in alignment.MODES:
-            if qc_options['reference']:
+            if qc_options.get('reference'):
                 approved_reference = await asyncio.to_thread(alignment.reference, self.settings, qc_options['reference'])
             if any(path.suffix.lower() == '.cram' for path in paths) and not approved_reference:
                 raise ValueError('Select an administrator-approved local reference for CRAM')
@@ -249,6 +252,8 @@ class RunManager:
                 run['qc']['reference_panel'] = screen_panel
             if approved_reference:
                 run['qc']['reference'] = approved_reference
+            if approved_annotation:
+                run['qc']['annotation'] = approved_annotation
             if bed_panel:
                 run['qc']['bed_panel'] = bed_panel
         self.runs[run_id] = run
@@ -348,16 +353,19 @@ class RunManager:
             paths.append(path)
         return paths
 
-    async def command(self, run, tool, argv, directory, *, stdout=None, env=None):
+    async def command(self, run, tool, argv, directory, *, stdout=None, stderr=None, env=None):
         execution = {"tool": tool, "argv": argv, "started_at": now(), "finished_at": None, "exit_code": None}
         run.setdefault("executions", []).append(execution)
         if stdout is not None:
             execution['stdout'] = str(stdout.relative_to(directory))
+        if stderr is not None:
+            execution['stderr'] = str(stderr.relative_to(directory))
         if env:
             execution['environment'] = env
         self.update(run)
         try:
             options = {'stdout': stdout, 'env': env} if stdout is not None or env is not None else {}
+            if stderr is not None:options['stderr'] = stderr
             code = await self.executor.execute(run["id"], argv, directory, directory / "analysis.log", run["threads"], **options)
             execution["exit_code"] = code
             return code

@@ -51,6 +51,8 @@ export interface Run {
     | "multiqc"
     | "mosdepth"
     | "samtools"
+    | "rseqc-infer"
+    | "rseqc-distribution"
     | "nanoplot"
     | "nanoq"
     | "fastq-screen"
@@ -90,8 +92,16 @@ export interface Run {
   }[];
   processing?: ProcessingResult;
   qc?: {
-    tool: "nanoq" | "nanoplot" | "fastq_screen" | "samtools" | "mosdepth";
+    tool:
+      | "nanoq"
+      | "nanoplot"
+      | "fastq_screen"
+      | "samtools"
+      | "mosdepth"
+      | "rseqc-infer"
+      | "rseqc-distribution";
     options: Record<string, unknown>;
+    annotation?: { id: string; path: string; sha256: string; identity: string };
     reference?: {
       id: string;
       path: string;
@@ -112,6 +122,16 @@ export interface Run {
       error: string | null;
       report: string;
       source_sha256?: string;
+      rseqc?: {
+        operation: string;
+        columns: string[];
+        rows: string[][];
+        reports: Record<string, string>;
+        sampled_alignments?: string;
+        layout?: string;
+        status?: string;
+        totals?: string[][];
+      };
       mosdepth?: CoverageMetrics;
       alignment?: {
         format: string;
@@ -257,6 +277,7 @@ export interface OutputLocation {
 }
 export interface RerunConfiguration extends SampleConfiguration {
   qc_options?:
+    | Partial<RnaOptions>
     | ScreenOptions
     | NanoPlotOptions
     | AlignmentOptions
@@ -310,6 +331,7 @@ export interface Listing {
   next_offset?: number | null;
 }
 export interface ToolInfo {
+  suite_version?: string;
   name: string;
   executable: string;
   available: boolean;
@@ -335,7 +357,18 @@ export interface MultiQCSummary {
   }[];
   rows: { sample: string; values: Record<string, string | number> }[];
 }
+export interface RnaOptions {
+  annotation: string;
+  sample_size: number;
+  mapq: number;
+}
 export interface Config {
+  rna_annotations?: {
+    id: string;
+    available: boolean;
+    transcripts?: number;
+    error: string | null;
+  }[];
   coverage_panels?: {
     id: string;
     available: boolean;
@@ -368,6 +401,8 @@ export interface Config {
     nanoplot?: boolean;
     samtools?: boolean;
     mosdepth?: boolean;
+    rseqc_infer?: boolean;
+    rseqc_distribution?: boolean;
     fastq_screen?: boolean;
     bowtie2?: boolean;
   };

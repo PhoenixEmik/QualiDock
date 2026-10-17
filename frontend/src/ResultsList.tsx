@@ -153,6 +153,10 @@ export default function ResultsList({
               <option value="multiqc">MultiQC only</option>
               <option value="mosdepth">mosdepth</option>
               <option value="samtools">SAMtools</option>
+              <option value="rseqc-infer">RSeQC strandedness</option>
+              <option value="rseqc-distribution">
+                RSeQC read distribution
+              </option>
               <option value="nanoplot">NanoPlot</option>
               <option value="nanoq">nanoq long-read QC</option>
               <option value="fastq-screen">FastQ Screen</option>

@@ -176,3 +176,5 @@ Licensed under [GNU GPLv3](LICENSE). FastQC, MultiQC, Apache ECharts, and other 
 
 MultiQC-only imports also accept existing fastp JSON reports without processing
 FASTQs. See [QC imports](docs/QC-IMPORTS.md).
+
+RNA-seq QC: optional RSeQC strandedness and read-distribution operations use approved BED12 gene models and read-only BAM inputs. See [scientific contracts and configuration](docs/RNA-QC.md).

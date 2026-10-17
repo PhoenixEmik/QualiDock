@@ -13,7 +13,7 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
-import { api, AuthError, date, url, isAlignmentQC } from "./api";
+import { api, AuthError, date, url, isAlignmentQC, isRnaQC } from "./api";
 import type {
   Config,
   DetailTab,
@@ -31,6 +31,7 @@ import type {
   NanoPlotOptions,
   AlignmentOptions,
   CoverageOptions,
+  RnaOptions,
 } from "./types";
 import { Empty } from "./Feedback";
 import FileExplorer from "./FileExplorer";
@@ -92,6 +93,11 @@ export default function App() {
   const [nanoPlotOptions, setNanoPlotOptions] = useState<NanoPlotOptions>({
     loglength: false,
     individual_plots: false,
+  });
+  const [rnaOptions, setRnaOptions] = useState<RnaOptions>({
+    annotation: "",
+    sample_size: 200000,
+    mapq: 30,
   });
   const [coverageOptions, setCoverageOptions] = useState<CoverageOptions>({
     panel: null,
@@ -477,22 +483,34 @@ export default function App() {
       const payload = {
         name,
         mode,
-        ...(isAlignmentQC(mode)
+        ...(isRnaQC(mode)
           ? {
               qc_options: {
-                ...(mode === "mosdepth" ? coverageOptions : alignmentOptions),
-                reference: [...selected.values()].some(
-                  (e) => e.kind === "alignment" && /\.cram$/i.test(e.name),
-                )
-                  ? alignmentOptions.reference
-                  : null,
+                annotation: rnaOptions.annotation,
+                ...(mode === "rseqc-infer"
+                  ? {
+                      sample_size: rnaOptions.sample_size,
+                      mapq: rnaOptions.mapq,
+                    }
+                  : {}),
               },
             }
-          : mode === "fastq-screen"
-            ? { qc_options: qcOptions }
-            : mode === "nanoplot"
-              ? { qc_options: nanoPlotOptions }
-              : {}),
+          : isAlignmentQC(mode)
+            ? {
+                qc_options: {
+                  ...(mode === "mosdepth" ? coverageOptions : alignmentOptions),
+                  reference: [...selected.values()].some(
+                    (e) => e.kind === "alignment" && /\.cram$/i.test(e.name),
+                  )
+                    ? alignmentOptions.reference
+                    : null,
+                },
+              }
+            : mode === "fastq-screen"
+              ? { qc_options: qcOptions }
+              : mode === "nanoplot"
+                ? { qc_options: nanoPlotOptions }
+                : {}),
         ...(isProcessing(mode)
           ? { processing_options: processingOptions }
           : {}),
@@ -504,7 +522,8 @@ export default function App() {
                   mode === "multiqc"
                     ? ["fastqc", "qcreport"].includes(entry.kind)
                     : isAlignmentQC(mode)
-                      ? entry.kind === "alignment"
+                      ? entry.kind === "alignment" &&
+                        (!isRnaQC(mode) || /\.bam$/i.test(entry.name))
                       : entry.kind === "fastq",
                 )
                 .map((entry) => entry.path),
@@ -578,6 +597,14 @@ export default function App() {
     );
     setName(draft.name);
     setMode(draft.mode);
+    if (isRnaQC(draft.mode) && draft.qc_options) {
+      const value = draft.qc_options as Partial<RnaOptions>;
+      setRnaOptions({
+        annotation: value.annotation || "",
+        sample_size: value.sample_size ?? 200000,
+        mapq: value.mapq ?? 30,
+      });
+    }
     if (draft.mode === "fastq-screen" && draft.qc_options)
       setQcOptions(draft.qc_options as ScreenOptions);
     if (draft.mode === "mosdepth" && draft.qc_options) {
@@ -969,6 +996,8 @@ export default function App() {
             <NewAnalysisForm
               coverageOptions={coverageOptions}
               setCoverageOptions={setCoverageOptions}
+              rnaOptions={rnaOptions}
+              setRnaOptions={setRnaOptions}
               alignmentOptions={alignmentOptions}
               setAlignmentOptions={setAlignmentOptions}
               nanoPlotOptions={nanoPlotOptions}

@@ -10,7 +10,7 @@ import time
 
 class Executor(ABC):
     @abstractmethod
-    async def execute(self, run_id: str, argv: list[str], cwd: Path, log: Path, cpus: int, *, stdout: Path | None = None, env: dict | None = None) -> int: ...
+    async def execute(self, run_id: str, argv: list[str], cwd: Path, log: Path, cpus: int, *, stdout: Path | None = None, stderr: Path | None = None, env: dict | None = None) -> int: ...
 
     @abstractmethod
     async def cancel(self, run_id: str) -> None: ...
@@ -23,7 +23,7 @@ class LocalExecutor(Executor):
         self.cancelled: set[str] = set()
         self.observations: dict[str, dict] = {}
 
-    async def execute(self, run_id, argv, cwd, log, cpus, *, stdout=None, env=None):
+    async def execute(self, run_id, argv, cwd, log, cpus, *, stdout=None, stderr=None, env=None):
         if run_id in self.cancelled:
             return 130
         observation = {"peak_sampled_rss_bytes": None, "rss_samples": 0, "sample_interval_seconds": 0.5, "termination_reason": None}
@@ -33,7 +33,7 @@ class LocalExecutor(Executor):
         env = os.environ.copy()
         env.pop('QUALIDOCK_MAX_FILE_BYTES', None)
         env.update(overrides)
-        if stdout is not None:
+        if stdout is not None or stderr is not None:
             env['QUALIDOCK_MAX_FILE_BYTES'] = str(128 * 1024 * 1024)
         env.update({k: str(cpus) for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "NUMEXPR_NUM_THREADS")})
         # Do not leak the web session credential into analysis subprocesses.
@@ -44,10 +44,11 @@ class LocalExecutor(Executor):
             # Owned report paths are unique. Never follow an existing symlink or
             # overwrite a planted hardlink/file when redirecting tool stdout.
             report = stack.enter_context(stdout.open('xb', buffering=0)) if stdout is not None else output
+            diagnostic = stack.enter_context(stderr.open('x+b', buffering=0)) if stderr is not None else output
             output.write(("\n$ " + repr(argv) + "\n").encode())
             process = await asyncio.create_subprocess_exec(
                 sys.executable, "-m", "qualidock.worker", str(cpus), str(os.getpid()), *argv,
-                cwd=cwd, env=env, stdout=report, stderr=output, start_new_session=True)
+                cwd=cwd, env=env, stdout=report, stderr=diagnostic, start_new_session=True)
             self.processes[run_id] = process
             waiter = asyncio.create_task(process.wait())
             try:
@@ -72,6 +73,13 @@ class LocalExecutor(Executor):
                 # A tool exiting must not leave a background descendant running.
                 await self.stop_group(run_id)
                 await waiter
+                if stderr is not None:
+                    # Read the already-open owned FD, never reopen a potentially
+                    # replaced pathname. Keep diagnostics visible on failed runs.
+                    diagnostic.seek(0)
+                    captured = diagnostic.read(65537)
+                    output.write(b'\n[Tool stderr; original: '+str(stderr.relative_to(cwd)).encode()+b']\n'+captured[:65536])
+                    if len(captured) > 65536:output.write(b'\n[Diagnostic excerpt limited to 64 KiB]\n')
                 self.processes.pop(run_id, None)
                 observation["elapsed_seconds"] = time.monotonic() - started
 

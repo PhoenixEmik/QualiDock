@@ -1,3 +1,4 @@
+import RnaQcResults from "./RnaQcResults";
 import CoverageResults from "./CoverageResults";
 import AlignmentResults from "./AlignmentResults";
 import { url } from "./api";
@@ -16,6 +17,8 @@ const metrics: [string, string, string][] = [
 ];
 
 export default function OptionalQcResults({ run }: { run: Run }) {
+  if (run.mode === "rseqc-infer" || run.mode === "rseqc-distribution")
+    return <RnaQcResults run={run} />;
   if (run.qc?.tool === "mosdepth") return <CoverageResults run={run} />;
   if (run.qc?.tool === "samtools") return <AlignmentResults run={run} />;
   if (run.qc?.tool === "fastq_screen") return <ScreenResults run={run} />;

@@ -19,6 +19,8 @@ TOOL_SPECS = {
     'nanoplot': (None, (1, 48, 0), (1, 48, 1), 'tested NanoPlot 1.48.0'),
     'mosdepth': ('--version', (0, 3, 14), (0, 3, 15), 'tested mosdepth 0.3.14'),
     'samtools': ('--version', (1, 22, 1), (1, 22, 2), 'tested SAMtools/HTSlib 1.22.1'),
+    'rseqc_infer': ('--version', (5, 5, 0), (5, 5, 1), 'RSeQC 5.0.5 (CLI 5.05)'),
+    'rseqc_distribution': ('--version', (5, 5, 0), (5, 5, 1), 'RSeQC 5.0.5 (CLI 5.05)'),
     'fastq_screen': ('--version', (0, 16, 0), (0, 17, 0), 'FastQ Screen 0.16.x'),
     'bowtie2': ('--version', (2, 4, 0), (3, 0, 0), 'Bowtie2 2.4 or newer, below 3'),
     'falco': ('--version', (2, 0, 3), (2, 1, 0), 'Falco 2.0.3–2.0.x'),
@@ -82,6 +84,10 @@ async def detect_tool(name: str, executable: str) -> dict:
             match = re.fullmatch(r'mosdepth ([0-9]+\.[0-9]+\.[0-9]+)', response)
         if name == 'samtools':
             match = re.search(r'(?m)^samtools ([0-9]+\.[0-9]+\.[0-9]+)$', response)
+        if name.startswith('rseqc_'):
+            script = 'infer_experiment' if name == 'rseqc_infer' else 'read_distribution'
+            match = re.fullmatch(re.escape(script)+r'\.py (5\.05)', response)
+            if match: result['suite_version'] = '5.0.5'
         if name == 'falco' and not match:
             match = re.fullmatch(r'([0-9]+(?:\.[0-9]+){1,2})', response)
         if process.returncode or not match:

@@ -34,7 +34,7 @@ class ValidationJobs:
         self.cancelled = set()
 
     def prepare(self, run, mode):
-        if run['mode'] in {'samtools','mosdepth'}:
+        if run['mode'] in {'samtools','mosdepth','rseqc-infer','rseqc-distribution'}:
             raise ValueError('FASTQ integrity checks do not apply to alignment inputs; inspect SAMtools evidence')
         manager = self.manager
         paths = run.get('sample_input_paths', run['inputs'])

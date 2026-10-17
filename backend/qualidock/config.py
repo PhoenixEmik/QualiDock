@@ -50,6 +50,9 @@ class Settings:
     nanoplot: str = "NanoPlot"
     samtools: str = "samtools"
     mosdepth: str = "mosdepth"
+    rseqc_infer: str = "infer_experiment.py"
+    rseqc_distribution: str = "read_distribution.py"
+    rna_annotations: dict[str, str] = field(default_factory=dict)
     coverage_panels: dict[str, str] = field(default_factory=dict)
     alignment_references: dict[str, str] = field(default_factory=dict)
     fastq_screen: str = "fastq_screen"
@@ -81,6 +84,9 @@ class Settings:
             nanoplot=os.environ.get("QUALIDOCK_NANOPLOT", "NanoPlot"),
             samtools=os.environ.get("QUALIDOCK_SAMTOOLS", "samtools"),
             mosdepth=os.environ.get("QUALIDOCK_MOSDEPTH", "mosdepth"),
+            rseqc_infer=os.environ.get("QUALIDOCK_RSEQC_INFER", "infer_experiment.py"),
+            rseqc_distribution=os.environ.get("QUALIDOCK_RSEQC_DISTRIBUTION", "read_distribution.py"),
+            rna_annotations=json.loads(os.environ.get("QUALIDOCK_RNA_ANNOTATIONS", "{}")),
             coverage_panels=json.loads(os.environ.get("QUALIDOCK_COVERAGE_PANELS", "{}")),
             alignment_references=json.loads(os.environ.get("QUALIDOCK_ALIGNMENT_REFERENCES", "{}")),
             fastq_screen=os.environ.get("QUALIDOCK_FASTQ_SCREEN", "fastq_screen"),

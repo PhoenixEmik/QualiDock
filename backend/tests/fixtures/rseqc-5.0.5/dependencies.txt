@@ -1,0 +1,17 @@
+bx-python==0.15.1
+contourpy==1.4.0
+cycler==0.12.1
+fonttools==4.67.0
+kiwisolver==1.5.1
+logomaker==0.8.7
+matplotlib==3.11.2
+numpy==2.5.4
+packaging==26.3
+pandas==3.0.6
+pillow==13.0.0
+pyBigWig==0.3.26
+pyparsing==3.3.3
+pysam==0.24.1
+python-dateutil==2.9.0.post0
+RSeQC==5.0.5
+six==1.17.0

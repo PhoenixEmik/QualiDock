@@ -9,12 +9,15 @@ from .outcomes import stop
 from .processing import local_file, validate
 from .metrics import bounded_text
 from .store import now, save_json
-from . import coverage, alignment, fastq_screen, multiqc, nanoplot
+from . import coverage, alignment, fastq_screen, multiqc, nanoplot, rseqc
 
 MODES = {'nanoq', 'fastq-screen', 'nanoplot', *alignment.MODES}
 
 
 def options(mode, supplied):
+    if mode in rseqc.MODES:
+        model = rseqc.InferOptions if mode == 'rseqc-infer' else rseqc.Options
+        return model.model_validate(supplied or {}).model_dump()
     if mode == 'mosdepth':
         return coverage.Options.model_validate(supplied or {}).model_dump()
     if mode == 'samtools':
@@ -29,6 +32,8 @@ def options(mode, supplied):
 
 
 def required(mode, value):
+    if mode in rseqc.MODES:
+        return ['samtools', 'rseqc_infer' if mode == 'rseqc-infer' else 'rseqc_distribution']
     if mode == 'mosdepth':
         return ['samtools', 'mosdepth']
     if mode == 'samtools':
@@ -80,7 +85,8 @@ def records(paths, tool):
     from .outcomes import plan
     result = []
     for row in plan(paths):
-        filename = {'samtools':row['id']+'.stats.txt', 'mosdepth':row['id']+'.mosdepth.summary.txt',
+        filename = {'rseqc-infer':row['id']+'.infer_experiment.txt', 'rseqc-distribution':row['id']+'.read_distribution.txt',
+                    'samtools':row['id']+'.stats.txt', 'mosdepth':row['id']+'.mosdepth.summary.txt',
                     'fastq-screen':row['id']+'_screen.txt', 'nanoplot':'NanoStats.txt', 'nanoq':'nanoq.json'}[tool]
         result.append({**{key:row[key] for key in ('id','path','name','state','error','exit_code','finished_at')},
                        'report':f'qc/{row["id"]}/{filename}', 'summary':None})

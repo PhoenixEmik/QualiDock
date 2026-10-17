@@ -5,6 +5,8 @@ limits, cancellation, owned output directories, authenticated downloads and
 restart recovery as the default FastQC workflow. QualiDock never installs tools.
 FastQC remains the default. These integrations do not create processed FASTQs.
 
+RNA-seq-specific contracts and genuine report evidence are documented in [RNA-QC.md](RNA-QC.md).
+
 ## nanoq 0.10.0
 
 Set `QUALIDOCK_NANOQ` to an executable path, or provide `nanoq` on PATH. Version
