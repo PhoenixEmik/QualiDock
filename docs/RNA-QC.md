@@ -104,6 +104,13 @@ CDS, four intronic), independently determined from geometry. The spliced record
 is intentionally not collapsed to one tag. Source fixture generation occurs
 only in tests; no source report is regenerated merely to view it.
 
+A second independent fixture preserves Galaxy tools-iuc's existing hg19 RNA-seq
+BAM/BED12 (40 primary alignments), original report references and pinned source
+hashes; see `backend/tests/fixtures/rseqc-5.0.5/galaxy/README.md`. New real-tool
+checks compare both operations against independent RSeQC execution on those
+unaltered bytes, supplementing the explicit synthetic geometry. Neither subset
+is used to infer population-wide biological protocol accuracy.
+
 Full application real-tool/browser acceptance will be recorded after those CI
 jobs pass. Representative large RNA-seq and shared-storage acceptance remain
 pending issue #5; small-fixture output correctness is not a throughput claim.

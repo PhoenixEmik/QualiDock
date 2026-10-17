@@ -187,3 +187,28 @@ def test_queued_annotation_change_is_not_reinterpreted_as_saved_provenance(input
         run=wait(c,response.json()['id'])
         assert run['state']=='failed' and 'annotation changed' in run['error']
         assert not any(e['tool'].startswith('rseqc_') for e in run['executions'])
+
+
+@pytest.mark.parametrize('mode',['rseqc-infer','rseqc-distribution'])
+def test_public_galaxy_hg19_rnaseq_matches_independent_upstream_and_original_fixture(inputs,mode):
+    from qualidock import rseqc
+    config,bam,bed=inputs
+    golden=Path(__file__).parent/'fixtures/rseqc-5.0.5/galaxy'
+    shutil.copyfile(golden/'input.bam',bam);shutil.copyfile(golden/'genes.bed12',bed)
+    before=hashes(bam.parent)
+    tool=INFER if mode=='rseqc-infer' else DISTRIBUTION
+    args=['-s','200000','-q','30'] if mode=='rseqc-infer' else []
+    original=subprocess.run([tool,'-i',str(bam),'-r',str(bed),*args],capture_output=True,check=True)
+    with TestClient(create_app(config)) as c:
+        auth(c,config)
+        run=wait(c,c.post('/api/runs',json={'mode':mode,'paths':[str(bam)],'qc_options':{'annotation':'genes'}}).json()['id'])
+        assert run['state']=='completed',run['error']
+        result=run['qc']['results'][0]['rseqc']
+        assert c.get(f'/api/runs/{run["id"]}/download',params={'path':result['reports']['stdout']}).content==original.stdout
+        if mode=='rseqc-infer':
+            assert [r[1] for r in result['rows']]==['0.0000','1.0000','0.0000']
+        else:
+            assert result['totals']==[['Total Reads','40'],['Total Tags','44'],['Total Assigned Tags','38']]
+            assert result['rows']==rseqc.distribution(golden/'upstream.read_distribution.txt')['rows']
+        shutil.copytree(config.output/run['id'],Path('validation/rseqc')/('galaxy-'+mode),dirs_exist_ok=True)
+    assert before==hashes(bam.parent)
