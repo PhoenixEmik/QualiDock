@@ -228,7 +228,48 @@ reference, source immutability, collision mapping, secure artifacts, cancellatio
 and restart. A live HTTP canary test runs unchanged in Linux genuine-tool CI;
 the local managed macOS sandbox cannot bind a listening port. No representative
 large-alignment or NFS/Lustre performance acceptance is claimed. No release work
-is included. #33 remains gated on #32 validation.
+is included. #33 may build on this validated input contract.
+
+SAMtools implementation inventory relative to `adb0888`: 12 added files,
+25 modified, none deleted. Application production code adds **675** lines and
+removes **97** (net **+578**, including formatting). New production files are
+`backend/qualidock/alignment.py` (253 lines) and
+`frontend/src/AlignmentResults.tsx`; existing config/file kinds/QC lifecycle,
+executor stdout handling, validation guard, analysis setup/history/types and
+artifact links are extended. Tests add the genuine synthetic SAM/FASTA and
+original reports, explicit test-only conversion/provisioning scripts, 31 backend
+cases and browser setup/results/restart coverage. No new runtime dependency,
+database, executor, plugin interface or manifest migration is introduced. API
+additions are optional `samtools` mode, approved-reference/QC options and config
+listing; manifest `qc` rows add optional `alignment` reports/tables and reference
+evidence. Existing saved analyses remain readable.
+
+Final local backend on `7024dc2`: **465 passed**, one HTTP-canary case deliberately
+not selected because this managed macOS sandbox cannot bind listening ports.
+That unchanged case passes in Linux genuine-tool CI, with curl-enabled upstream
+HTSlib. All **31 SAMtools tests pass** in the dedicated MultiQC 1.25.1/1.35/latest
+matrix; 1.25.1's explicit stats-only contract is covered, not skipped. Frontend
+**144 passed**, TypeScript/Vite build passed (existing ECharts chunk warning).
+[Acceptance CI 39001443076](https://github.com/PhoenixEmik/QualiDock/actions/runs/39001443076)
+on implementation commit `7024dc2` passed **all eight jobs**. Browser artifacts
+contain **63 Chromium / 39 Firefox** cases, zero failures/errors/skips, including
+actual BAM/CRAM setup, missing-reference blocking, downloads with live terminal
+updates, prefixed paths, narrow layouts and restored results. Both browsers'
+screenshots were visually reviewed. Narrow tables retain keyboard-accessible
+horizontal scrolling; no pixel-equivalence claim is made. Source immutability,
+reference identity and numerical equivalence are tested independently of visuals.
+Artifacts are `report-browser-*`, with downloaded copies under ignored
+`validation/alignment-final-browser`. #32 is accepted; no release was prepared.
+
+One hosted-Linux observation on the explicit 8-record fixture: BAM+MultiQC wall
+**2.363 s**, CRAM+MultiQC **2.353 s**; each SAMtools command took 0.224–0.229 s
+including the existing worker/guardian. Single process-group RSS observations
+were approximately 10.4–10.6 MB (one sample per command), **not exact peak memory
+or pure SAMtools RSS**. No tool CPU or physical filesystem-throughput claim is
+inferred from these timings. Original evidence/tool compilation features are in
+`alignment-1.35-evidence` on CI run `39001443076`; local downloaded evidence is
+under ignored `validation/alignment-final-linux`. Large alignment/shared-storage
+acceptance remains unmeasured.
 
 ## FastQ Screen 0.16.x (tested 0.16.0)
 
