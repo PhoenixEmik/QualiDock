@@ -55,6 +55,14 @@ Set `QUALIDOCK_NANOPLOT` to an existing `NanoPlot` executable, or put it on PATH
 Only the genuinely tested **1.48.0** contract is enabled. The application installs
 no packages or browsers. Tool dependencies stay outside QualiDock's runtime
 dependencies; CI uses an isolated environment and records installed versions.
+Runtime detection reads Python distribution metadata in the console entrypoint's
+own interpreter, without importing NanoPlot: some older versions install Chrome
+during CLI import, even for `--version`. A standard pip/conda Python console script
+is required; shell/binary wrappers and nonstandard launchers are unavailable with
+an explicit diagnostic. Load the environment first and configure its direct
+`NanoPlot` entrypoint. Scientific input paths with spaces remain supported. The
+recorded tool information includes this version-source distinction; genuine CLI
+version/execution is separately verified by the provisioned regression tests.
 
 Choose **NanoPlot long-read QC** with authorized FASTQ/FASTQ.gz or exact registered
 derived datasets. Each file stays an independent observation. Pair/lane metadata

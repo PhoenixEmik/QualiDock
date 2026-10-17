@@ -7,7 +7,6 @@ import json
 import os
 from pathlib import Path
 import shutil
-import shlex
 import subprocess
 import time
 import sys
@@ -100,7 +99,8 @@ def test_genuine_invocation_failure_retains_no_scientific_artifacts(tmp_path):
     config=settings(tmp_path)
     # Intentionally ask the real executable to reject an invalid upstream flag.
     wrapper=tmp_path/'invalid-NanoPlot'
-    wrapper.write_text('#!/bin/sh\nif [ "$1" = "--version" ]; then exec '+shlex.quote(TOOL)+' "$@"; fi\nexec '+shlex.quote(TOOL)+' --invalid-qualidock-test-flag "$@"\n')
+    header=Path(TOOL).read_text().splitlines()[0]
+    wrapper.write_text(header+'\nimport sys\nfrom nanoplot.NanoPlot import main\nsys.argv.insert(1,"--invalid-qualidock-test-flag")\nmain()\n')
     wrapper.chmod(0o700);config=replace(config,nanoplot=str(wrapper))
     with TestClient(create_app(config)) as client:
         auth(client,config)

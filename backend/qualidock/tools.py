@@ -3,6 +3,7 @@ import asyncio
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import signal
 
@@ -15,11 +16,29 @@ TOOL_SPECS = {
     'fastp': ('--version', (0, 23, 0), (2, 0, 0), '0.23 or newer, below 2'),
     'seqkit': ('version', (2, 6, 0), (3, 0, 0), '2.6 or newer, below 3'),
     'nanoq': ('--version', (0, 10, 0), (0, 10, 1), 'tested nanoq 0.10.0'),
-    'nanoplot': ('--version', (1, 48, 0), (1, 48, 1), 'tested NanoPlot 1.48.0'),
+    'nanoplot': (None, (1, 48, 0), (1, 48, 1), 'tested NanoPlot 1.48.0'),
     'fastq_screen': ('--version', (0, 16, 0), (0, 17, 0), 'FastQ Screen 0.16.x'),
     'bowtie2': ('--version', (2, 4, 0), (3, 0, 0), 'Bowtie2 2.4 or newer, below 3'),
     'falco': ('--version', (2, 0, 3), (2, 1, 0), 'Falco 2.0.3–2.0.x'),
 }
+
+
+def nanoplot_metadata_probe(path):
+    """Older CLI imports can install Chrome even for --version: never run them."""
+    with Path(path).open('rb') as stream:
+        script = stream.read(4096).decode('utf-8')
+    if not script.startswith('#!') or 'from nanoplot.NanoPlot import main' not in script:
+        raise ValueError('Configure the standard NanoPlot Python console entrypoint; shell/binary wrappers are not safely probed')
+    command = shlex.split(script.splitlines()[0][2:])
+    if len(command) == 2 and command[0] == '/usr/bin/env':
+        command = command[1:]
+    if len(command) != 1 or not re.fullmatch(r'python(?:[0-9.]+)?', Path(command[0]).name):
+        raise ValueError('NanoPlot requires a standard Python console entrypoint')
+    interpreter = shutil.which(command[0])
+    if not interpreter:
+        raise ValueError('NanoPlot Python interpreter is unavailable')
+    # Preserve the venv interpreter path (do not resolve its binary symlink).
+    return [interpreter, '-I', '-c', "from importlib.metadata import version; print('NanoPlot ' + version('NanoPlot'))"]
 
 
 async def detect_tool(name: str, executable: str) -> dict:
@@ -35,7 +54,10 @@ async def detect_tool(name: str, executable: str) -> dict:
         env = os.environ.copy()
         for key in ("QUALIDOCK_TOKEN", "password"):
             env.pop(key, None)
-        process = await asyncio.create_subprocess_exec(path, probe, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, start_new_session=True, env=env)
+        argv = nanoplot_metadata_probe(path) if name == 'nanoplot' else [path, probe]
+        if name == 'nanoplot':
+            result['version_source'] = 'Python distribution metadata without importing NanoPlot'
+        process = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, start_new_session=True, env=env)
         async def output():
             chunks, size = [], 0
             while True:

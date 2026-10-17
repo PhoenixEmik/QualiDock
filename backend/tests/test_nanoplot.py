@@ -55,15 +55,30 @@ def test_absence_is_optional_and_old_qc_works(client,setup):
     assert not asyncio.run(detect_tool('nanoplot','/missing/NanoPlot'))['compatible']
 
 
-@pytest.mark.parametrize('version,compatible',[('1.48.0',True),('1.48.0rc1',False),('1.48.1rc1',False),('1.48.1',False),('1.48.0.1',False)])
+@pytest.mark.parametrize('version,compatible',[('1.48.0',True),('1.48.0rc1',False),('1.48.1rc1',False),('1.48.1',False),('1.48.0.1',False),('1.45.1',False)])
 def test_version_metadata_never_truncates_untested_builds(tmp_path,version,compatible):
     # Version-probe metadata only; no synthetic successful QC results.
+    marker=tmp_path/'UNSAFE_IMPORT'
+    interpreter=tmp_path/'python'
+    interpreter.write_text('#!'+sys.executable+'\nimport sys\nassert sys.argv[1:3]==["-I","-c"]\nprint('+repr('NanoPlot '+version)+')\n')
+    interpreter.chmod(0o700)
     program=tmp_path/'NanoPlot'
-    program.write_text('#!'+sys.executable+'\nprint('+repr('NanoPlot '+version)+')\n')
+    program.write_text('#!'+str(interpreter)+'\nfrom pathlib import Path\nPath('+repr(str(marker))+').touch()\nfrom nanoplot.NanoPlot import main\nmain()\n')
     program.chmod(0o700)
     info=asyncio.run(detect_tool('nanoplot',str(program)))
     assert info['available'] and info['compatible']==compatible
+    assert not marker.exists(), 'Version detection must never import/execute NanoPlot'
+    assert 'metadata' in info['version_source']
     if compatible:assert info['version']=='1.48.0'
+
+
+def test_shell_wrapper_is_not_executed_for_detection(tmp_path):
+    marker=tmp_path/'UNSAFE_WRAPPER'
+    program=tmp_path/'NanoPlot';program.write_text('#!/bin/sh\ntouch '+str(marker)+'\n')
+    program.chmod(0o700)
+    info=asyncio.run(detect_tool('nanoplot',str(program)))
+    assert not info['compatible'] and 'entrypoint' in info['error']
+    assert not marker.exists()
 
 
 def test_nanoplot_source_paths_remain_fastq_only_and_contained(client,setup):
