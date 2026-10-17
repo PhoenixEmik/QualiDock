@@ -36,36 +36,39 @@ export async function api<T>(
 }
 export const isRnaQC = (mode: string) =>
   mode === "rseqc-infer" || mode === "rseqc-distribution";
+export const isBamOnlyQC = (mode: string) => isRnaQC(mode) || mode === "picard";
 export const isAlignmentQC = (mode: string) =>
-  mode === "samtools" || mode === "mosdepth" || isRnaQC(mode);
+  mode === "samtools" || mode === "mosdepth" || isBamOnlyQC(mode);
 export const modeLabel = (mode: string) =>
-  mode === "rseqc-infer"
-    ? "RSeQC strandedness"
-    : mode === "rseqc-distribution"
-      ? "RSeQC read distribution"
-      : mode === "mosdepth"
-        ? "mosdepth coverage QC"
-        : mode === "samtools"
-          ? "SAMtools alignment QC"
-          : mode === "nanoplot"
-            ? "NanoPlot long-read QC"
-            : mode === "fastq-screen"
-              ? "FastQ Screen"
-              : mode === "nanoq"
-                ? "nanoq long-read QC"
-                : mode === "fastp"
-                  ? "fastp processing"
-                  : mode === "seqkit-filter"
-                    ? "Length filtering"
-                    : mode === "seqkit-extract"
-                      ? "Extract read identifiers"
-                      : mode.startsWith("seqkit-")
-                        ? `SeqKit ${mode.slice(7)}`
-                        : mode === "both"
-                          ? "FastQC + MultiQC"
-                          : mode === "fastqc"
-                            ? "FastQC only"
-                            : "MultiQC only";
+  mode === "picard"
+    ? "Picard insert-size QC"
+    : mode === "rseqc-infer"
+      ? "RSeQC strandedness"
+      : mode === "rseqc-distribution"
+        ? "RSeQC read distribution"
+        : mode === "mosdepth"
+          ? "mosdepth coverage QC"
+          : mode === "samtools"
+            ? "SAMtools alignment QC"
+            : mode === "nanoplot"
+              ? "NanoPlot long-read QC"
+              : mode === "fastq-screen"
+                ? "FastQ Screen"
+                : mode === "nanoq"
+                  ? "nanoq long-read QC"
+                  : mode === "fastp"
+                    ? "fastp processing"
+                    : mode === "seqkit-filter"
+                      ? "Length filtering"
+                      : mode === "seqkit-extract"
+                        ? "Extract read identifiers"
+                        : mode.startsWith("seqkit-")
+                          ? `SeqKit ${mode.slice(7)}`
+                          : mode === "both"
+                            ? "FastQC + MultiQC"
+                            : mode === "fastqc"
+                              ? "FastQC only"
+                              : "MultiQC only";
 export const bytes = (value: number | null) =>
   value === null
     ? "—"

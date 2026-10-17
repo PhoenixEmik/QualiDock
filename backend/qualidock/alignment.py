@@ -13,9 +13,9 @@ from .integrity import snapshot
 from .metrics import bounded_text
 from .processing import local_file
 from .store import now, save_json
-from . import multiqc, coverage, rseqc
+from . import multiqc, coverage, rseqc, picard
 
-MODES = {'samtools', 'mosdepth', *rseqc.MODES}
+MODES = {'samtools', 'mosdepth', 'picard', *rseqc.MODES}
 
 
 class Options(BaseModel):
@@ -182,6 +182,7 @@ async def execute(manager, run, metrics, errors):
     env = {'REF_PATH': '/dev/null', 'REF_CACHE': '/dev/null', 'HTS_PATH': ''}
     is_coverage = run['mode'] == 'mosdepth'
     is_rna = run['mode'] in rseqc.MODES
+    is_picard = run['mode'] == 'picard'
     for row in run['qc']['results']:
         if run['id'] in manager.cancelled:
             break
@@ -205,7 +206,7 @@ async def execute(manager, run, metrics, errors):
                 ('flagstat', ['flagstat', '-@', str(run['threads']-1), *decoding], '.flagstat.txt'),
                 ('stats', ['stats', '-@', str(run['threads']-1), *decoding], '.stats.txt'),
             ]:
-                if (is_coverage or is_rna) and label == 'flagstat':
+                if run['mode'] != 'samtools' and label == 'flagstat':
                     continue
                 output = destination / (row['id']+suffix)
                 argv = [executable, *args, str(source)]
@@ -218,7 +219,7 @@ async def execute(manager, run, metrics, errors):
                 outputs[label] = str(output.relative_to(directory))
                 if label == 'header':
                     contigs = await asyncio.to_thread(header, local_file(directory, outputs[label]), approved if cram else None)
-            flagstat = await asyncio.to_thread(parse_flagstat, local_file(directory, outputs['flagstat'])) if not (is_coverage or is_rna) else None
+            flagstat = await asyncio.to_thread(parse_flagstat, local_file(directory, outputs['flagstat'])) if run['mode']=='samtools' else None
             stats = await asyncio.to_thread(parse_stats, local_file(directory, outputs['stats']), flagstat)
             result = None
             if is_coverage:
@@ -227,6 +228,10 @@ async def execute(manager, run, metrics, errors):
                     return
             elif is_rna:
                 result = await rseqc.execute(manager, run, row, contigs, outputs, env)
+                if run['id'] in manager.cancelled:
+                    return
+            elif is_picard:
+                result = await picard.execute(manager,run,row,stats,outputs,env)
                 if run['id'] in manager.cancelled:
                     return
             if snapshot(source.stat()) != before:
@@ -239,6 +244,8 @@ async def execute(manager, run, metrics, errors):
                 row['mosdepth'] = {**result, 'source_snapshot': before}
             elif is_rna:
                 row['rseqc'] = {**result, 'source_snapshot': before}
+            elif is_picard:
+                row['picard'] = {**result, 'source_snapshot': before}
             else:
                 row['alignment'] = {'format': source.suffix[1:].upper(), 'quickcheck': 'passed (header/EOF only)',
                     'source_snapshot': before, 'contigs': contigs, 'reports': outputs, 'flagstat': flagstat, 'stats': stats}

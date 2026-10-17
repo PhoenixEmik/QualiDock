@@ -9,9 +9,10 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
-import { bytes, modeLabel, isAlignmentQC, isRnaQC } from "./api";
+import { bytes, modeLabel, isAlignmentQC, isRnaQC, isBamOnlyQC } from "./api";
 import { Empty } from "./Feedback";
 import { ReadRelationships } from "./SampleEditor";
+import PicardSettings from "./PicardSettings";
 import RnaQcSettings from "./RnaQcSettings";
 import OutputDirectory from "./OutputDirectory";
 import type { SampleConfiguration } from "./types";
@@ -24,9 +25,12 @@ import type {
   AlignmentOptions,
   CoverageOptions,
   RnaOptions,
+  PicardOptions,
 } from "./types";
 
 interface Props {
+  picardOptions: PicardOptions;
+  setPicardOptions: (value: PicardOptions) => void;
   rnaOptions: RnaOptions;
   setRnaOptions: (value: RnaOptions) => void;
   coverageOptions: CoverageOptions;
@@ -58,6 +62,8 @@ interface Props {
   submit: () => Promise<void>;
 }
 export default function NewAnalysisForm({
+  picardOptions,
+  setPicardOptions,
   rnaOptions,
   setRnaOptions,
   coverageOptions,
@@ -93,33 +99,36 @@ export default function NewAnalysisForm({
       ? ["fastqc", "qcreport"].includes(entry.kind)
       : isAlignmentQC(mode)
         ? entry.kind === "alignment" &&
-          (!isRnaQC(mode) || /\.bam$/i.test(entry.name))
+          (!isBamOnlyQC(mode) || /\.bam$/i.test(entry.name))
         : entry.kind === "fastq";
   const configuredPaths = [...selected.values()].filter(suitable);
-  const required = isRnaQC(mode)
-    ? [
-        "samtools",
-        mode === "rseqc-infer" ? "rseqc_infer" : "rseqc_distribution",
-      ]
-    : mode === "mosdepth"
-      ? ["samtools", "mosdepth"]
-      : mode === "samtools"
-        ? ["samtools", ...(alignmentOptions.multiqc ? ["multiqc"] : [])]
-        : mode === "nanoplot"
-          ? ["nanoplot"]
-          : mode === "fastq-screen"
-            ? [
-                "fastq_screen",
-                "bowtie2",
-                ...(qcOptions.multiqc ? ["multiqc"] : []),
-              ]
-            : mode === "nanoq"
-              ? ["nanoq"]
-              : mode === "fastqc"
-                ? ["fastqc"]
-                : mode === "multiqc"
-                  ? ["multiqc"]
-                  : ["fastqc", "multiqc"];
+  const required =
+    mode === "picard"
+      ? ["samtools", "java", "picard"]
+      : isRnaQC(mode)
+        ? [
+            "samtools",
+            mode === "rseqc-infer" ? "rseqc_infer" : "rseqc_distribution",
+          ]
+        : mode === "mosdepth"
+          ? ["samtools", "mosdepth"]
+          : mode === "samtools"
+            ? ["samtools", ...(alignmentOptions.multiqc ? ["multiqc"] : [])]
+            : mode === "nanoplot"
+              ? ["nanoplot"]
+              : mode === "fastq-screen"
+                ? [
+                    "fastq_screen",
+                    "bowtie2",
+                    ...(qcOptions.multiqc ? ["multiqc"] : []),
+                  ]
+                : mode === "nanoq"
+                  ? ["nanoq"]
+                  : mode === "fastqc"
+                    ? ["fastqc"]
+                    : mode === "multiqc"
+                      ? ["multiqc"]
+                      : ["fastqc", "multiqc"];
   const unavailable = config
     ? required.filter((tool) => !config.tools[tool as keyof Config["tools"]])
     : [];
@@ -156,7 +165,7 @@ export default function NewAnalysisForm({
                 ...([...selected.values()].some(
                   (entry) => entry.kind === "alignment",
                 )
-                  ? (["samtools", "mosdepth", "rseqc-infer"] as const)
+                  ? (["samtools", "mosdepth", "rseqc-infer", "picard"] as const)
                   : []),
               ] as const
             ).map((value) => (
@@ -176,28 +185,38 @@ export default function NewAnalysisForm({
                     : modeLabel(value)}
                 </strong>
                 <small>
-                  {value === "rseqc-infer"
-                    ? "Strandedness and alignment-block distribution with approved BED12"
-                    : value === "mosdepth"
-                      ? "Original depth distribution and approved-region coverage"
-                      : value === "samtools"
-                        ? "Read-only BAM/CRAM header/EOF, flagstat and stats"
-                        : value === "both"
-                          ? "Individual read QC and a combined report"
-                          : value === "fastqc"
-                            ? "Individual read quality assessment"
-                            : value === "fastq-screen"
-                              ? "Read-source mapping against an approved reference panel"
-                              : value === "nanoplot"
-                                ? "Original long-read plots and NanoStats"
-                                : value === "nanoq"
-                                  ? "Read-only long-read counts, N50 and quality summaries"
-                                  : "Combine existing FastQC or fastp JSON reports"}
+                  {value === "picard"
+                    ? "Original insert-size and orientation metrics for BAM libraries"
+                    : value === "rseqc-infer"
+                      ? "Strandedness and alignment-block distribution with approved BED12"
+                      : value === "mosdepth"
+                        ? "Original depth distribution and approved-region coverage"
+                        : value === "samtools"
+                          ? "Read-only BAM/CRAM header/EOF, flagstat and stats"
+                          : value === "both"
+                            ? "Individual read QC and a combined report"
+                            : value === "fastqc"
+                              ? "Individual read quality assessment"
+                              : value === "fastq-screen"
+                                ? "Read-source mapping against an approved reference panel"
+                                : value === "nanoplot"
+                                  ? "Original long-read plots and NanoStats"
+                                  : value === "nanoq"
+                                    ? "Read-only long-read counts, N50 and quality summaries"
+                                    : "Combine existing FastQC or fastp JSON reports"}
                 </small>
                 {mode === value && <Check size={15} />}
               </button>
             ))}
           </div>
+          {mode === "picard" && (
+            <PicardSettings
+              value={picardOptions}
+              change={setPicardOptions}
+              config={config}
+              busy={busy}
+            />
+          )}
           {isRnaQC(mode) && (
             <RnaQcSettings
               mode={mode}
@@ -208,7 +227,7 @@ export default function NewAnalysisForm({
               busy={busy}
             />
           )}
-          {isAlignmentQC(mode) && !isRnaQC(mode) && (
+          {isAlignmentQC(mode) && !isBamOnlyQC(mode) && (
             <>
               <p className="inline-note">
                 BAM/CRAM files are independent alignment inputs. No FASTQ
@@ -628,6 +647,9 @@ export default function NewAnalysisForm({
           className="button primary"
           disabled={
             busy ||
+            (mode === "picard" &&
+              picardOptions.histogram_pdf &&
+              !config?.tool_details?.picard?.rscript_executable) ||
             (isRnaQC(mode) &&
               (!config?.rna_annotations?.some(
                 (a) => a.id === rnaOptions.annotation && a.available,

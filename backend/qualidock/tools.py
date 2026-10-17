@@ -6,6 +6,7 @@ import re
 import shlex
 import shutil
 import signal
+from .files import approved_file
 
 
 PROBE_TIMEOUT = 10
@@ -21,6 +22,8 @@ TOOL_SPECS = {
     'samtools': ('--version', (1, 22, 1), (1, 22, 2), 'tested SAMtools/HTSlib 1.22.1'),
     'rseqc_infer': ('--version', (5, 5, 0), (5, 5, 1), 'RSeQC 5.0.5 (CLI 5.05)'),
     'rseqc_distribution': ('--version', (5, 5, 0), (5, 5, 1), 'RSeQC 5.0.5 (CLI 5.05)'),
+    'java': ('--version', (17, 0, 0), (18, 0, 0), 'qualified Java 17'),
+    'picard': ('--version', (3, 5, 0), (3, 5, 1), 'qualified Picard 3.5.0 JAR'),
     'fastq_screen': ('--version', (0, 16, 0), (0, 17, 0), 'FastQ Screen 0.16.x'),
     'bowtie2': ('--version', (2, 4, 0), (3, 0, 0), 'Bowtie2 2.4 or newer, below 3'),
     'falco': ('--version', (2, 0, 3), (2, 1, 0), 'Falco 2.0.3–2.0.x'),
@@ -45,20 +48,37 @@ def nanoplot_metadata_probe(path):
     return [interpreter, '-I', '-c', "from importlib.metadata import version; print('NanoPlot ' + version('NanoPlot'))"]
 
 
-async def detect_tool(name: str, executable: str) -> dict:
+def locate_tool(name, executable):
+    # A JAR is a readable input to Java, not an executable shell launcher.
+    located = shutil.which(executable, mode=os.R_OK if name == 'picard' else os.F_OK | os.X_OK)
+    return str(Path(located).absolute()) if located and Path(located).is_file() else None
+
+
+async def detect_tool(name: str, executable: str, *, java='java') -> dict:
     probe, minimum, maximum, expected = TOOL_SPECS[name]
-    located = shutil.which(executable)
-    path = str(Path(located).absolute()) if located else None
+    path = locate_tool(name, executable)
     result = {"name": name, "executable": path or executable, "available": bool(path), "compatible": False, "version": None, "error": None}
     if not path:
-        result["error"] = f"{name} is unavailable. Configure its executable path or load it on PATH."
+        result["error"] = "Picard JAR is unavailable. Configure QUALIDOCK_PICARD with the original readable JAR." if name == "picard" else f"{name} is unavailable. Configure its executable path or load it on PATH."
         return result
     process = None
     try:
         env = os.environ.copy()
         for key in ("QUALIDOCK_TOKEN", "password"):
             env.pop(key, None)
+        if name in {'java','picard'}:
+            for key in ('JAVA_TOOL_OPTIONS','JDK_JAVA_OPTIONS','_JAVA_OPTIONS'):
+                env.pop(key,None)
         argv = nanoplot_metadata_probe(path) if name == 'nanoplot' else [path, probe]
+        if name == 'picard':
+            approved_file(Path(path))
+            if not path.lower().endswith('.jar'):
+                raise ValueError('Configure the original Picard JAR, not a shell launcher')
+            runtime = locate_tool('java',java)
+            if runtime is None:raise ValueError('Picard requires an existing Java 17 executable')
+            result['java_executable'] = runtime
+            result['rscript_executable'] = shutil.which('Rscript')
+            argv = [runtime,'-Xms32m','-Xmx128m','-XX:ActiveProcessorCount=1','-XX:-UsePerfData','-jar',path,'CollectInsertSizeMetrics','--version']
         if name == 'nanoplot':
             result['version_source'] = 'Python distribution metadata without importing NanoPlot'
         process = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, start_new_session=True, env=env)
@@ -88,9 +108,14 @@ async def detect_tool(name: str, executable: str) -> dict:
             script = 'infer_experiment' if name == 'rseqc_infer' else 'read_distribution'
             match = re.fullmatch(re.escape(script)+r'\.py (5\.05)', response)
             if match: result['suite_version'] = '5.0.5'
+        if name == 'java':
+            match = re.search(r'(?m)^(?:openjdk|java)(?: version)?\s+"?([0-9]+(?:\.[0-9]+){1,3})(?:[" +\s]|$)', response)
+        if name == 'picard':
+            match = re.fullmatch(r'Version:([0-9]+\.[0-9]+\.[0-9]+)',response)
+            result['version_probe_exit_code'] = process.returncode
         if name == 'falco' and not match:
             match = re.fullmatch(r'([0-9]+(?:\.[0-9]+){1,2})', response)
-        if process.returncode or not match:
+        if process.returncode != (1 if name == 'picard' else 0) or not match:
             raise ValueError(f"Cannot detect {name} version (exit {process.returncode}): {response[:300]}")
         result["version"] = match[1]
         version = tuple(int(part) for part in match[1].split("."))

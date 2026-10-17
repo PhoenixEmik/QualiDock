@@ -153,6 +153,7 @@ export default function ResultsList({
               <option value="multiqc">MultiQC only</option>
               <option value="mosdepth">mosdepth</option>
               <option value="samtools">SAMtools</option>
+              <option value="picard">Picard insert size</option>
               <option value="rseqc-infer">RSeQC strandedness</option>
               <option value="rseqc-distribution">
                 RSeQC read distribution

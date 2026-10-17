@@ -106,6 +106,16 @@ jobs:
         with:
           name: picard-tool-study
           path: validation/picard-tool-study
+      - name: Actual Picard observations, PDF, resources and restart
+        if: matrix.multiqc == '1.35'
+        env:
+          QUALIDOCK_REQUIRE_PICARD_TESTS: '1'
+        run: pytest -q backend/tests/test_picard.py backend/tests/test_picard_real.py
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.multiqc == '1.35'
+        with:
+          name: picard-qc-evidence
+          path: validation/picard
       - name: Actual mosdepth coverage, references and indexed input
         if: matrix.multiqc == '1.35'
         env:
@@ -216,6 +226,12 @@ jobs:
         run: bash scripts/setup-alignment-ci.sh --mosdepth
       - name: Provision RNA QC tools
         run: bash scripts/setup-rna-ci.sh
+      - name: Provision Picard and original PDF runtime
+        run: bash scripts/setup-picard-ci.sh
+      - name: Native insert-size metrics and original PDF downloads
+        env:
+          QUALIDOCK_BROWSER: ${{ matrix.browser }}
+        run: pytest -q tests/browser/test_picard_browser.py --junitxml=validation/picard-browser.xml
       - name: Native RNA-seq annotations, original values and restart
         env:
           QUALIDOCK_BROWSER: ${{ matrix.browser }}
@@ -253,7 +269,7 @@ jobs:
         if: matrix.browser == 'chromium'
         env:
           QUALIDOCK_BROWSER: ${{ matrix.browser }}
-        run: pytest -q tests/browser --ignore=tests/browser/test_rna_browser.py --ignore=tests/browser/test_coverage_browser.py --ignore=tests/browser/test_alignment_browser.py --ignore=tests/browser/test_nanoplot_browser.py --ignore=tests/browser/test_optional_qc_browser.py --ignore=tests/browser/test_processing_browser.py --ignore=tests/browser/test_inspector_browser.py --ignore=tests/browser/test_lineage_browser.py --junitxml=validation/report-browser.xml
+        run: pytest -q tests/browser --ignore=tests/browser/test_picard_browser.py --ignore=tests/browser/test_rna_browser.py --ignore=tests/browser/test_coverage_browser.py --ignore=tests/browser/test_alignment_browser.py --ignore=tests/browser/test_nanoplot_browser.py --ignore=tests/browser/test_optional_qc_browser.py --ignore=tests/browser/test_processing_browser.py --ignore=tests/browser/test_inspector_browser.py --ignore=tests/browser/test_lineage_browser.py --junitxml=validation/report-browser.xml
       - name: Firefox critical report isolation and interaction
         if: matrix.browser == 'firefox'
         env:
@@ -264,6 +280,8 @@ jobs:
         with:
           name: report-browser-${{ matrix.browser }}
           path: |
+            validation/picard-browser.xml
+            validation/picard-native*.png
             validation/rna-browser.xml
             validation/rna-*.png
             validation/coverage-browser.xml

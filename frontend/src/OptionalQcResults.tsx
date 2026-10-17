@@ -1,3 +1,4 @@
+import PicardResults from "./PicardResults";
 import RnaQcResults from "./RnaQcResults";
 import CoverageResults from "./CoverageResults";
 import AlignmentResults from "./AlignmentResults";
@@ -17,6 +18,7 @@ const metrics: [string, string, string][] = [
 ];
 
 export default function OptionalQcResults({ run }: { run: Run }) {
+  if (run.mode === "picard") return <PicardResults run={run} />;
   if (run.mode === "rseqc-infer" || run.mode === "rseqc-distribution")
     return <RnaQcResults run={run} />;
   if (run.qc?.tool === "mosdepth") return <CoverageResults run={run} />;

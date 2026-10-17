@@ -1,0 +1,23 @@
+INFO	2026-10-17 08:55:54	CollectInsertSizeMetrics	
+
+********** NOTE: Picard's command line syntax is changing.
+**********
+********** For more information, please see:
+********** 
+https://github.com/broadinstitute/picard/wiki/Command-Line-Syntax-Transition-For-Users-(Pre-Transition)
+**********
+********** The command line looks like this in the new syntax:
+**********
+**********    CollectInsertSizeMetrics -INPUT /home/runner/work/_temp/qualidock-picard-tools/single/input.bam -OUTPUT /home/runner/work/QualiDock/QualiDock/validation/picard-tool-study/single.insert_size_metrics.txt -H /home/runner/work/QualiDock/QualiDock/validation/picard-tool-study/single.histogram.pdf -TMP_DIR /home/runner/work/_temp/qualidock-picard-tools/tmp -MINIMUM_PCT 0.05 -DEVIATIONS 10 -INCLUDE_DUPLICATES false -METRIC_ACCUMULATION_LEVEL ALL_READS -ASSUME_SORTED false -VALIDATION_STRINGENCY STRICT -CREATE_INDEX false -CREATE_MD5_FILE false
+**********
+
+
+INFO	2026-10-17 08:55:54	RExecutor	Executing R script via command: Rscript /home/runner/work/_temp/qualidock-picard-tools/tmp/script5972651076615258341.R
+INFO	2026-10-17 08:55:54	ProcessExecutor	[1] "Checking if R is installed"
+08:55:54.959 INFO  NativeLibraryLoader - Loading libgkl_compression.so from jar:file:/home/runner/work/_temp/qualidock-picard-tools/picard.jar!/com/intel/gkl/native/libgkl_compression.so
+[Sat Oct 17 08:55:54 UTC 2026] CollectInsertSizeMetrics HISTOGRAM_FILE=/home/runner/work/QualiDock/QualiDock/validation/picard-tool-study/single.histogram.pdf DEVIATIONS=10.0 MINIMUM_PCT=0.05 METRIC_ACCUMULATION_LEVEL=[ALL_READS] INCLUDE_DUPLICATES=false INPUT=/home/runner/work/_temp/qualidock-picard-tools/single/input.bam OUTPUT=/home/runner/work/QualiDock/QualiDock/validation/picard-tool-study/single.insert_size_metrics.txt ASSUME_SORTED=false TMP_DIR=[/home/runner/work/_temp/qualidock-picard-tools/tmp] VALIDATION_STRINGENCY=STRICT CREATE_INDEX=false CREATE_MD5_FILE=false    STOP_AFTER=0 VERBOSITY=INFO QUIET=false COMPRESSION_LEVEL=5 MAX_RECORDS_IN_RAM=500000 USE_JDK_DEFLATER=false USE_JDK_INFLATER=false
+[Sat Oct 17 08:55:55 UTC 2026] Executing as runner@runnervm8k3b6 on Linux 6.17.0-1022-azure amd64; OpenJDK 64-Bit Server VM 17.0.20.1+1; Deflater: Intel; Inflater: Intel; Provider GCS is available; Picard version: 3.5.0
+WARNING	2026-10-17 08:55:55	CollectInsertSizeMetrics	All data categories were discarded because they contained < 0.05 of the total aligned paired data.
+WARNING	2026-10-17 08:55:55	CollectInsertSizeMetrics	Total mapped pairs in all categories: 0.0
+[Sat Oct 17 08:55:55 UTC 2026] picard.analysis.CollectInsertSizeMetrics done. Elapsed time: 0.00 minutes.
+Runtime.totalMemory()=64880640

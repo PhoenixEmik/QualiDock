@@ -76,10 +76,11 @@ class LocalExecutor(Executor):
                 if stderr is not None:
                     # Read the already-open owned FD, never reopen a potentially
                     # replaced pathname. Keep diagnostics visible on failed runs.
-                    diagnostic.seek(0)
-                    captured = diagnostic.read(65537)
-                    output.write(b'\n[Tool stderr; original: '+str(stderr.relative_to(cwd)).encode()+b']\n'+captured[:65536])
-                    if len(captured) > 65536:output.write(b'\n[Diagnostic excerpt limited to 64 KiB]\n')
+                    size = diagnostic.seek(0, os.SEEK_END)
+                    diagnostic.seek(max(0,size-65536))
+                    output.write(b'\n[Tool stderr; original: '+str(stderr.relative_to(cwd)).encode()+b']\n')
+                    if size > 65536:output.write(b'[Last 64 KiB of diagnostics]\n')
+                    output.write(diagnostic.read(65536))
                 self.processes.pop(run_id, None)
                 observation["elapsed_seconds"] = time.monotonic() - started
 

@@ -59,6 +59,11 @@ Optional [mosdepth 0.3.14](docs/OPTIONAL-QC.md#mosdepth-0314--coverage-qc) adds
 native coverage CDFs and approved BED target/threshold reports for sorted, indexed
 BAM/CRAM. Source alignments/indexes remain unchanged. Reported and omitted
 reference denominators are explicit; per-base output is disabled by default.
+Optional [RSeQC and Picard](docs/RNA-QC.md) add read-only RNA-seq strandedness,
+annotation distribution and original insert-size metrics/histograms for BAM.
+RSeQC uses approved BED12 annotations; Picard uses an existing Java17/JAR, with
+optional Rscript PDF generation. Original reports and unavailable values retain
+their upstream meaning; no protocol or contamination classification is inferred.
 Falco 2.0.3 was [benchmarked](docs/FALCO-EVALUATION.md) and remains outside the
 application: required structural validation removes its measured throughput
 advantage on the million-read test input. FastQC stays the default.
@@ -176,5 +181,3 @@ Licensed under [GNU GPLv3](LICENSE). FastQC, MultiQC, Apache ECharts, and other 
 
 MultiQC-only imports also accept existing fastp JSON reports without processing
 FASTQs. See [QC imports](docs/QC-IMPORTS.md).
-
-RNA-seq QC: optional RSeQC strandedness and read-distribution operations use approved BED12 gene models and read-only BAM inputs. See [scientific contracts and configuration](docs/RNA-QC.md).

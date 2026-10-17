@@ -2,62 +2,8 @@ import { useMemo, useState } from "react";
 import { url } from "./api";
 import { NativePlot } from "./AnalyticsChart";
 import { coverageView } from "./coverageChart";
-import type { ReportedTable, Run } from "./types";
-
-function OriginalTable({
-  label,
-  data,
-  open = false,
-}: {
-  label: string;
-  data: ReportedTable;
-  open?: boolean;
-}) {
-  return (
-    <details open={open}>
-      <summary>
-        {label} ({data.total_rows} reported rows)
-      </summary>
-      {data.total_rows > data.rows.length && (
-        <p className="inline-note">
-          Showing {data.rows.length} rows. Download the original file for all
-          reported values.
-        </p>
-      )}
-      <div
-        className="table-scroll"
-        tabIndex={0}
-        role="region"
-        aria-label={label}
-      >
-        <table>
-          <thead>
-            <tr>
-              {data.columns.map((c) => (
-                <th key={c}>{c}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {data.rows.map((values, i) => (
-              <tr key={i}>
-                {values.map((v, j) =>
-                  j ? (
-                    <td key={j}>{v || "Unavailable"}</td>
-                  ) : (
-                    <th key={j} scope="row">
-                      {v}
-                    </th>
-                  ),
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </details>
-  );
-}
+import ReportedTable from "./ReportedTable";
+import type { Run } from "./types";
 
 export default function CoverageResults({ run }: { run: Run }) {
   const rows = run.qc?.results || [];
@@ -146,7 +92,7 @@ export default function CoverageResults({ run }: { run: Run }) {
             rounded mosdepth value. Empty aggregates have unavailable
             mean/min/max; original sentinels are retained in the raw table.
           </p>
-          <OriginalTable
+          <ReportedTable
             label="Original coverage summary"
             data={data.summary}
             open
@@ -167,7 +113,7 @@ export default function CoverageResults({ run }: { run: Run }) {
                 start. These are per-region counts, not global percentages;
                 regions are never combined into a new QC metric.
               </p>
-              <OriginalTable
+              <ReportedTable
                 label="Original region thresholds"
                 data={data.thresholds}
                 open
@@ -175,12 +121,12 @@ export default function CoverageResults({ run }: { run: Run }) {
             </>
           )}
           {data.regions && (
-            <OriginalTable
+            <ReportedTable
               label="Original regional mean coverage"
               data={data.regions}
             />
           )}
-          <OriginalTable
+          <ReportedTable
             label="Raw reported global CDF"
             data={data.distribution}
           />

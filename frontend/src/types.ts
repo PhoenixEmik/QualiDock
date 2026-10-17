@@ -53,6 +53,7 @@ export interface Run {
     | "samtools"
     | "rseqc-infer"
     | "rseqc-distribution"
+    | "picard"
     | "nanoplot"
     | "nanoq"
     | "fastq-screen"
@@ -99,7 +100,8 @@ export interface Run {
       | "samtools"
       | "mosdepth"
       | "rseqc-infer"
-      | "rseqc-distribution";
+      | "rseqc-distribution"
+      | "picard";
     options: Record<string, unknown>;
     annotation?: { id: string; path: string; sha256: string; identity: string };
     reference?: {
@@ -122,6 +124,17 @@ export interface Run {
       error: string | null;
       report: string;
       source_sha256?: string;
+      picard?: {
+        status: string;
+        mapped_pairs_reported?: string;
+        metrics: ReportedTable;
+        histogram: ReportedTable;
+        reports: Record<string, string>;
+        heap_mb: number;
+        minimum_orientation_fraction: string;
+        deviations: string;
+        rscript_version: string | null;
+      };
       rseqc?: {
         operation: string;
         columns: string[];
@@ -277,6 +290,7 @@ export interface OutputLocation {
 }
 export interface RerunConfiguration extends SampleConfiguration {
   qc_options?:
+    | PicardOptions
     | Partial<RnaOptions>
     | ScreenOptions
     | NanoPlotOptions
@@ -331,6 +345,9 @@ export interface Listing {
   next_offset?: number | null;
 }
 export interface ToolInfo {
+  rscript_executable?: string | null;
+  java_executable?: string;
+  version_probe_exit_code?: number;
   suite_version?: string;
   name: string;
   executable: string;
@@ -356,6 +373,11 @@ export interface MultiQCSummary {
     hidden?: boolean;
   }[];
   rows: { sample: string; values: Record<string, string | number> }[];
+}
+export interface PicardOptions {
+  by_library: boolean;
+  include_duplicates: boolean;
+  histogram_pdf: boolean;
 }
 export interface RnaOptions {
   annotation: string;
@@ -401,6 +423,8 @@ export interface Config {
     nanoplot?: boolean;
     samtools?: boolean;
     mosdepth?: boolean;
+    java?: boolean;
+    picard?: boolean;
     rseqc_infer?: boolean;
     rseqc_distribution?: boolean;
     fastq_screen?: boolean;

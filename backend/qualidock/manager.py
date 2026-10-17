@@ -18,7 +18,7 @@ from .files import FileAccess, FASTQ, PathViolation
 from .metrics import parse_report
 from .import_formats import fastp_metadata
 from .reports import discover, metadata
-from .tools import detect_tool
+from .tools import detect_tool, locate_tool
 from . import coverage, alignment, processing, datasets, multiqc, optional_qc, fastq_screen, rseqc
 from .store import ResultStores, now, save_json
 from .sample_metadata import validate_configuration
@@ -107,18 +107,19 @@ class RunManager:
         return sorted(self.runs.values(), key=lambda r: r["created_at"], reverse=True)
 
     async def detect_tools(self):
+        names = ("fastqc", "multiqc", "fastp", "seqkit", "nanoq", "nanoplot", "fastq_screen", "bowtie2", "samtools", "mosdepth", "rseqc_infer", "rseqc_distribution", "java", "picard")
         signature = []
-        for name in (self.settings.fastqc, self.settings.multiqc, self.settings.fastp, self.settings.seqkit, self.settings.nanoq, self.settings.nanoplot, self.settings.fastq_screen, self.settings.bowtie2, self.settings.samtools, self.settings.mosdepth, self.settings.rseqc_infer, self.settings.rseqc_distribution):
-            executable = shutil.which(name)
+        for name in names:
+            configured = getattr(self.settings,name)
+            executable = locate_tool(name,configured)
             try:
                 stat = Path(executable).stat() if executable else None
-                signature.append((name, executable, stat.st_mtime_ns if stat else None))
+                signature.append((configured, executable, stat.st_mtime_ns if stat else None))
             except OSError:
-                signature.append((name, None, None))
+                signature.append((configured, None, None))
         async with self.tool_lock:
             if signature != self.tool_signature or time.monotonic() - self.tool_checked_at >= 60:
-                names = ("fastqc", "multiqc", "fastp", "seqkit", "nanoq", "nanoplot", "fastq_screen", "bowtie2", "samtools", "mosdepth", "rseqc_infer", "rseqc_distribution")
-                detected = await asyncio.gather(*(detect_tool(name, getattr(self.settings, name)) for name in names))
+                detected = await asyncio.gather(*(detect_tool(name, getattr(self.settings, name), **({'java':self.settings.java} if name == 'picard' else {})) for name in names))
                 self.tool_info = dict(zip(names, detected))
                 self.tool_signature = signature
                 self.tool_checked_at = time.monotonic()
@@ -176,8 +177,8 @@ class RunManager:
                 raise ValueError('Alignment QC does not accept FASTQ datasets, pairing or sample grouping')
             for path in paths:
                 await asyncio.to_thread(alignment.readable, path)
-                if mode in rseqc.MODES and path.suffix.lower() != '.bam':
-                    raise ValueError('RSeQC currently supports BAM only; CRAM is not qualified')
+                if mode in {*rseqc.MODES,'picard'} and path.suffix.lower() != '.bam':
+                    raise ValueError('RSeQC/Picard currently support BAM only; CRAM is not qualified')
         elif mode == "multiqc":
             try:
                 report_inputs = await asyncio.to_thread(discover, paths, access, import_summary)
@@ -203,11 +204,13 @@ class RunManager:
         for tool in required:
             info = self.tool_info.get(tool)
             executable = getattr(self.settings, tool)
-            if shutil.which(executable) is None:
+            if locate_tool(tool,executable) is None:
                 raise ValueError(f"QC tool is unavailable: {Path(executable).name}. Install it or configure its executable path.")
             if info and not info["compatible"]:
                 raise ValueError(info["error"])
         processing.check_features(mode, operation_options, self.tool_info)
+        if mode == 'picard' and qc_options['histogram_pdf'] and not self.tool_info['picard'].get('rscript_executable'):
+            raise ValueError('Original Picard PDF requires Rscript. Disable PDF to retain original numeric histogram/metrics without R.')
         screen_panel = None
         bed_panel = None
         if mode == "mosdepth" and qc_options["panel"]:
@@ -605,13 +608,17 @@ class RunManager:
         reports = []
         registered = {record['path'] for record in run.get('reports', [])}
         coverage_reports = {path for row in run.get('qc', {}).get('results', []) if row['state'] == 'completed' for path in row.get('mosdepth', {}).get('reports', {}).values()}
+        picard_reports = {path for row in run.get('qc', {}).get('results', []) if row['state']=='completed' for path in row.get('picard',{}).get('reports',{}).values()}
         for path in sorted(directory.rglob("*")):
             coverage_report = path.suffix in {'.gz','.csi'} and str(path.relative_to(directory)) in coverage_reports
-            if path.is_file() and not path.is_symlink() and path.resolve().is_relative_to(directory.resolve()) and (path.suffix in allowed or coverage_report):
+            picard_report = path.suffix == '.pdf' and str(path.relative_to(directory)) in picard_reports
+            if path.is_file() and not path.is_symlink() and path.resolve().is_relative_to(directory.resolve()) and (path.suffix in allowed or coverage_report or picard_report):
                 relative = str(path.relative_to(directory))
                 if relative.startswith('processing/private/'):
                     continue
                 if relative.startswith('qc/'):
+                    if len(Path(relative).parts)>2 and Path(relative).parts[2]=='private':
+                        continue
                     if not any(row['state'] == 'completed' and relative.startswith(f'qc/{row["id"]}/') for row in run.get('qc', {}).get('results', [])):
                         continue
                 if relative.startswith('processing/'):

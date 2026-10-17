@@ -52,6 +52,8 @@ class Settings:
     mosdepth: str = "mosdepth"
     rseqc_infer: str = "infer_experiment.py"
     rseqc_distribution: str = "read_distribution.py"
+    java: str = "java"
+    picard: str = "picard.jar"
     rna_annotations: dict[str, str] = field(default_factory=dict)
     coverage_panels: dict[str, str] = field(default_factory=dict)
     alignment_references: dict[str, str] = field(default_factory=dict)
@@ -86,6 +88,8 @@ class Settings:
             mosdepth=os.environ.get("QUALIDOCK_MOSDEPTH", "mosdepth"),
             rseqc_infer=os.environ.get("QUALIDOCK_RSEQC_INFER", "infer_experiment.py"),
             rseqc_distribution=os.environ.get("QUALIDOCK_RSEQC_DISTRIBUTION", "read_distribution.py"),
+            java=os.environ.get("QUALIDOCK_JAVA", "java"),
+            picard=os.environ.get("QUALIDOCK_PICARD", "picard.jar"),
             rna_annotations=json.loads(os.environ.get("QUALIDOCK_RNA_ANNOTATIONS", "{}")),
             coverage_panels=json.loads(os.environ.get("QUALIDOCK_COVERAGE_PANELS", "{}")),
             alignment_references=json.loads(os.environ.get("QUALIDOCK_ALIGNMENT_REFERENCES", "{}")),

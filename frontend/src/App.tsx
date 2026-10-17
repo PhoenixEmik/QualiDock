@@ -13,7 +13,15 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
-import { api, AuthError, date, url, isAlignmentQC, isRnaQC } from "./api";
+import {
+  api,
+  AuthError,
+  date,
+  url,
+  isAlignmentQC,
+  isRnaQC,
+  isBamOnlyQC,
+} from "./api";
 import type {
   Config,
   DetailTab,
@@ -32,6 +40,7 @@ import type {
   AlignmentOptions,
   CoverageOptions,
   RnaOptions,
+  PicardOptions,
 } from "./types";
 import { Empty } from "./Feedback";
 import FileExplorer from "./FileExplorer";
@@ -93,6 +102,11 @@ export default function App() {
   const [nanoPlotOptions, setNanoPlotOptions] = useState<NanoPlotOptions>({
     loglength: false,
     individual_plots: false,
+  });
+  const [picardOptions, setPicardOptions] = useState<PicardOptions>({
+    by_library: false,
+    include_duplicates: false,
+    histogram_pdf: false,
   });
   const [rnaOptions, setRnaOptions] = useState<RnaOptions>({
     annotation: "",
@@ -495,22 +509,26 @@ export default function App() {
                   : {}),
               },
             }
-          : isAlignmentQC(mode)
-            ? {
-                qc_options: {
-                  ...(mode === "mosdepth" ? coverageOptions : alignmentOptions),
-                  reference: [...selected.values()].some(
-                    (e) => e.kind === "alignment" && /\.cram$/i.test(e.name),
-                  )
-                    ? alignmentOptions.reference
-                    : null,
-                },
-              }
-            : mode === "fastq-screen"
-              ? { qc_options: qcOptions }
-              : mode === "nanoplot"
-                ? { qc_options: nanoPlotOptions }
-                : {}),
+          : mode === "picard"
+            ? { qc_options: picardOptions }
+            : isAlignmentQC(mode)
+              ? {
+                  qc_options: {
+                    ...(mode === "mosdepth"
+                      ? coverageOptions
+                      : alignmentOptions),
+                    reference: [...selected.values()].some(
+                      (e) => e.kind === "alignment" && /\.cram$/i.test(e.name),
+                    )
+                      ? alignmentOptions.reference
+                      : null,
+                  },
+                }
+              : mode === "fastq-screen"
+                ? { qc_options: qcOptions }
+                : mode === "nanoplot"
+                  ? { qc_options: nanoPlotOptions }
+                  : {}),
         ...(isProcessing(mode)
           ? { processing_options: processingOptions }
           : {}),
@@ -523,7 +541,7 @@ export default function App() {
                     ? ["fastqc", "qcreport"].includes(entry.kind)
                     : isAlignmentQC(mode)
                       ? entry.kind === "alignment" &&
-                        (!isRnaQC(mode) || /\.bam$/i.test(entry.name))
+                        (!isBamOnlyQC(mode) || /\.bam$/i.test(entry.name))
                       : entry.kind === "fastq",
                 )
                 .map((entry) => entry.path),
@@ -597,6 +615,8 @@ export default function App() {
     );
     setName(draft.name);
     setMode(draft.mode);
+    if (draft.mode === "picard" && draft.qc_options)
+      setPicardOptions(draft.qc_options as PicardOptions);
     if (isRnaQC(draft.mode) && draft.qc_options) {
       const value = draft.qc_options as Partial<RnaOptions>;
       setRnaOptions({
@@ -996,6 +1016,8 @@ export default function App() {
             <NewAnalysisForm
               coverageOptions={coverageOptions}
               setCoverageOptions={setCoverageOptions}
+              picardOptions={picardOptions}
+              setPicardOptions={setPicardOptions}
               rnaOptions={rnaOptions}
               setRnaOptions={setRnaOptions}
               alignmentOptions={alignmentOptions}
