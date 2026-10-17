@@ -606,6 +606,9 @@ class RunManager:
         directory = self.directory(run["id"])
         allowed = {".html", ".zip", ".json", ".log", ".txt", ".tsv", ".csv", ".yaml", ".parquet", ".png", ".svg"}
         reports = []
+        # Failed/cancelled MultiQC can leave a partial HTML/JSON bundle. Reuse
+        # recorded execution evidence; old manifests without it stay compatible.
+        multiqc_execution = next((e for e in reversed(run.get('executions', [])) if e.get('tool')=='multiqc'), None)
         registered = {record['path'] for record in run.get('reports', [])}
         coverage_reports = {path for row in run.get('qc', {}).get('results', []) if row['state'] == 'completed' for path in row.get('mosdepth', {}).get('reports', {}).values()}
         picard_reports = {path for row in run.get('qc', {}).get('results', []) if row['state']=='completed' for path in row.get('picard',{}).get('reports',{}).values()}
@@ -614,6 +617,8 @@ class RunManager:
             picard_report = path.suffix == '.pdf' and str(path.relative_to(directory)) in picard_reports
             if path.is_file() and not path.is_symlink() and path.resolve().is_relative_to(directory.resolve()) and (path.suffix in allowed or coverage_report or picard_report):
                 relative = str(path.relative_to(directory))
+                if relative.startswith('multiqc/') and multiqc_execution is not None and 'exit_code' in multiqc_execution and multiqc_execution['exit_code'] != 0:
+                    continue
                 if relative.startswith('processing/private/'):
                     continue
                 if relative.startswith('qc/'):

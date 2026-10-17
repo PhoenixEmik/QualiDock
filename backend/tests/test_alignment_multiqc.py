@@ -98,7 +98,7 @@ def test_application_originals_survive_aggregation_and_restart(tmp_path,mode,agg
     executable=MULTIQC
     if aggregation_failure:
         wrapper=tmp_path/'failing-multiqc'
-        wrapper.write_text(f'#!{sys.executable}\nimport os,sys\nif "--version" in sys.argv:os.execv({MULTIQC!r},[{MULTIQC!r},*sys.argv[1:]])\nsys.exit(9)\n');wrapper.chmod(0o700);executable=str(wrapper)
+        wrapper.write_text(f'#!{sys.executable}\nimport os,sys\nif "--version" in sys.argv:os.execv({MULTIQC!r},[{MULTIQC!r},*sys.argv[1:]])\nfrom pathlib import Path\np=Path(sys.argv[sys.argv.index("--outdir")+1]);p.mkdir(exist_ok=True)\n(p/"multiqc_report.html").write_text("<h1>Incomplete diagnostic probe</h1>")\n(p/"incomplete.json").write_text("{{}}")\nsys.exit(9)\n');wrapper.chmod(0o700);executable=str(wrapper)
     config=Settings(roots=[bam.parent],output=tmp_path/'results',frontend=tmp_path/'frontend',samtools=SAMTOOLS,picard=JAR or 'picard.jar',
         multiqc=executable,rseqc_infer=INFER or 'infer_experiment.py',rseqc_distribution=DIST or 'read_distribution.py',
         rna_annotations={'genes':str(bed)} if bed else {},cpus=1,memory_mb=2048,allow_root=True)
@@ -113,7 +113,11 @@ def test_application_originals_survive_aggregation_and_restart(tmp_path,mode,agg
         for row in run['qc']['results']:
             response=c.get(f'/api/runs/{run["id"]}/download',params={'path':row['report']})
             assert response.status_code==200 and response.content==(config.output/run['id']/row['report']).read_bytes()
-        if aggregation_failure:assert 'code 9' in run['error']
+        if aggregation_failure:
+            assert 'code 9' in run['error']
+            assert (config.output/run['id']/'multiqc/multiqc_report.html').exists()
+            assert not any(r['path'].startswith('multiqc/') for r in run['reports'])
+            assert c.get(f'/api/runs/{run["id"]}/download',params={'path':'multiqc/multiqc_report.html'}).status_code==403
         else:
             mappings=run['report_input_map'];assert len(mappings)==2 and len({r['multiqc_name'] for r in mappings.values()})==2
             assert c.get('/api/report-preview',params={'run_id':run['id'],'path':'multiqc/multiqc_report.html'}).status_code==200
@@ -122,5 +126,7 @@ def test_application_originals_survive_aggregation_and_restart(tmp_path,mode,agg
         c.headers.update({'Authorization':'Bearer '+config.token,'X-QualiDock-Request':'1'})
         restored=c.get('/api/runs/'+run['id']).json()
         assert restored['report_input_map']==run['report_input_map'] and restored['qc']==run['qc']
+        assert restored['reports']==run['reports']
+        if aggregation_failure:assert c.get(f'/api/runs/{run["id"]}/download',params={'path':'multiqc/multiqc_report.html'}).status_code==403
         assert c.get('/api/runs/'+run['id']+'/configuration').json()['qc_options']['multiqc']
     assert all(p.read_bytes()==raw for p,raw in originals.items())

@@ -78,3 +78,21 @@ def test_unknown_alignment_raw_schema_never_invents_sample_names(tmp_path,value)
     path=tmp_path/'multiqc/multiqc_data/multiqc_data.json';path.parent.mkdir(parents=True)
     path.write_text(json.dumps(value))
     assert asyncio.run(multiqc.alignment_sample_names(tmp_path,'rseqc-infer'))==set()
+
+
+@pytest.mark.parametrize('execution',[{'exit_code':9},{'exit_code':137},{'exit_code':None},{'exit_code':0},{},None])
+def test_incomplete_multiqc_bundle_is_not_published_but_legacy_reports_survive(client,setup,execution):
+    # Synthetic lifecycle evidence over existing fixture reports, not scientific QC.
+    from test_workspace import start,wait
+    config,root=setup
+    run=wait(client,start(client,root)['id']);manager=client.app.state.manager
+    persisted=manager.runs[run['id']]
+    persisted['executions']=[e for e in persisted['executions'] if e['tool']!='multiqc']
+    if execution is not None:persisted['executions'].append({'tool':'multiqc',**execution})
+    manager.refresh_reports(persisted)
+    verified_or_legacy=execution is None or 'exit_code' not in execution or execution['exit_code']==0
+    response=client.get(f'/api/runs/{run["id"]}/download',params={'path':'multiqc/multiqc_report.html'})
+    assert response.status_code==(200 if verified_or_legacy else 403)
+    assert (config.output/run['id']/'multiqc/multiqc_report.html').exists()
+    fastqc=next(r['path'] for r in persisted['reports'] if r['path'].endswith('_fastqc.html'))
+    assert client.get(f'/api/runs/{run["id"]}/download',params={'path':fastqc}).status_code==200
