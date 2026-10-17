@@ -17,6 +17,7 @@ TOOL_SPECS = {
     'nanoq': ('--version', (0, 10, 0), (0, 10, 1), 'tested nanoq 0.10.0'),
     'fastq_screen': ('--version', (0, 16, 0), (0, 17, 0), 'FastQ Screen 0.16.x'),
     'bowtie2': ('--version', (2, 4, 0), (3, 0, 0), 'Bowtie2 2.4 or newer, below 3'),
+    'falco': ('--version', (2, 0, 3), (2, 1, 0), 'Falco 2.0.3–2.0.x'),
 }
 
 
@@ -49,6 +50,8 @@ async def detect_tool(name: str, executable: str) -> dict:
         response = await asyncio.wait_for(output(), timeout=PROBE_TIMEOUT)
         label = {'fastq_screen': r'FastQ Screen', 'bowtie2': r'bowtie2(?:-align-[sl])?'}.get(name, re.escape(name))
         match = re.search(r"(?i)\b" + label + r"(?:,?\s+(?:version|v))?\s*([0-9]+(?:\.[0-9]+){1,2})\b", response)
+        if name == 'falco' and not match:
+            match = re.fullmatch(r'([0-9]+(?:\.[0-9]+){1,2})', response)
         if process.returncode or not match:
             raise ValueError(f"Cannot detect {name} version (exit {process.returncode}): {response[:300]}")
         result["version"] = match[1]

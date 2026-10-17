@@ -47,6 +47,9 @@ Optional [FastQ Screen](docs/OPTIONAL-QC.md#fastq-screen-016x-tested-0160) uses
 administrator-approved, prebuilt Bowtie2 reference panels for read-level source
 screening. Original reports and verified MultiQC aggregation remain available;
 mapping observations are not definitive contamination diagnoses.
+Falco 2.0.3 was [benchmarked](docs/FALCO-EVALUATION.md) and remains outside the
+application: required structural validation removes its measured throughput
+advantage on the million-read test input. FastQC stays the default.
 
 - **Workspace:** browse connected storage, navigate directories, and select inputs. Switch between **Samples** (grouped detected read pairs) and **Files** (individual files). Incomplete pairs and unrecognized names remain available. Search covers currently loaded sample names and filenames; load more to include additional entries.
 - **Quality Control:** configure FastQC-only, combined FastQC/MultiQC, or existing-report MultiQC runs.

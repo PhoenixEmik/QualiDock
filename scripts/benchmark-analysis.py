@@ -1,20 +1,27 @@
 #!/usr/bin/env python3
 """Private benchmark of authorized FASTQ paths using the existing application API."""
 import argparse
+import asyncio
 import hashlib
 import json
 import math
 import os
 import resource
+import re
 import subprocess
 from pathlib import Path
 import sys
 import time
+import zipfile
 
 from fastapi.testclient import TestClient
 from qualidock.app import create_app
 from qualidock.config import Settings, available_cpus, available_memory_mb
 from qualidock import datasets, processing
+from qualidock.executor import LocalExecutor
+from qualidock.metrics import bounded_text, parse_summary
+from qualidock.tools import detect_tool
+from qualidock.integrity import snapshot
 
 
 def fingerprint(path, full_hash):
@@ -82,6 +89,8 @@ def parser():
     result.add_argument('--plain-output',action='store_true')
     result.add_argument('--compare-qc',action='store_true',help='fastp only: include raw and processed FastQC')
     result.add_argument('--multiqc',action='store_true',help='fastp only: aggregate fastp and optional FastQC')
+    result.add_argument('--evaluate-falco', metavar='EXECUTABLE', help='Benchmark actual Falco against FastQC before enabling another engine; requires --mode fastqc')
+    result.add_argument('--repeats', type=int, default=3, help='Alternating engine evaluation repetitions, 1–5')
     return result
 
 
@@ -115,6 +124,8 @@ def main(args):
     budget=args.memory_mb if args.memory_mb is not None else memory
     if not 1<=args.threads<=capacity or not 1024<=budget<=memory:
         raise SystemExit(f'Request is outside detected allocation: {capacity} CPUs, {memory} MiB. Set allocation variables correctly before launch.')
+    if args.evaluate_falco:
+        return asyncio.run(evaluate_falco(args, files, budget))
     os.umask(0o077)
     options=processing_options(args)
     args.output.mkdir(parents=True,mode=0o700)  # Refuse to overwrite any previous evidence/results.
@@ -223,6 +234,112 @@ def main(args):
         (args.output/'benchmark.json').write_text(json.dumps(evidence,indent=2,allow_nan=False)+'\n')
     print(f"Benchmark saved: {args.output/'benchmark.json'}; state={evidence['run']['state']}")
     if evidence.get('timeout_reached') or evidence['run']['state'] not in {'completed','cancelled'}: raise SystemExit(1)
+
+
+async def evaluate_falco(args, files, budget):
+    """Qualification only: one existing executor, sequential commands, no new runs/API."""
+    if args.mode != 'fastqc' or args.cancel_after is not None or not 1 <= args.repeats <= 5:
+        raise ValueError('Engine evaluation requires --mode fastqc, 1–5 repeats and no cancellation request')
+    os.umask(0o077)
+    args.output.mkdir(parents=True, mode=0o700)
+    tools = {name: await detect_tool(name, executable) for name, executable in
+             [('fastqc', os.environ.get('QUALIDOCK_FASTQC', 'fastqc')), ('falco', args.evaluate_falco)]}
+    if any(not value['compatible'] for value in tools.values()):
+        raise ValueError(str(tools))
+    evidence = {'scope': 'Local engine qualification; uncontrolled cache, no shared-storage acceptance',
+                'platform': sys.platform, 'tools': tools, 'threads': args.threads, 'memory_mb': budget,
+                'input_bytes': sum(path.stat().st_size for path in files),
+                'inputs': [dict(path=str(path), **fingerprint(path, args.hash_inputs)) for path in files],
+                'source_evidence': 'sha256_before_after' if args.hash_inputs else 'metadata_only',
+                'measurements': [], 'status': 'running'}
+    # wait4 observes only this actual command, excluding version probes and other
+    # repetitions. It does not claim simultaneous process-tree peak RSS or byte I/O.
+    measure = '''import json, os, resource, sys, time
+command=json.loads(sys.argv[1]); started=time.monotonic(); pid=os.fork()
+if pid==0:
+ os.execv(command[0],command)
+_,status,r=os.wait4(pid,0);code=os.waitstatus_to_exitcode(status)
+json.dump({'wall_seconds':time.monotonic()-started,'cpu_user_seconds':r.ru_utime,'cpu_system_seconds':r.ru_stime,
+ 'waited_high_water_rss_bytes':r.ru_maxrss*(1 if sys.platform=='darwin' else 1024),
+ 'block_input_operations':r.ru_inblock,'block_output_operations':r.ru_oublock,'exit_code':code},open(sys.argv[2],'w'))
+sys.exit(code if 0<=code<=255 else 1)
+'''
+    executor = LocalExecutor(max(256, budget-256))
+    try:
+        for index, source in enumerate(files):
+            stem = re.sub(r'\.(fastq|fq)(\.gz)?$', '', source.name, flags=re.I)
+            if stem in {'', '.', '..'}:
+                raise ValueError('Unsafe output basename for engine evaluation')
+            for trial in range(args.repeats):
+                for name in (('validation','fastqc','falco') if trial % 2 == 0 else ('validation','falco','fastqc')):
+                    directory = args.output/f'input-{index}'/f'{trial}-{name}'
+                    directory.mkdir(parents=True)
+                    resource_file = directory/'resources.json'
+                    if name == 'validation':
+                        configuration = directory/'validation-input.json'
+                        configuration.write_text(json.dumps({'mode':'full','quick_reads':10000,'pairs':[],
+                            'files':[{'id':str(index),'path':str(source),'snapshot':snapshot(source.stat())}]}))
+                        argv = [sys.executable,'-m','qualidock.integrity_worker','--config',str(configuration),'--output',str(directory/'validation.json')]
+                    else:
+                        executable = tools[name]['executable']
+                        argv = ([executable,'--outdir',str(directory),'--threads',str(args.threads),'--memory','512','--format','fastq',str(source)]
+                                if name == 'fastqc' else [executable,'--output',str(directory),'--threads',str(args.threads),'--mem','256M','--groups',str(source)])
+                    identity = f'{index}-{trial}-{name}'
+                    started = time.monotonic()
+                    if name == 'validation': validation_started = started
+                    task = asyncio.create_task(executor.execute(identity,[sys.executable,'-c',measure,json.dumps(argv),str(resource_file)],directory,directory/'tool.log',args.threads))
+                    counters = {}
+                    while not task.done():
+                        process = executor.processes.get(identity)
+                        if process: counters.update(usage(process.pid))
+                        if time.monotonic()-started > args.timeout:
+                            await executor.cancel(identity)
+                        await asyncio.sleep(.05)
+                    code = await task
+                    if code: raise ValueError(f'{name} command failed ({code}); inspect {directory}/tool.log')
+                    measured = json.loads(resource_file.read_text())
+                    if name == 'falco' and evidence['measurements'][-1]['engine'] == 'validation':
+                        measured['validated_falco_serial_wall_seconds'] = time.monotonic()-validation_started
+                    if name == 'validation':
+                        validation = json.loads((directory/'validation.json').read_text())
+                        if validation['result'] != 'passed': raise ValueError('Input failed actual full validation')
+                        counts = validation['files'][0]
+                        text, summary = 'QualiDock full structural validation', ''
+                        stats = {'Filename':source.name, 'Total Sequences':str(counts['records_scanned']), 'Total Bases':str(counts['bases_scanned'])}
+                    elif name == 'fastqc':
+                        with zipfile.ZipFile(directory/(stem+'_fastqc.zip')) as archive:
+                            text = archive.read(stem+'_fastqc/fastqc_data.txt').decode()
+                            summary = archive.read(stem+'_fastqc/summary.txt').decode()
+                    else:
+                        text = bounded_text(directory/stem/'fastqc_data.txt')
+                        summary = bounded_text(directory/stem/'summary.txt')
+                    if name != 'validation':
+                        basic = text.split('>>Basic Statistics\t',1)[1].split('>>END_MODULE',1)[0]
+                        stats = dict(line.split('\t',1) for line in basic.splitlines() if '\t' in line and not line.startswith('#'))
+                    if stats.get('Filename') != source.name or int(stats.get('Total Sequences','0')) <= 0:
+                        raise ValueError('Engine output does not identify a nonempty original input')
+                    observation = dict(executor.observations[identity])
+                    if sys.platform != 'linux':
+                        observation.update(peak_sampled_rss_bytes=None, rss_scope='Portable evaluation does not assert Linux process-tree RSS')
+                    evidence['measurements'].append({'input': str(source), 'engine': name, 'trial': trial, 'argv': argv,
+                        **measured, 'cpu_percent_one_core': 100*(measured['cpu_user_seconds']+measured['cpu_system_seconds'])/measured['wall_seconds'],
+                        'process_counters_not_summable': counters, 'executor_observation': observation,
+                        **({'validation_scan': counts} if name == 'validation' else {}),
+                        'reported_header': text.splitlines()[0], 'basic_statistics': stats, 'modules': parse_summary(summary)})
+                    print(f'{name} trial {trial+1}: {source.name}, {measured["wall_seconds"]:.3f}s',flush=True)
+        evidence['status'] = 'measured'
+    except BaseException as exc:
+        evidence.update(status='failed', error=repr(exc))
+        raise
+    finally:
+        unchanged = all(before == dict(path=str(path), **fingerprint(path,args.hash_inputs)) for before,path in zip(evidence['inputs'],files))
+        evidence['source_fingerprint_unchanged'] = unchanged
+        evidence['source_unchanged'] = unchanged if args.hash_inputs else None
+        if not unchanged: evidence['status'] = 'failed_source_changed'
+        evidence['memory_scope'] = 'wait4 kernel high-water RSS of each command and waited descendants, not simultaneous tree peak; executor RSS is sampled'
+        evidence['io_scope'] = 'Kernel block operation counts and non-additive Linux per-process observations, not bytes or NFS/Lustre throughput'
+        (args.output/'falco-evaluation.json').write_text(json.dumps(evidence,indent=2,allow_nan=False)+'\n')
+    if evidence['status'] != 'measured': raise ValueError(evidence['status'])
 
 
 if __name__=='__main__': main(parser().parse_args())

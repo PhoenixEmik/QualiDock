@@ -8,6 +8,13 @@ accessible HPC allocation was provided for this validation pass; this gate is
 
 ## Run procedure
 
+For the conditional FastQC/Falco comparison, use the same script with
+`--mode fastqc --evaluate-falco /path/to/falco --repeats 3 --hash-inputs`.
+It measures the existing full validator separately as well as both actual tools.
+See [Falco evaluation and decision](FALCO-EVALUATION.md) for scientific differences,
+measured validation overhead, resource-accounting limits and the decision to keep
+Falco out of the application in this phase. This does not complete issue #5.
+
 Use a regular Unix account inside the intended compute allocation. Load the real
 FastQC/MultiQC versions and install QualiDock's existing test extras for TestClient.
 Keep the output on private persistent storage with sufficient free space. Enter

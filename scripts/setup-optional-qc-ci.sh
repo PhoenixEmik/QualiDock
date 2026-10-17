@@ -18,3 +18,14 @@ chmod 700 "$qc_bin/FastQ-Screen-0.16.0/fastq_screen"
 bowtie2 --version
 if [ -n "${GITHUB_PATH:-}" ]; then echo "$qc_bin" >> "$GITHUB_PATH"; fi
 if [ -n "${GITHUB_PATH:-}" ]; then echo "$qc_bin/FastQ-Screen-0.16.0" >> "$GITHUB_PATH"; fi
+if [ "${1:-}" = "--falco-benchmark" ]; then
+  # Qualification only. There is deliberately no Falco execution mode in the app.
+  curl -fsSL https://github.com/smithlabcode/falco/releases/download/v2.0.3/falco-2.0.3-Linux.tar.gz -o "$qc_bin/falco.tar.gz"
+  echo "a6e62934a84ee5210f1d7945ee2a806edf01083a52c3afad9abf31a054218d14  $qc_bin/falco.tar.gz" | sha256sum --check --status
+  tar -xzf "$qc_bin/falco.tar.gz" -C "$qc_bin"
+  "$qc_bin/falco-2.0.3-Linux/bin/falco" --version
+  if [ -n "${GITHUB_PATH:-}" ]; then echo "$qc_bin/falco-2.0.3-Linux/bin" >> "$GITHUB_PATH"; fi
+  curl -fsSL https://raw.githubusercontent.com/nf-core/test-datasets/d5a0422243620ef4e32c19812ab12edb5dfc882e/testdata/sample_1.fastq.gz -o /tmp/qualidock-million-reads.fastq.gz
+  echo "ee1fc6f0213515c1b5d0253ff37e1ad84207c43c059f73011baefd1c97ea9208  /tmp/qualidock-million-reads.fastq.gz" | sha256sum --check --status
+  chmod 400 /tmp/qualidock-million-reads.fastq.gz
+fi

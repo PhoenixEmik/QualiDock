@@ -66,11 +66,21 @@ jobs:
         if: matrix.multiqc == '1.35'
         run: bash scripts/setup-processing-ci.sh
       - name: Provision optional QC tools
-        run: bash scripts/setup-optional-qc-ci.sh
+        run: bash scripts/setup-optional-qc-ci.sh ${{ matrix.multiqc == '1.35' && '--falco-benchmark' || '' }}
       - name: Actual FastQ Screen and MultiQC compatibility
         env:
           QUALIDOCK_REQUIRE_SCREEN_TESTS: '1'
         run: pytest -q backend/tests/test_screen_real.py
+      - name: Conditional Falco engine evaluation
+        if: matrix.multiqc == '1.35'
+        env:
+          QUALIDOCK_REQUIRE_FALCO_EVALUATION: '1'
+        run: pytest -q backend/tests/test_falco_evaluation.py
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.multiqc == '1.35'
+        with:
+          name: falco-engine-evaluation
+          path: validation/falco-evaluation
       - name: Actual nanoq QC
         if: matrix.multiqc == '1.35'
         env:
