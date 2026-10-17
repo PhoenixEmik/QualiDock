@@ -151,7 +151,7 @@ async def execute(manager, run, row, source):
     if current != recorded:
         raise ValueError('Reference panel/index identity changed since analysis setup')
     private = manager.stores.subdirectory(run['id'], f'qc/private/{row["id"]}', exist_ok=True)
-    alias = private / ('input.fastq.gz' if row['path'].lower().endswith('.gz') else 'input.fastq')
+    alias = private / (row['id'] + ('.fastq.gz' if row['path'].lower().endswith('.gz') else '.fastq'))
     alias.symlink_to(row['path'])  # Authorized original remains unchanged, no full FASTQ copy.
     destination = manager.stores.subdirectory(run['id'], f'qc/{row["id"]}', exist_ok=True)
     status = private / 'aligner-status.jsonl'
@@ -181,9 +181,9 @@ async def execute(manager, run, row, source):
     if await asyncio.to_thread(panel, manager.settings, recorded['id']) != recorded:
         raise ValueError('Reference panel/index changed during screening')
     row['aligner_executions'] = statuses
-    report = destination / 'input_screen.txt'
+    report = destination / (row['id']+'_screen.txt')
     summary = await asyncio.to_thread(parse_report, local_file(directory, str(report.relative_to(directory))),
                                       [r['name'] for r in recorded['references']], value['subset'], source['records_scanned'], run['tools']['fastq_screen']['version'])
-    local_file(directory, str((destination/'input_screen.html').relative_to(directory)))
+    local_file(directory, str((destination/(row['id']+'_screen.html')).relative_to(directory)))
     row['report'] = str(report.relative_to(directory))
     return summary

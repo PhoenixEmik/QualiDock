@@ -67,7 +67,7 @@ def parse_nanoq(path):
 def records(paths, tool):
     from .outcomes import plan
     return [{**{key: row[key] for key in ('id', 'path', 'name', 'state', 'error', 'exit_code', 'finished_at')},
-             'report': f'qc/{row["id"]}/input_screen.txt' if tool == 'fastq-screen' else f'qc/{row["id"]}/{tool}.json', 'summary': None} for row in plan(paths)]
+             'report': f'qc/{row["id"]}/{row["id"]}_screen.txt' if tool == 'fastq-screen' else f'qc/{row["id"]}/{tool}.json', 'summary': None} for row in plan(paths)]
 
 
 async def execute(manager, run, metrics, errors):
@@ -125,8 +125,7 @@ async def execute(manager, run, metrics, errors):
         reports = [directory/row['report'] for row in run['qc']['results'] if row['state'] == 'completed']
         if reports:
             manager.update(run, stage='MultiQC · FastQ Screen')
-            problem = await multiqc.execute(manager, run, reports, options=['--dirs', '--dirs-depth', '1'],
-                                            config={'preserve_module_raw_data': True})
+            problem = await multiqc.execute(manager, run, reports)
             if problem:
                 errors.append(problem)
             elif run['id'] not in manager.cancelled:

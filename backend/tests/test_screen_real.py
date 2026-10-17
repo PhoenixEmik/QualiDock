@@ -29,7 +29,7 @@ def config(tmp_path):
     script=Path(__file__).resolve().parents[2]/'scripts/prepare-screen-test.py'
     subprocess.run([sys.executable,str(script),'--output',str(tmp_path/'references'),'--builder',BUILDER],check=True,capture_output=True)
     return Settings(roots=[FIXTURE.resolve(),tmp_path.resolve()],output=tmp_path/'results',frontend=tmp_path/'frontend',token='screen-tests',
-                    cpus=1,memory_mb=2048,fastq_screen=SCREEN,bowtie2=BOWTIE,screen_panels={'test-panel':str(tmp_path/'references/panel.conf')},allow_root=True)
+                    cpus=1,memory_mb=2048,fastq_screen=SCREEN,bowtie2=BOWTIE,multiqc=os.environ.get('QUALIDOCK_MULTIQC','multiqc'),screen_panels={'test-panel':str(tmp_path/'references/panel.conf')},allow_root=True)
 
 
 def auth(client,config):
@@ -92,8 +92,7 @@ def test_actual_screen_multiqc_source_mapping_and_independent_mates(config,tmp_p
         structured=json.loads((config.output/run['id']/'multiqc/multiqc_data/multiqc_data.json').read_text())
         actual=structured['report_saved_raw_data']['multiqc_fastq_screen']
         assert len(actual)==2 and all(row['total_reads']==20 and row['alpha counts']==12 for row in actual.values())
-        configuration=json.loads((config.output/run['id']/'multiqc-config.json').read_text())
-        assert configuration['preserve_module_raw_data'] is True
+        assert len({Path(row['report']).name for row in run['qc']['results']})==2
         assert len({mapping['multiqc_name'] for mapping in run['report_input_map'].values()})==2
 
 
