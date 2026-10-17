@@ -49,7 +49,8 @@ export function coverageView(data: CoverageMetrics): NativePlotView {
         {
           name,
           type: "line",
-          step: "end",
+          // P(D ≥ d) is left-continuous at integer thresholds.
+          step: "start",
           showSymbol: true,
           connectNulls: false,
           data: points,

@@ -77,7 +77,7 @@ def test_native_coverage_cdf_regions_downloads_cram_and_restart(workspace,browse
         playwright.expect(page.get_by_role('region',name='mosdepth coverage results').get_by_text('CDF denominator: 100 mosdepth-reported reference bases.',exact=True)).to_be_visible()
         page.get_by_role('button',name='Rerun',exact=True).click()
         playwright.expect(page.get_by_label('Target regions (optional)',exact=True)).to_have_value(label)
-        page.get_by_role('button',name='Workspace',exact=True).click()
+        page.get_by_label('Workspace',exact=True).click()
         page.get_by_role('button',name='Clear selection',exact=True).click()
         page.get_by_role('button',name='Files',exact=True).click()
         page.get_by_label('Select file '+source_cram.name,exact=True).check()

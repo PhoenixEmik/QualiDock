@@ -34,7 +34,7 @@ test("genuine mosdepth points preserve original CDF fractions and omit unreporte
     data: { value: number[]; raw: string[] }[];
   }[];
   assert.equal(series[0].type, "line");
-  assert.equal(series[0].step, "end");
+  assert.equal(series[0].step, "start");
   assert.deepEqual(series[0].data, [
     { value: [0, 1], raw: ["0", "1.00000"] },
     { value: [1, 0.25], raw: ["1", "0.25000"] },
