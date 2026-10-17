@@ -51,6 +51,7 @@ def test_rseqc_original_values_accessible_setup_downloads_and_restart(workspace,
         page.wait_for_function('() => document.documentElement.scrollWidth<=innerWidth+1')
         suffix=workspace.settings.prefix.replace('/','-') or '-root'
         page.screenshot(path='validation/rna-strandedness'+suffix+'.png',full_page=True)
+        page.set_viewport_size({'width':1400,'height':1000})
         page.get_by_role('tab',name='Reports',exact=True).click()
         frame=page.locator('.report-preview[aria-busy=false] iframe').content_frame
         frame.locator('a[href="#rseqc-infer_experiment"]').first.click()

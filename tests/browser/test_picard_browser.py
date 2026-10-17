@@ -54,6 +54,7 @@ def test_native_insert_metrics_original_histogram_pdf_and_restart(workspace,brow
         page.wait_for_function('() => document.documentElement.scrollWidth<=innerWidth+1')
         suffix=workspace.settings.prefix.replace('/','-') or '-root'
         page.screenshot(path='validation/picard-native'+suffix+'.png',full_page=True)
+        page.set_viewport_size({'width':1400,'height':1000})
         page.get_by_role('tab',name='Reports',exact=True).click()
         frame=page.locator('.report-preview[aria-busy=false] iframe').content_frame
         frame.locator('#picard_insert_size').scroll_into_view_if_needed()
