@@ -54,7 +54,8 @@ def test_rseqc_original_values_accessible_setup_downloads_and_restart(workspace,
         page.set_viewport_size({'width':1400,'height':1000})
         page.get_by_role('tab',name='Reports',exact=True).click()
         frame=page.locator('.report-preview[aria-busy=false] iframe').content_frame
-        frame.locator('a[href="#rseqc-infer_experiment"]').first.click()
+        # MultiQC collapses a single section into its module anchor.
+        frame.locator('a[href="#rseqc"]').first.click()
         frame.locator('#rseqc_infer_experiment_plot .main-svg').first.wait_for(timeout=30000)
         page.get_by_role('button',name='Rerun',exact=True).click()
         playwright.expect(page.get_by_label('Aggregate original RSeQC reports with MultiQC',exact=True)).to_be_checked()
