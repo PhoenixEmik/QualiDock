@@ -98,6 +98,14 @@ jobs:
         with:
           name: rna-qc-evidence
           path: validation/rseqc
+      - name: Verify Picard CLI and genuine insert reports
+        if: matrix.multiqc == '1.35'
+        run: bash scripts/setup-picard-ci.sh --study
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.multiqc == '1.35'
+        with:
+          name: picard-tool-study
+          path: validation/picard-tool-study
       - name: Actual mosdepth coverage, references and indexed input
         if: matrix.multiqc == '1.35'
         env:
