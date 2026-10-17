@@ -394,8 +394,55 @@ startup), 32,895 registered report bytes, and unchanged source SHA-256. Waited-c
 CPU was 1.110 s, including probes/guardians, not pure mosdepth CPU. These small,
 warmed/uncontrolled-cache observations are not performance acceptance. Portable
 process-tree RSS and kernel filesystem I/O are unavailable; original scope labels
-are retained. Linux CI records its separate evidence. Complete acceptance evidence
-is recorded after the required CI jobs finish.
+are retained. Linux CI records its separate evidence.
+
+Linux hosted-runner observation on the same eight-record fixture (507-byte BAM):
+2.335 s application analysis wall, 0.230 s full-stats scan and 0.231 s mosdepth
+stage, 31,993 registered report bytes, source SHA-256 unchanged. These timings
+include process guardians. Waited-child CPU was 2.202 s including probes/guardians.
+The mosdepth execution had one process-tree RSS sample of 10,579,968 bytes at a
+0.5 s interval: **not tool-only or exact peak memory**. Kernel per-process I/O
+observations are retained without summing overlapping counters into a throughput
+claim. Evidence is in `mosdepth-real-evidence` on CI 39005371025; local downloaded
+copies are under ignored `validation/coverage-final-linux`.
+
+Implementation inventory relative to accepted SAMtools commit `71f5287`:
+16 files added, 22 modified, none deleted. Application code (`backend/qualidock`,
+`frontend/src`) adds **844** lines/removes **120** (net **+724**, including
+formatting). Added application files are `coverage.py` (248 lines),
+`CoverageResults.tsx` (215 lines) and `coverageChart.ts` (63 lines). Existing
+alignment lifecycle, input authorization, configuration, manager/artifact handling,
+history, QC setup/results, API helpers and optional frontend types are extended;
+there is no separate execution loop. Added tests are `test_coverage.py`,
+`test_coverage_real.py`, genuine mosdepth report fixtures, `coverage.test.ts` and
+`test_coverage_browser.py`. Existing benchmark, test-tool provisioning, CI,
+README and optional-QC/benchmark documentation are updated.
+
+API additions: optional `mosdepth` mode, bounded `qc_options`, and approved-panel
+availability in `/api/config`. Manifests add optional `qc.bed_panel` and
+`qc.results[].mosdepth` raw tables/provenance; existing analysis fields, source
+identities and artifact/download contracts are preserved. No migration or source
+copying is required. Original reports can be reopened without tool execution.
+
+[Final acceptance CI 39005371025](https://github.com/PhoenixEmik/QualiDock/actions/runs/39005371025)
+on `d917322` passed **all eight jobs**, including MultiQC 1.25.1/1.35/latest-1.x
+and Linux resource controls. Dedicated mosdepth checks: **46 passed** (24 unit,
+22 actual-tool cases), including remote-reference HTTP canaries unchanged.
+The complete local backend suite with real tools passed **510 tests**, with two
+HTTP-listener canaries deselected because this sandbox cannot bind sockets;
+both run in Linux CI. The dependency-light backend job intentionally reports
+397 passed/115 optional-tool skips; required-tool jobs exercise genuine tools.
+Frontend: **146 passed**, no skips, TypeScript/Vite build passed (existing large
+ECharts bundle warning). Browser JUnit artifacts contain **66 Chromium / 42
+Firefox** cases with zero failures/errors/skips, including coverage at `/`,
+`/node/compute/8765` and `/rnode/compute/8765`, source/index/reference/BED hashes,
+CRAM, restart/rerun, downloads, SVG export, keyboard controls and narrow layout.
+Mobile coverage screenshots from both browsers were visually reviewed, without
+claiming pixel equivalence. Reproducible originals are `report-browser-*`
+artifacts; downloaded screenshots/XML are under ignored
+`validation/coverage-final-browser/{chromium,firefox}`. #33 is accepted; #5 remains
+open for representative large-file/shared-storage acceptance. No release is
+prepared or published.
 
 ## FastQ Screen 0.16.x (tested 0.16.0)
 
