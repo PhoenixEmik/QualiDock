@@ -253,3 +253,33 @@ These validate the instrumentation/operation contract. No representative large
 RNA BAM, Picard library dataset, authorized shared filesystem, JVM-overhead
 isolation study or live network/SSE performance measurement is supplied here.
 **Issue #5 remains open; no large-data acceptance or site defaults are claimed.**
+
+### Recorded Linux small-fixture observations, 2026-10-17
+
+Code `343a027`, [CI 39023607426](https://github.com/PhoenixEmik/QualiDock/actions/runs/39023607426),
+`core-processing-io` artifact (`benchmarks/alignment-rna`). All seven completed
+observations preserve source SHA-256 and publish no derived FASTQ. Requested
+budget: one analysis CPU /1024 MiB; stat reports local `ext2/ext3`. These are
+single functional observations under uncontrolled cache/runner conditions,
+**not representative performance acceptance or controlled tool comparisons**.
+
+| Operation/configuration | Input bytes | Wall s | Waited-child CPU s | Validation/preflight command s | Max sampled command-tree RSS MiB |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| nanoq, gzip /400 reads | 52,290 | 1.743 | 3.202 | 0.226 | 10.0 |
+| SAMtools BAM /8 records | 505 | 2.237 | 3.212 | 0.450 | 10.1 |
+| SAMtools controlled CRAM /8 records | 1,305 | 2.219 | 3.315 | 0.450 | 10.2 |
+| RSeQC infer /10 alignments | 562 | 2.286 | 3.374 | 0.676 | 10.0 |
+| RSeQC distribution /10 alignments | 562 | 2.280 | 3.384 | 0.676 | 10.0 |
+| Picard numeric, duplicates excluded /15 records | 624 | 3.312 | 4.374 | 0.677 | 106.7 |
+| Picard PDF, duplicates included /15 records | 624 | 3.789 | 4.717 | 0.677 | 103.9 |
+
+Cold submission includes concurrent bounded tool-version probes, so total
+waited-child CPU can exceed wall time even with one requested analysis CPU.
+Neither quantity is pure scientific-tool CPU. Short processes can finish between
+RSS/CPU/I/O samples; 10 MiB samples can reflect only the guardian, **not actual
+RSeQC/nanoq peak memory**. The last two rows change both PDF and duplicate policy,
+so their difference is not isolated PDF/JVM overhead. Picard's 576 MiB heap is a
+configured limit, not allocated/measured memory. No throughput, exact tree peak,
+network I/O, large-BAM scaling or site resource recommendation is inferred.
+Full JSON retains individual counters, version/argv/parameter evidence, registered
+report sizes, in-process API observations and the measurement-scope labels.

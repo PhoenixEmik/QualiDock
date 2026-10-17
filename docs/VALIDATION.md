@@ -4,6 +4,85 @@ QualiDock remains `0.1.0.dev0`; no release is tagged or published. This is the
 current acceptance record. Development-phase documents describe historical
 implementation environments and do not override this record.
 
+## RNA-seq and library alignment QC — 2026-10-17
+
+[CI 39023607426](https://github.com/PhoenixEmik/QualiDock/actions/runs/39023607426)
+on code `343a027` passed **all eight jobs**, with all supported scientific,
+resource, browser and security checks enabled. Feature contracts and file
+inventory are in [RNA-QC.md](RNA-QC.md); actual private measurement records and
+limits are in [BENCHMARKING.md](BENCHMARKING.md#rna-seq-and-library-qc-evidence-5).
+The final follow-up changes documentation only; no release/tag is created.
+
+| Check | Final evidence |
+| --- | --- |
+| Backend default CI | 487 passed /166 missing-tool skips; provisioned jobs below execute the optional scientific cases |
+| Genuine SAMtools/ref safety | 31 passed; BAM/CRAM, local reference policy and authenticated artifacts |
+| RSeQC | 64 passed without skips, including independent CLI comparisons, public hg19 BAM, synthetic orientations and BED12 security |
+| Picard | 49 passed without skips, including original PDF/Rscript, exact orientations/precision, single-end unavailable, tail cutoff, resources/cancellation/restart |
+| New RNA/Picard MultiQC | Eight passed without skips on 1.35; genuine mixed original fixtures additionally pass on 1.25.1 and latest supported 1.x |
+| Existing mosdepth | 46 passed |
+| Existing FastQ Screen | 13 passed on each MultiQC target |
+| nanoq / NanoPlot | Eight /13 genuine-tool cases passed |
+| Retained processing/new benchmark | 91 passed without skips, including all 11 new alignment/RNA benchmark cases, genuine fastp/SeqKit and derived reuse |
+| Existing QC/imports | Seven actual-tool cases per MultiQC target |
+| Frontend | 146 passed; TypeScript and Vite build pass |
+| Linux resources | Non-root one-CPU /one-GiB cgroup, affinity, memory, cancellation, guardians and restart remain passing |
+| Chromium / Firefox | 72 /48 passed; JUnit has zero failures/errors/skips, including root and both existing URL prefixes |
+
+Qualified new runtimes: **RSeQC 5.0.5** (scripts report 5.05), **Picard 3.5.0**
+(original JAR), **Java 17.0.20.1**, **Rscript 4.3.3** for optional original PDF,
+SAMtools/HTSlib1.22.1 and MultiQC1.25.1/1.35 (latest `<2` resolved to1.35).
+FastQC0.13.0, fastp0.23.4 (Linux;1.4.0 locally), SeqKit2.14.0, nanoq0.10.0,
+NanoPlot1.48.0, FastQ Screen and mosdepth retain their genuine regression suites.
+The existing Falco qualification-only tests also pass; no extra engine is enabled.
+No runtime package dependency or second executor/persistence layer was added.
+
+Committed upstream reports include original RSeQC stdout/stderr over explicit
+synthetic geometry plus Galaxy tools-iuc's pinned hg19 public test BAM/BED12.
+Picard fixtures preserve the original metrics, histogram PDF, single-end zero
+observation diagnostics, exact Java/R metadata and JAR SHA-256. Independent CLI
+outputs match native original strings/tables; unknown SD remains `?`/unavailable,
+not zero. The original PDF was rendered and visually inspected without editing.
+Native screenshot/JUnit evidence is retained in `report-browser-*` artifacts
+and locally under ignored `validation/rna-343-browser/{chromium,firefox}`.
+Screenshots were visually reviewed; no pixel-perfect equivalence is claimed.
+
+The MultiQC partial-bundle regression deliberately writes incomplete HTML/JSON
+then fails. Verified RSeQC/Picard results remain downloadable; the failed bundle
+stays on disk but is unpublished, including after restart. Registry tests cover
+nonzero/active/cancelled exits and legacy manifests without execution metadata,
+using existing execution records rather than another state model. Application
+CSP, opaque-origin report sandboxing, authentication, source immutability and
+historical result compatibility remain intact. No CI assertions or supported scientific regressions
+were weakened or disabled.
+
+Local full retained-tool run after the artifact fix: **621 passed /30 missing
+optional-tool skips**, with two local socket-listener canaries deselected because
+this managed macOS sandbox cannot bind sockets. The required Linux alignment
+job executes those canaries. The portable local test fixture substitutes only
+the denied RSS sampler; actual `/proc`/cgroup resource proof comes from Linux.
+Missing local RSeQC/R/PDF/Falco cases are not treated as scientific evidence;
+the provisioned jobs require actual tools and execute them. Focused local
+preview/artifact/MultiQC checks:47 passed /four missing-local-RSeQC skips.
+
+Seven completed new benchmark observations retain source hashes, exact
+versions/argv, validation/preflight timing, sampled CPU/RSS, available individual
+I/O counters and API observations. Their BAM inputs are505–1305 bytes and the
+nanoq gzip input52,290 bytes. These test instrumentation, not scale. CPU includes
+concurrent cold tool probes; sampled RSS can miss short tools; individual I/O
+counters are not NFS/Lustre bandwidth. JVM startup overhead was not isolated.
+**Issue #5 remains open** for authorized large files, real shared storage,
+cache/concurrent-load, live network/SSE, insufficient-space and site tuning.
+
+Deliberate limits: new RSeQC/Picard modes accept BAM only; no RNA/Picard CRAM
+qualification is asserted. BED12 SHA-256 and BAM contig/bounds checks do not
+prove complete genome assembly identity. Picard per-library MultiQC is disabled
+because upstream combines overlapping populations. Native library rows and
+original reports remain available. Aggregation is scoped to the current
+operation; external MultiQC-only imports retain their FastQC/fastp allowlist.
+No gene-body coverage, expression/variant pipeline, reference download, OOD/PBS
+expansion or release work was performed.
+
 ## Core usability and performance implementation — 2026-10-17
 
 Issues #5, #26 and #27 extend the existing benchmark and add two read-only views.
