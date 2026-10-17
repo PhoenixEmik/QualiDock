@@ -102,6 +102,28 @@ Local macOS cannot validate process-tree RSS enforcement; Linux CI supplies its
 own observation. No giant-input, NFS/Lustre or 11 GB summary acceptance is claimed;
 #5 stays open. PNG is the only intentionally deferred output format for #31.
 
+Linux hosted-runner observations on the same input: 2.718 s baseline / 3.117 s
+advanced analysis wall time; actual NanoPlot stage 1.225 / 1.427 s, source
+validation 0.226 / 0.225 s. Highest sampled process-tree RSS was 231,268,352 /
+268,709,888 bytes (three samples, 0.5 s interval), **not exact peak memory**.
+Waited-child CPU was 4.037 / 3.990 s including probes/guardians, not pure tool
+CPU. The source SHA-256 was unchanged. Evidence and dependency versions are in
+`nanoplot-real-evidence` on [CI 38997343347](https://github.com/PhoenixEmik/QualiDock/actions/runs/38997343347).
+
+Implementation inventory relative to `fe0e57d`: 6 files added, 20 modified,
+none deleted. Application code adds 334 lines/removes 46 (net +288, including
+formatting). Added `nanoplot.py` is an 81-line explicit adapter; modified existing
+QC lifecycle/config/API/history and setup/results/types/report-selection files
+reuse the same manager, validator and viewer. Genuine NanoStats and its provenance
+README, 21 unit cases, 13 real-tool cases, one frontend report-order regression
+and browser cases are added. Benchmark, test provisioning, CI and the existing
+guides are extended. No runtime dependency, executor, database or chart framework
+is introduced. Manifests add optional `qc.results[].nanoplot` raw rows/HTML paths;
+old analysis fields/formats remain unchanged. Initial full local backend: 426 passed, then 34 focused NanoPlot checks passed
+after version/completeness hardening; frontend: 143 passed and TypeScript/Vite
+build. CI acceptance is recorded after
+all required jobs finish; no release is prepared.
+
 ## FastQ Screen 0.16.x (tested 0.16.0)
 
 Optional operator configuration:

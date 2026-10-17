@@ -69,7 +69,11 @@ async def execute(manager, run, row, source):
     local_file(directory, str(html.relative_to(directory)))
     # A truncated/empty HTML artifact is not successful report generation.
     with html.open('rb') as stream:
-        if b'<html' not in stream.read(64 * 1024).lower():
+        prefix = stream.read(64 * 1024).lower()
+        size = stream.seek(0, 2)
+        stream.seek(max(0, size - 4096))
+        tail = stream.read(4096).lower()
+        if b'<html' not in prefix or b'</html>' not in tail:
             raise ValueError('Missing NanoPlot HTML document')
     result['html'] = str(html.relative_to(directory))
     result['plots'] = [str(p.relative_to(directory)) for p in sorted(destination.glob('*.html'))

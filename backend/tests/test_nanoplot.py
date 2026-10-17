@@ -1,6 +1,7 @@
 """Original NanoPlot 1.48.0 TSV and strict QC-only configuration contract."""
 import asyncio
 from pathlib import Path
+import sys
 import pytest
 from qualidock.nanoplot import stats
 from qualidock.optional_qc import options
@@ -52,3 +53,24 @@ def test_absence_is_optional_and_old_qc_works(client,setup):
     assert client.post('/api/runs',json={'mode':'nanoplot','paths':[str(next(root.glob('*.fastq')))]}).status_code==400
     assert client.post('/api/runs',json={'mode':'fastqc','paths':[str(next(root.glob('*.fastq')))]}).status_code==201
     assert not asyncio.run(detect_tool('nanoplot','/missing/NanoPlot'))['compatible']
+
+
+@pytest.mark.parametrize('version,compatible',[('1.48.0',True),('1.48.0rc1',False),('1.48.1rc1',False),('1.48.1',False),('1.48.0.1',False)])
+def test_version_metadata_never_truncates_untested_builds(tmp_path,version,compatible):
+    # Version-probe metadata only; no synthetic successful QC results.
+    program=tmp_path/'NanoPlot'
+    program.write_text('#!'+sys.executable+'\nprint('+repr('NanoPlot '+version)+')\n')
+    program.chmod(0o700)
+    info=asyncio.run(detect_tool('nanoplot',str(program)))
+    assert info['available'] and info['compatible']==compatible
+    if compatible:assert info['version']=='1.48.0'
+
+
+def test_nanoplot_source_paths_remain_fastq_only_and_contained(client,setup):
+    _,root=setup
+    outside=root.parent/'outside.fastq';outside.write_text('@x\nACGT\n+\nIIII\n')
+    alias=root/'alias.fastq';alias.symlink_to(outside)
+    for path in [outside,alias,root/'..'/'outside.fastq']:
+        assert client.post('/api/runs',json={'mode':'nanoplot','paths':[str(path)]}).status_code==403
+    wrong=root/'wrong.bam';wrong.write_bytes(b'not FASTQ')
+    assert client.post('/api/runs',json={'mode':'nanoplot','paths':[str(wrong)]}).status_code==400

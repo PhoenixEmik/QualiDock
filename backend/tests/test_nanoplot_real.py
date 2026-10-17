@@ -111,6 +111,27 @@ def test_genuine_invocation_failure_retains_no_scientific_artifacts(tmp_path):
         assert not any(r['path'].startswith('qc/') for r in run['reports'])
 
 
+def test_actual_successful_tool_with_truncated_html_is_not_published(tmp_path,monkeypatch):
+    from qualidock import nanoplot
+    original=nanoplot.stats
+    def damage_report(path,source):
+        result=original(path,source)
+        html=path.with_name('NanoPlot-report.html')
+        assert html.stat().st_size>1000  # A genuine completed tool report exists.
+        html.write_bytes(b'<html><head></head><body>')
+        return result
+    monkeypatch.setattr(nanoplot,'stats',damage_report)
+    config=settings(tmp_path)
+    with TestClient(create_app(config)) as client:
+        auth(client,config)
+        created=client.post('/api/runs',json={'mode':'nanoplot','paths':[str(FIXTURE.resolve())]})
+        assert created.status_code==201,created.text
+        run=wait(client,created.json()['id'],timeout=60)
+        assert run['state']=='failed' and run['qc']['results'][0]['exit_code']==0
+        assert 'HTML document' in run['error']
+        assert not any(r['path'].startswith('qc/') for r in run['reports'])
+
+
 @pytest.mark.parametrize('interrupt',[False,True])
 def test_actual_nanoplot_cancellation_and_interrupted_restart(tmp_path,interrupt):
     config=settings(tmp_path)

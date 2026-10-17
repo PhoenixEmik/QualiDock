@@ -51,6 +51,9 @@ async def detect_tool(name: str, executable: str) -> dict:
         response = await asyncio.wait_for(output(), timeout=PROBE_TIMEOUT)
         label = {'fastq_screen': r'FastQ Screen', 'bowtie2': r'bowtie2(?:-align-[sl])?'}.get(name, re.escape(name))
         match = re.search(r"(?i)\b" + label + r"(?:,?\s+(?:version|v))?\s*([0-9]+(?:\.[0-9]+){1,2})\b", response)
+        if name == 'nanoplot':
+            # Do not truncate e.g. 1.48.1rc1 to 1.48 and admit an untested build.
+            match = re.fullmatch(r'NanoPlot\s+([0-9]+\.[0-9]+\.[0-9]+)', response, re.IGNORECASE)
         if name == 'falco' and not match:
             match = re.fullmatch(r'([0-9]+(?:\.[0-9]+){1,2})', response)
         if process.returncode or not match:
