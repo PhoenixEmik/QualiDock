@@ -182,3 +182,74 @@ Kernel counters and cumulative child high-water RSS retain their existing scope
 labels; they are not pure-tool CPU, exact simultaneous tree peak or logical
 source-byte throughput. Local macOS sandbox resource restrictions are not hidden
 by reporting zero memory. Representative shared-storage acceptance remains open.
+
+## RNA-seq and library QC evidence (#5)
+
+The **same** command also accepts `nanoq`, `samtools`, `rseqc-infer`,
+`rseqc-distribution` and `picard`. NanoPlot/mosdepth and all prior FASTQ/processing
+modes remain supported. Use the existing resource, private output and optional
+source-hash arguments. Minimal operation-specific examples:
+
+```sh
+python scripts/benchmark-analysis.py --input /authorized/reads.fastq.gz \
+  --output /private/new-nanoq --mode nanoq --hash-inputs
+
+python scripts/benchmark-analysis.py --input /authorized/aligned.bam \
+  --output /private/new-samtools --mode samtools --hash-inputs
+
+QUALIDOCK_RNA_ANNOTATIONS='{"genes":"/approved/genes.bed12"}' \
+python scripts/benchmark-analysis.py --input /authorized/rna.bam \
+  --output /private/new-strandedness --mode rseqc-infer \
+  --rna-annotation genes --rna-sample-size 200000 --rna-mapq 30 --hash-inputs
+
+QUALIDOCK_RNA_ANNOTATIONS='{"genes":"/approved/genes.bed12"}' \
+python scripts/benchmark-analysis.py --input /authorized/rna.bam \
+  --output /private/new-distribution --mode rseqc-distribution \
+  --rna-annotation genes --hash-inputs
+
+QUALIDOCK_PICARD=/approved/picard.jar \
+python scripts/benchmark-analysis.py --input /authorized/library.bam \
+  --output /private/new-insert-size --mode picard --memory-mb 4096 --hash-inputs
+```
+
+`--multiqc` optionally adds verified SAMtools/RSeQC/Picard aggregation, and
+remains available for fastp. Picard has only `--picard-by-library`,
+`--picard-include-duplicates` and `--picard-histogram-pdf`; the last requires
+existing Rscript. Per-library MultiQC is rejected rather than incorrectly
+combining overlapping populations. Keep numeric-only and optional original-PDF
+runs separate to observe actual R/JVM costs. New tool paths use the same
+`QUALIDOCK_*` configuration as the application, including Java, SAMtools,
+RSeQC, nanoq and Picard. SAMtools/coverage CRAM requires an approved local
+reference ID via `--alignment-reference`; RNA/Picard remain BAM-only.
+
+Evidence retains exact argv, runtime/tool versions, parameters, terminal state,
+registered artifact sizes and source SHA-256 before/after when requested. Source
+sizes are **not** physical bytes read. Alignment preflight is distinguished from
+FASTQ structural scans: header/EOF checks and full SAMtools stats are explicit;
+SAMtools flagstat/stats as the requested operation remain scientific tool work.
+`validation_observed_seconds` sums recorded validation/preflight command wall
+times, including their startup/guardian costs. FASTQ validation still records
+actual compressed bytes read; alignment logical read volume is not invented
+from input size or sample caps. Annotation identity/size/checksum are retained;
+RSeQC's sample cap does not bound source I/O.
+
+`submission_seconds` includes request validation and cached-or-actual tool
+probes; it is **not isolated JVM startup time**. Picard execution observations
+include JVM startup, tool work and optional R plotting. `jvm_observation` records
+the actual Java/Picard versions and configured heaps; no guessed JVM overhead is
+subtracted. Per-stage sampled CPU ticks can miss short/final work and remain
+null when unobserved. Waited-child CPU remains the separately measured complete
+benchmark-child scope, including tool probes, not isolated pure-tool CPU.
+Sampled RSS, cumulative child high-water marks and individual Linux I/O counters
+retain their existing limitations; they never establish simultaneous process
+peak, NFS/Lustre bandwidth or whole-workload physical I/O.
+
+Genuine small-fixture regressions cover SAMtools BAM/controlled CRAM, nanoq gzip,
+both RSeQC operations, Picard numeric/PDF modes, source immutability, cancellation
+and invalid settings. Existing NanoPlot baseline/advanced and indexed mosdepth
+benchmarks continue separately. Tests preserve private JSON evidence under
+`validation/benchmarks/alignment-rna`, uploaded with `core-processing-io`.
+These validate the instrumentation/operation contract. No representative large
+RNA BAM, Picard library dataset, authorized shared filesystem, JVM-overhead
+isolation study or live network/SSE performance measurement is supplied here.
+**Issue #5 remains open; no large-data acceptance or site defaults are claimed.**

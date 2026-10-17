@@ -17,7 +17,7 @@ import zipfile
 from fastapi.testclient import TestClient
 from qualidock.app import create_app
 from qualidock.config import Settings, available_cpus, available_memory_mb
-from qualidock import datasets, processing
+from qualidock import datasets, processing, alignment
 from qualidock.executor import LocalExecutor
 from qualidock.metrics import bounded_text, parse_summary
 from qualidock.tools import detect_tool
@@ -73,11 +73,17 @@ def parser():
     result=argparse.ArgumentParser(description=__doc__)
     result.add_argument('--input',type=Path,nargs='+',required=True)
     result.add_argument('--output',type=Path,required=True,help='New private directory; must not already exist')
-    result.add_argument('--mode',choices=['fastqc','both','nanoplot','mosdepth',*sorted(processing.MODES)],default='both')
-    result.add_argument('--alignment-reference', help='Approved local reference ID for a CRAM coverage benchmark')
+    result.add_argument('--mode',choices=['fastqc','both','nanoq','nanoplot',*sorted(alignment.MODES),*sorted(processing.MODES)],default='both')
+    result.add_argument('--alignment-reference', help='Approved local reference ID for a SAMtools/coverage CRAM benchmark')
     result.add_argument('--coverage-panel', help='Approved BED panel ID for coverage benchmarking')
     result.add_argument('--nanoplot-loglength',action='store_true')
     result.add_argument('--nanoplot-individual-plots',action='store_true')
+    result.add_argument('--rna-annotation',help='Approved BED12 annotation ID; paths come from QUALIDOCK_RNA_ANNOTATIONS')
+    result.add_argument('--rna-sample-size',type=int,default=200000)
+    result.add_argument('--rna-mapq',type=int,default=30)
+    result.add_argument('--picard-by-library',action='store_true')
+    result.add_argument('--picard-include-duplicates',action='store_true')
+    result.add_argument('--picard-histogram-pdf',action='store_true')
     result.add_argument('--threads',type=int,default=1)
     result.add_argument('--memory-mb',type=int)
     result.add_argument('--cancel-after',type=float)
@@ -92,7 +98,7 @@ def parser():
     result.add_argument('--preserve-pairs',action='store_true',help='Keep both mates in length/ID selection; sampling already preserves confirmed pairs')
     result.add_argument('--plain-output',action='store_true')
     result.add_argument('--compare-qc',action='store_true',help='fastp only: include raw and processed FastQC')
-    result.add_argument('--multiqc',action='store_true',help='fastp only: aggregate fastp and optional FastQC')
+    result.add_argument('--multiqc',action='store_true',help='Optional verified aggregation for fastp, SAMtools, RSeQC or Picard')
     result.add_argument('--evaluate-falco', metavar='EXECUTABLE', help='Benchmark actual Falco against FastQC before enabling another engine; requires --mode fastqc')
     result.add_argument('--repeats', type=int, default=3, help='Alternating engine evaluation repetitions, 1–5')
     return result
@@ -102,7 +108,8 @@ def processing_options(args):
     if args.count is not None and args.mode!='seqkit-sample': raise ValueError('--count requires seqkit-sample')
     if args.identifiers and args.mode!='seqkit-extract': raise ValueError('--identifiers requires seqkit-extract')
     if args.preserve_pairs and args.mode not in {'seqkit-filter','seqkit-extract'}: raise ValueError('--preserve-pairs requires length or ID selection')
-    if (args.compare_qc or args.multiqc) and args.mode!='fastp': raise ValueError('--compare-qc and --multiqc require fastp')
+    if args.compare_qc and args.mode!='fastp': raise ValueError('--compare-qc requires fastp')
+    if args.multiqc and args.mode not in {'fastp','samtools','picard','rseqc-infer','rseqc-distribution'}: raise ValueError('--multiqc requires fastp, SAMtools, RSeQC or Picard')
     if args.mode not in processing.MODES: return None
     value={'gzip':not args.plain_output}
     if args.mode=='fastp':
@@ -134,13 +141,24 @@ def main(args):
     options=processing_options(args)
     if (args.nanoplot_loglength or args.nanoplot_individual_plots) and args.mode != 'nanoplot':
         raise ValueError('NanoPlot plotting options require --mode nanoplot')
-    if (args.alignment_reference or args.coverage_panel) and args.mode != 'mosdepth':
-        raise ValueError('Alignment reference and coverage panel require --mode mosdepth')
-    qc_options={'loglength':args.nanoplot_loglength,'individual_plots':args.nanoplot_individual_plots} if args.mode=='nanoplot' else {'reference':args.alignment_reference,'panel':args.coverage_panel} if args.mode=='mosdepth' else None
+    if args.alignment_reference and args.mode not in {'samtools','mosdepth'}:
+        raise ValueError('Local alignment reference is supported for SAMtools/coverage CRAM only')
+    if args.coverage_panel and args.mode!='mosdepth':raise ValueError('Coverage panel requires mosdepth')
+    if args.rna_annotation and args.mode not in {'rseqc-infer','rseqc-distribution'}:raise ValueError('RNA annotation requires RSeQC')
+    if (args.rna_sample_size!=200000 or args.rna_mapq!=30) and args.mode!='rseqc-infer':raise ValueError('RNA sampling/MAPQ requires infer_experiment')
+    if any((args.picard_by_library,args.picard_include_duplicates,args.picard_histogram_pdf)) and args.mode!='picard':raise ValueError('Picard settings require Picard')
+    qc_options=None
+    if args.mode=='nanoplot':qc_options={'loglength':args.nanoplot_loglength,'individual_plots':args.nanoplot_individual_plots}
+    if args.mode=='samtools':qc_options={'reference':args.alignment_reference,'multiqc':args.multiqc}
+    if args.mode=='mosdepth':qc_options={'reference':args.alignment_reference,'panel':args.coverage_panel}
+    if args.mode in {'rseqc-infer','rseqc-distribution'}:
+        qc_options={'annotation':args.rna_annotation,'multiqc':args.multiqc}
+        if args.mode=='rseqc-infer':qc_options.update(sample_size=args.rna_sample_size,mapq=args.rna_mapq)
+    if args.mode=='picard':qc_options={'by_library':args.picard_by_library,'include_duplicates':args.picard_include_duplicates,'histogram_pdf':args.picard_histogram_pdf,'multiqc':args.multiqc}
     args.output.mkdir(parents=True,mode=0o700)  # Refuse to overwrite any previous evidence/results.
     fingerprint_started=time.monotonic()
     before=[fingerprint(path,args.hash_inputs) for path in files]
-    settings=Settings(roots=list(dict.fromkeys(path.parent for path in files)),output=args.output/'results',frontend=args.output/'frontend',cpus=capacity,memory_mb=budget,fastqc=os.environ.get('QUALIDOCK_FASTQC','fastqc'),multiqc=os.environ.get('QUALIDOCK_MULTIQC','multiqc'),fastp=os.environ.get('QUALIDOCK_FASTP','fastp'),seqkit=os.environ.get('QUALIDOCK_SEQKIT','seqkit'),nanoplot=os.environ.get('QUALIDOCK_NANOPLOT','NanoPlot'),samtools=os.environ.get('QUALIDOCK_SAMTOOLS','samtools'),mosdepth=os.environ.get('QUALIDOCK_MOSDEPTH','mosdepth'),alignment_references=json.loads(os.environ.get('QUALIDOCK_ALIGNMENT_REFERENCES','{}')),coverage_panels=json.loads(os.environ.get('QUALIDOCK_COVERAGE_PANELS','{}')))
+    settings=Settings(roots=list(dict.fromkeys(path.parent for path in files)),output=args.output/'results',frontend=args.output/'frontend',cpus=capacity,memory_mb=budget,fastqc=os.environ.get('QUALIDOCK_FASTQC','fastqc'),multiqc=os.environ.get('QUALIDOCK_MULTIQC','multiqc'),fastp=os.environ.get('QUALIDOCK_FASTP','fastp'),seqkit=os.environ.get('QUALIDOCK_SEQKIT','seqkit'),nanoplot=os.environ.get('QUALIDOCK_NANOPLOT','NanoPlot'),samtools=os.environ.get('QUALIDOCK_SAMTOOLS','samtools'),mosdepth=os.environ.get('QUALIDOCK_MOSDEPTH','mosdepth'),alignment_references=json.loads(os.environ.get('QUALIDOCK_ALIGNMENT_REFERENCES','{}')),coverage_panels=json.loads(os.environ.get('QUALIDOCK_COVERAGE_PANELS','{}')),nanoq=os.environ.get('QUALIDOCK_NANOQ','nanoq'),rseqc_infer=os.environ.get('QUALIDOCK_RSEQC_INFER','infer_experiment.py'),rseqc_distribution=os.environ.get('QUALIDOCK_RSEQC_DISTRIBUTION','read_distribution.py'),rna_annotations=json.loads(os.environ.get('QUALIDOCK_RNA_ANNOTATIONS','{}')),java=os.environ.get('QUALIDOCK_JAVA','java'),picard=os.environ.get('QUALIDOCK_PICARD','picard.jar'))
     evidence={'scope':'actual tools; in-process HTTP latency, not browser/SSE/network acceptance','platform':sys.platform,
               'filesystems':[filesystem(path) for path in files], 'output_filesystem':filesystem(args.output), 'inputs':before,'input_bytes':sum(row['size'] for row in before),
               'input_integrity_evidence':'sha256_before_after' if args.hash_inputs else 'metadata_only_not_content_proof',
@@ -152,7 +170,10 @@ def main(args):
     try:
         with TestClient(create_app(settings),raise_server_exceptions=False) as client:
             client.headers.update({'Authorization':f'Bearer {settings.token}','X-QualiDock-Request':'1'})
+            submission_started=time.monotonic()
             response=client.post('/api/runs',json={'name':'Authorized filesystem benchmark','mode':args.mode,'paths':list(map(str,files)),'threads':args.threads,'processing_options':options,'qc_options':qc_options})
+            evidence['submission_seconds']=time.monotonic()-submission_started
+            evidence['submission_scope']='Input/configuration checks and cached-or-actual tool probes; not isolated JVM startup time'
             if response.status_code!=201: raise RuntimeError(f'Cannot start benchmark ({response.status_code}): {response.text}')
             run_id=response.json()['id']
             log_offset=0; snapshot=None
@@ -165,8 +186,12 @@ def main(args):
                     evidence['stages'].append({'stage':run['stage'],'elapsed_seconds':time.monotonic()-started})
                 process=client.app.state.manager.executor.processes.get(run_id)
                 if process:
-                    for pid,counters in usage(process.pid).items():
-                        previous=evidence['process_counters'].setdefault(pid,{key:0 for key in counters})
+                    executions=client.app.state.manager.runs[run_id].get('executions',[])
+                    index=len(executions)-1
+                    counters_by_pid=usage(process.pid)
+                    current=index if index>=0 and client.app.state.manager.executor.processes.get(run_id) is process and not executions[index]['finished_at'] else None
+                    for pid,counters in counters_by_pid.items():
+                        previous=evidence['process_counters'].setdefault(pid,{**{key:0 for key in counters},'execution_index':current})
                         for key,value in counters.items(): previous[key]=max(previous[key],value)
                 if run['state'] not in {'queued','running'}: break
                 for name,endpoint,params in [('logs',f'/api/runs/{run_id}/logs',{'offset':log_offset}),('files','/api/files',{'path':str(files[0].parent),'limit':10,**({'snapshot':snapshot} if snapshot else {})})]:
@@ -207,18 +232,32 @@ def main(args):
             evidence['output_hash_only_bytes']=evidence['derived_bytes']
             evidence['output_audit_seconds']=time.monotonic()-output_audit_started
             validation=run.get('processing',{}).get('input_validation',{})
-            if args.mode=='nanoplot':
+            if args.mode in {'nanoq','nanoplot'}:
                 validation_file=settings.output/run_id/'qc/private/source-validation.json'
                 validation=json.loads(bounded_text(validation_file)) if validation_file.exists() else {}
                 evidence['qc_options']=qc_options
                 evidence['registered_report_bytes']=sum(r['size'] for r in run['reports'])
-            if args.mode=='mosdepth':
+            if args.mode in alignment.MODES:
                 evidence['qc_options']=run['qc']['options']
                 evidence['registered_report_bytes']=sum(r['size'] for r in run['reports'])
-                evidence['alignment_validation']='SAMtools header/EOF and full stats scan; not a fresh cryptographic source/index binding'
+                evidence['alignment_validation']='SAMtools header/EOF and full stats scan (plus flagstat for SAMtools QC). EOF/quickcheck is not complete integrity validation; source SHA-256 is separate, indexes use existing authorization evidence.'
+                if run['qc'].get('annotation'):
+                    evidence['annotation']=run['qc']['annotation']
             checks=[('source',validation), *[(unit['id'],unit.get('output_validation',{})) for unit in run.get('processing',{}).get('units',[])]]
             evidence['validation_scans']=[{'stage':stage,'path':row['path'],'bytes_read':row['compressed_bytes_read'],'coverage':row['coverage'],'state':row['state'],'sha256':row['sha256']} for stage,check in checks for row in check.get('files',[])]
             evidence['execution_stages']=[{'tool':row['tool'],'stdout':row.get('stdout'),'argv':row['argv'],'started_at':row['started_at'],'finished_at':row['finished_at'],'exit_code':row['exit_code'],'resources':row.get('resources')} for row in run.get('executions',[])]
+            for index, stage in enumerate(evidence['execution_stages']):
+                argv=stage['argv']
+                stage['role']='fastq_validation' if stage['tool']=='FASTQ validation' else 'alignment_preflight' if stage['tool']=='samtools' and (argv[1] in {'head','quickcheck'} or args.mode!='samtools') else 'tool_execution'
+                observed=[v for v in evidence['process_counters'].values() if v.get('execution_index')==index]
+                stage['sampled_cpu_seconds']=sum(v['cpu_ticks'] for v in observed)/os.sysconf('SC_CLK_TCK') if observed else None
+                stage['cpu_scope']='Observed process CPU ticks; can miss short/final work, not complete per-stage CPU'
+            evidence['validation_observed_seconds']=sum((s.get('resources') or {}).get('elapsed_seconds',0) for s in evidence['execution_stages'] if s['role'] in {'fastq_validation','alignment_preflight'})
+            if args.mode=='picard':
+                evidence['jvm_observation']={'java_version':run['tools']['java']['version'],
+                    'picard_version':run['tools']['picard']['version'],
+                    'scope':'Picard execution wall/CPU/RSS includes JVM startup and scientific work; isolated JVM overhead was not measured. Submission includes tool probes. No inferred subtraction.',
+                    'heaps_mb':[r['picard']['heap_mb'] for r in run['qc']['results'] if r.get('picard')]}
             if sys.platform!='linux':
                 for stage in evidence['execution_stages']:
                     if stage['resources']:

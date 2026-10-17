@@ -174,7 +174,8 @@ jobs:
         if: matrix.multiqc == '1.35'
         env:
           QUALIDOCK_REQUIRE_PROCESSING_TESTS: '1'
-        run: pytest -q backend/tests/test_processing_real.py backend/tests/test_paired_processing.py backend/tests/test_benchmark.py backend/tests/test_inspector.py backend/tests/test_lineage.py
+          QUALIDOCK_REQUIRE_BENCHMARK_ALIGNMENT_TESTS: '1'
+        run: pytest -q backend/tests/test_processing_real.py backend/tests/test_paired_processing.py backend/tests/test_benchmark.py backend/tests/test_benchmark_alignment.py backend/tests/test_inspector.py backend/tests/test_lineage.py
       - uses: actions/upload-artifact@v4
         if: always() && matrix.multiqc == '1.35'
         with:
