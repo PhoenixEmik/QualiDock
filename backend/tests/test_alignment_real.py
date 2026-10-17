@@ -48,6 +48,14 @@ def test_actual_reports_metrics_multicq_provenance_and_restart(inputs, kind):
     subprocess.run([TOOL, 'index', str(source)], check=True, capture_output=True)
     hashes = {p: digest(p) for p in source.parent.iterdir()}
     expected = subprocess.run([TOOL, 'flagstat', str(source)], check=True, capture_output=True).stdout
+    # Independent CLI extraction, without using the application parser.
+    decode = ['--input-fmt-option', 'reference='+str(ref)] if kind == 'cram' else []
+    original_stats = subprocess.run([TOOL, 'stats', *decode, str(source)], check=True, capture_output=True, text=True).stdout
+    expected_rows = []
+    for line in original_stats.splitlines():
+        if line.startswith('SN\t'):
+            columns = line.split('\t')
+            expected_rows.append([columns[1], columns[2], columns[3] if len(columns) == 4 else ''])
     with TestClient(create_app(config)) as c:
         auth(c, config)
         listing = c.get('/api/files', params={'path': str(source.parent)}).json()
@@ -62,6 +70,7 @@ def test_actual_reports_metrics_multicq_provenance_and_restart(inputs, kind):
         row = run['qc']['results'][0]; data = row['alignment']
         assert data['quickcheck'] == 'passed (header/EOF only)'
         assert data['flagstat']['rows'][0] == ['in total (QC-passed reads + QC-failed reads)', '7', '1']
+        assert data['stats']['rows'] == expected_rows
         stats = dict((r[0], r[1]) for r in data['stats']['rows'])
         assert stats['raw total sequences:'] == '6' and stats['reads mapped:'] == '5' and stats['total length:'] == '40'
         downloaded = c.get(f'/api/runs/{run["id"]}/download', params={'path': data['reports']['flagstat']})
@@ -233,3 +242,17 @@ def test_hostile_and_colliding_filenames_preserve_multiqc_sources(inputs):
         assert c.get(f'/api/runs/{run["id"]}/download',params={'path':artifact}).status_code==403
         assert c.post(f'/api/runs/{run["id"]}/integrity',json={'mode':'full'}).status_code==400
     assert not list(bam.parent.rglob('INJECTED'))
+
+
+def test_truncated_and_false_cram_are_not_successful(inputs):
+    config,bam,cram,ref=inputs
+    truncated=cram.parent/'truncated.cram';truncated.write_bytes(cram.read_bytes()[:-38])
+    invalid=cram.parent/'false.cram';invalid.write_bytes(b'not a CRAM')
+    with TestClient(create_app(config)) as c:
+        auth(c,config)
+        assert c.post('/api/runs',json={'mode':'samtools','paths':[str(invalid)],'qc_options':{'reference':'test'}}).status_code==400
+        created=c.post('/api/runs',json={'mode':'samtools','paths':[str(truncated)],'qc_options':{'reference':'test'}})
+        assert created.status_code==201,created.text
+        run=wait(c,created.json()['id'])
+        assert run['state']=='failed' and not run['sample_count']
+        assert not any(r['path'].startswith('qc/') for r in run['reports'])
