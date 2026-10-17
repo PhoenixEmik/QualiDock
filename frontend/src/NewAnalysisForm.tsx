@@ -14,9 +14,17 @@ import { Empty } from "./Feedback";
 import { ReadRelationships } from "./SampleEditor";
 import OutputDirectory from "./OutputDirectory";
 import type { SampleConfiguration } from "./types";
-import type { Config, Entry, Run, ScreenOptions } from "./types";
+import type {
+  Config,
+  Entry,
+  Run,
+  ScreenOptions,
+  NanoPlotOptions,
+} from "./types";
 
 interface Props {
+  nanoPlotOptions: NanoPlotOptions;
+  setNanoPlotOptions: (value: NanoPlotOptions) => void;
   qcOptions: ScreenOptions;
   setQcOptions: (value: ScreenOptions) => void;
   config: Config | null;
@@ -40,6 +48,8 @@ interface Props {
   submit: () => Promise<void>;
 }
 export default function NewAnalysisForm({
+  nanoPlotOptions,
+  setNanoPlotOptions,
   qcOptions,
   setQcOptions,
   config,
@@ -68,15 +78,17 @@ export default function NewAnalysisForm({
       : entry.kind === "fastq";
   const configuredPaths = [...selected.values()].filter(suitable);
   const required =
-    mode === "fastq-screen"
-      ? ["fastq_screen", "bowtie2", ...(qcOptions.multiqc ? ["multiqc"] : [])]
-      : mode === "nanoq"
-        ? ["nanoq"]
-        : mode === "fastqc"
-          ? ["fastqc"]
-          : mode === "multiqc"
-            ? ["multiqc"]
-            : ["fastqc", "multiqc"];
+    mode === "nanoplot"
+      ? ["nanoplot"]
+      : mode === "fastq-screen"
+        ? ["fastq_screen", "bowtie2", ...(qcOptions.multiqc ? ["multiqc"] : [])]
+        : mode === "nanoq"
+          ? ["nanoq"]
+          : mode === "fastqc"
+            ? ["fastqc"]
+            : mode === "multiqc"
+              ? ["multiqc"]
+              : ["fastqc", "multiqc"];
   const unavailable = config
     ? required.filter((tool) => !config.tools[tool as keyof Config["tools"]])
     : [];
@@ -103,7 +115,14 @@ export default function NewAnalysisForm({
           <div className="field-label">QC workflow</div>
           <div className="mode-options" role="group" aria-label="QC workflow">
             {(
-              ["both", "fastqc", "multiqc", "nanoq", "fastq-screen"] as const
+              [
+                "both",
+                "fastqc",
+                "multiqc",
+                "nanoq",
+                "nanoplot",
+                "fastq-screen",
+              ] as const
             ).map((value) => (
               <button
                 key={value}
@@ -121,14 +140,61 @@ export default function NewAnalysisForm({
                       ? "Individual read quality assessment"
                       : value === "fastq-screen"
                         ? "Read-source mapping against an approved reference panel"
-                        : value === "nanoq"
-                          ? "Read-only long-read counts, N50 and quality summaries"
-                          : "Combine existing FastQC or fastp JSON reports"}
+                        : value === "nanoplot"
+                          ? "Original long-read plots and NanoStats"
+                          : value === "nanoq"
+                            ? "Read-only long-read counts, N50 and quality summaries"
+                            : "Combine existing FastQC or fastp JSON reports"}
                 </small>
                 {mode === value && <Check size={15} />}
               </button>
             ))}
           </div>
+          {mode === "nanoplot" && (
+            <div>
+              <p className="inline-note">
+                Each FASTQ receives an independent original NanoPlot report.
+                Time, channel activity and yield over time are unavailable from
+                ordinary FASTQ. No read filtering or platform identification.
+              </p>
+              <details className="processing-advanced">
+                <summary>Plot settings (optional)</summary>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={nanoPlotOptions.loglength}
+                    disabled={busy}
+                    onChange={(e) =>
+                      setNanoPlotOptions({
+                        ...nanoPlotOptions,
+                        loglength: e.target.checked,
+                      })
+                    }
+                  />{" "}
+                  Additional logarithmic length plots
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={nanoPlotOptions.individual_plots}
+                    disabled={busy}
+                    onChange={(e) =>
+                      setNanoPlotOptions({
+                        ...nanoPlotOptions,
+                        individual_plots: e.target.checked,
+                      })
+                    }
+                  />{" "}
+                  Save individual interactive plot HTML
+                </label>
+                <p className="inline-note">
+                  Input is fully read before plotting; plot sampling does not
+                  bound input I/O or initial memory. Plotly static export and
+                  automatic Chrome downloads are disabled.
+                </p>
+              </details>
+            </div>
+          )}
           {mode === "fastq-screen" && (
             <div>
               <label className="field-label" htmlFor="screen-panel">

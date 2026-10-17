@@ -28,6 +28,7 @@ import type {
   ProcessingOptions,
   DatasetReference,
   ScreenOptions,
+  NanoPlotOptions,
 } from "./types";
 import { Empty } from "./Feedback";
 import FileExplorer from "./FileExplorer";
@@ -86,6 +87,10 @@ export default function App() {
   const [rerunOf, setRerunOf] = useState<string | null>(null);
   const [mode, setMode] = useState<Run["mode"]>("both");
   const [threads, setThreads] = useState(1);
+  const [nanoPlotOptions, setNanoPlotOptions] = useState<NanoPlotOptions>({
+    loglength: false,
+    individual_plots: false,
+  });
   const [qcOptions, setQcOptions] = useState<ScreenOptions>({
     panel: "",
     subset: 100000,
@@ -458,7 +463,11 @@ export default function App() {
       const payload = {
         name,
         mode,
-        ...(mode === "fastq-screen" ? { qc_options: qcOptions } : {}),
+        ...(mode === "fastq-screen"
+          ? { qc_options: qcOptions }
+          : mode === "nanoplot"
+            ? { qc_options: nanoPlotOptions }
+            : {}),
         ...(isProcessing(mode)
           ? { processing_options: processingOptions }
           : {}),
@@ -542,7 +551,9 @@ export default function App() {
     setName(draft.name);
     setMode(draft.mode);
     if (draft.mode === "fastq-screen" && draft.qc_options)
-      setQcOptions(draft.qc_options);
+      setQcOptions(draft.qc_options as ScreenOptions);
+    if (draft.mode === "nanoplot" && draft.qc_options)
+      setNanoPlotOptions(draft.qc_options as NanoPlotOptions);
     if (isProcessing(draft.mode))
       setProcessingOptions(draft.processing_options || defaults(draft.mode));
     setMultiqcDirectory(
@@ -913,6 +924,8 @@ export default function App() {
           )}
           {view === "new" && (
             <NewAnalysisForm
+              nanoPlotOptions={nanoPlotOptions}
+              setNanoPlotOptions={setNanoPlotOptions}
               qcOptions={qcOptions}
               setQcOptions={setQcOptions}
               config={config}

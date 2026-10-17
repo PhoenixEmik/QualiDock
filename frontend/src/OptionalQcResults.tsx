@@ -15,6 +15,7 @@ const metrics: [string, string, string][] = [
 
 export default function OptionalQcResults({ run }: { run: Run }) {
   if (run.qc?.tool === "fastq_screen") return <ScreenResults run={run} />;
+  if (run.qc?.tool === "nanoplot") return <NanoPlotResults run={run} />;
   return (
     <section className="form-section" aria-label="nanoq QC results">
       <h2>nanoq long-read QC</h2>
@@ -123,6 +124,97 @@ export default function OptionalQcResults({ run }: { run: Run }) {
         MultiQC aggregation is unavailable for this JSON adapter. MultiQC's
         nanoq module expects a text report; the original JSON remains available.
       </p>
+    </section>
+  );
+}
+
+function NanoPlotResults({ run }: { run: Run }) {
+  const download = (path: string) =>
+    url(`/api/runs/${run.id}/download?path=${encodeURIComponent(path)}`);
+  return (
+    <section className="form-section" aria-label="NanoPlot QC results">
+      <h2>NanoPlot long-read QC</h2>
+      <p className="inline-note">
+        NanoPlot {run.tools?.nanoplot?.version || "version unavailable"}.
+        Original read-level NanoStats; these are independent of nanoq and FastQC
+        per-base statistics. Reported precision is preserved. Phred+33 is the
+        tool convention, not detected encoding. Reads above a Q threshold are
+        read-count percentages, not Q20/Q30 base percentages; reported Mb fields
+        are rounded by NanoPlot.
+      </p>
+      <p className="inline-note">
+        Time/channel activity and yield over time: unavailable from ordinary
+        FASTQ. Input is fully extracted before plotting. The upstream scatter
+        can display a random subset of up to 10,000 reads; NanoStats describes
+        the full input. Original interactive plots are in Reports. PNG export is
+        unavailable in this safe profile; it would require an upstream fix to
+        avoid automatic Chrome downloads.
+      </p>
+      {run.qc?.results.map((row) => (
+        <section className="form-section" key={row.id}>
+          <h3>{row.name}</h3>
+          <p className="mono output-destination">{row.path}</p>
+          <p role="status">
+            {row.state}
+            {row.error ? ` · ${row.error}` : ""}
+          </p>
+          {row.state === "completed" && row.nanoplot && (
+            <>
+              <div
+                className="table-scroll"
+                role="region"
+                aria-label={`NanoStats ${row.name}`}
+                tabIndex={0}
+              >
+                <table>
+                  <thead>
+                    <tr>
+                      {row.nanoplot.columns.map((c) => (
+                        <th key={c}>{c}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {row.nanoplot.rows.map(([key, value]) => (
+                      <tr key={key}>
+                        <th scope="row">{key}</th>
+                        <td>{value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <a className="button secondary small" href={download(row.report)}>
+                Download original NanoStats
+              </a>{" "}
+              <a
+                className="button secondary small"
+                href={download(row.nanoplot.html)}
+              >
+                Download original NanoPlot HTML
+              </a>
+              {row.nanoplot.plots.length > 0 && (
+                <details>
+                  <summary>Original plot files</summary>
+                  {row.nanoplot.plots.map((path) => (
+                    <p key={path}>
+                      <a href={download(path)}>
+                        Download {path.split("/").pop()}
+                      </a>
+                    </p>
+                  ))}
+                </details>
+              )}
+              <details>
+                <summary>Source provenance</summary>
+                <p className="mono output-destination">
+                  SHA-256: {row.source_sha256 || "Unavailable"}
+                </p>
+              </details>
+            </>
+          )}
+        </section>
+      ))}
     </section>
   );
 }

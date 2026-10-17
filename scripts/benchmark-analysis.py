@@ -73,7 +73,9 @@ def parser():
     result=argparse.ArgumentParser(description=__doc__)
     result.add_argument('--input',type=Path,nargs='+',required=True)
     result.add_argument('--output',type=Path,required=True,help='New private directory; must not already exist')
-    result.add_argument('--mode',choices=['fastqc','both',*sorted(processing.MODES)],default='both')
+    result.add_argument('--mode',choices=['fastqc','both','nanoplot',*sorted(processing.MODES)],default='both')
+    result.add_argument('--nanoplot-loglength',action='store_true')
+    result.add_argument('--nanoplot-individual-plots',action='store_true')
     result.add_argument('--threads',type=int,default=1)
     result.add_argument('--memory-mb',type=int)
     result.add_argument('--cancel-after',type=float)
@@ -128,10 +130,13 @@ def main(args):
         return asyncio.run(evaluate_falco(args, files, budget))
     os.umask(0o077)
     options=processing_options(args)
+    if (args.nanoplot_loglength or args.nanoplot_individual_plots) and args.mode != 'nanoplot':
+        raise ValueError('NanoPlot plotting options require --mode nanoplot')
+    qc_options={'loglength':args.nanoplot_loglength,'individual_plots':args.nanoplot_individual_plots} if args.mode=='nanoplot' else None
     args.output.mkdir(parents=True,mode=0o700)  # Refuse to overwrite any previous evidence/results.
     fingerprint_started=time.monotonic()
     before=[fingerprint(path,args.hash_inputs) for path in files]
-    settings=Settings(roots=list(dict.fromkeys(path.parent for path in files)),output=args.output/'results',frontend=args.output/'frontend',cpus=capacity,memory_mb=budget,fastqc=os.environ.get('QUALIDOCK_FASTQC','fastqc'),multiqc=os.environ.get('QUALIDOCK_MULTIQC','multiqc'),fastp=os.environ.get('QUALIDOCK_FASTP','fastp'),seqkit=os.environ.get('QUALIDOCK_SEQKIT','seqkit'))
+    settings=Settings(roots=list(dict.fromkeys(path.parent for path in files)),output=args.output/'results',frontend=args.output/'frontend',cpus=capacity,memory_mb=budget,fastqc=os.environ.get('QUALIDOCK_FASTQC','fastqc'),multiqc=os.environ.get('QUALIDOCK_MULTIQC','multiqc'),fastp=os.environ.get('QUALIDOCK_FASTP','fastp'),seqkit=os.environ.get('QUALIDOCK_SEQKIT','seqkit'),nanoplot=os.environ.get('QUALIDOCK_NANOPLOT','NanoPlot'))
     evidence={'scope':'actual tools; in-process HTTP latency, not browser/SSE/network acceptance','platform':sys.platform,
               'filesystems':[filesystem(path) for path in files], 'output_filesystem':filesystem(args.output), 'inputs':before,'input_bytes':sum(row['size'] for row in before),
               'input_integrity_evidence':'sha256_before_after' if args.hash_inputs else 'metadata_only_not_content_proof',
@@ -143,7 +148,7 @@ def main(args):
     try:
         with TestClient(create_app(settings),raise_server_exceptions=False) as client:
             client.headers.update({'Authorization':f'Bearer {settings.token}','X-QualiDock-Request':'1'})
-            response=client.post('/api/runs',json={'name':'Authorized filesystem benchmark','mode':args.mode,'paths':list(map(str,files)),'threads':args.threads,'processing_options':options})
+            response=client.post('/api/runs',json={'name':'Authorized filesystem benchmark','mode':args.mode,'paths':list(map(str,files)),'threads':args.threads,'processing_options':options,'qc_options':qc_options})
             if response.status_code!=201: raise RuntimeError(f'Cannot start benchmark ({response.status_code}): {response.text}')
             run_id=response.json()['id']
             log_offset=0; snapshot=None
@@ -198,6 +203,11 @@ def main(args):
             evidence['output_hash_only_bytes']=evidence['derived_bytes']
             evidence['output_audit_seconds']=time.monotonic()-output_audit_started
             validation=run.get('processing',{}).get('input_validation',{})
+            if args.mode=='nanoplot':
+                validation_file=settings.output/run_id/'qc/private/source-validation.json'
+                validation=json.loads(bounded_text(validation_file)) if validation_file.exists() else {}
+                evidence['qc_options']=qc_options
+                evidence['registered_report_bytes']=sum(r['size'] for r in run['reports'])
             checks=[('source',validation), *[(unit['id'],unit.get('output_validation',{})) for unit in run.get('processing',{}).get('units',[])]]
             evidence['validation_scans']=[{'stage':stage,'path':row['path'],'bytes_read':row['compressed_bytes_read'],'coverage':row['coverage'],'state':row['state'],'sha256':row['sha256']} for stage,check in checks for row in check.get('files',[])]
             evidence['execution_stages']=[{'tool':row['tool'],'started_at':row['started_at'],'finished_at':row['finished_at'],'exit_code':row['exit_code'],'resources':row.get('resources')} for row in run.get('executions',[])]

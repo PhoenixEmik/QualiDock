@@ -66,7 +66,7 @@ jobs:
         if: matrix.multiqc == '1.35'
         run: bash scripts/setup-processing-ci.sh
       - name: Provision optional QC tools
-        run: bash scripts/setup-optional-qc-ci.sh ${{ matrix.multiqc == '1.35' && '--falco-benchmark' || '' }}
+        run: bash scripts/setup-optional-qc-ci.sh ${{ matrix.multiqc == '1.35' && '--falco-benchmark --nanoplot' || '' }}
       - name: Actual FastQ Screen and MultiQC compatibility
         env:
           QUALIDOCK_REQUIRE_SCREEN_TESTS: '1'
@@ -86,6 +86,18 @@ jobs:
         env:
           QUALIDOCK_REQUIRE_OPTIONAL_QC_TESTS: '1'
         run: pytest -q backend/tests/test_nanoq_real.py
+      - name: Actual NanoPlot QC and plotting overhead
+        if: matrix.multiqc == '1.35'
+        env:
+          QUALIDOCK_REQUIRE_NANOPLOT_TESTS: '1'
+        run: pytest -q backend/tests/test_nanoplot_real.py
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.multiqc == '1.35'
+        with:
+          name: nanoplot-real-evidence
+          path: |
+            validation/nanoplot
+            validation/nanoplot-tooling.txt
       - name: Actual single/paired fastp and SeqKit processing
         if: matrix.multiqc == '1.35'
         env:
@@ -148,7 +160,11 @@ jobs:
       - name: Provision focused processing tools
         run: bash scripts/setup-processing-ci.sh
       - name: Provision optional QC tools
-        run: bash scripts/setup-optional-qc-ci.sh
+        run: bash scripts/setup-optional-qc-ci.sh --nanoplot
+      - name: NanoPlot original reports and native statistics
+        env:
+          QUALIDOCK_BROWSER: ${{ matrix.browser }}
+        run: pytest -q tests/browser/test_nanoplot_browser.py --junitxml=validation/nanoplot-browser.xml
       - name: Optional QC native interaction
         env:
           QUALIDOCK_BROWSER: ${{ matrix.browser }}
@@ -170,7 +186,7 @@ jobs:
         if: matrix.browser == 'chromium'
         env:
           QUALIDOCK_BROWSER: ${{ matrix.browser }}
-        run: pytest -q tests/browser --ignore=tests/browser/test_optional_qc_browser.py --ignore=tests/browser/test_processing_browser.py --ignore=tests/browser/test_inspector_browser.py --ignore=tests/browser/test_lineage_browser.py --junitxml=validation/report-browser.xml
+        run: pytest -q tests/browser --ignore=tests/browser/test_nanoplot_browser.py --ignore=tests/browser/test_optional_qc_browser.py --ignore=tests/browser/test_processing_browser.py --ignore=tests/browser/test_inspector_browser.py --ignore=tests/browser/test_lineage_browser.py --junitxml=validation/report-browser.xml
       - name: Firefox critical report isolation and interaction
         if: matrix.browser == 'firefox'
         env:
@@ -182,6 +198,8 @@ jobs:
           name: report-browser-${{ matrix.browser }}
           path: |
             validation/optional-qc-browser.xml
+            validation/nanoplot-browser.xml
+            validation/nanoplot-*.png
             validation/nanoq*.png
             validation/screen*.png
             validation/processing-browser.xml

@@ -49,6 +49,59 @@ JSON, invalid inputs, collision isolation, partial outcomes, validation cancella
 downloads, derived authorization and restart. CI provisions only test tools and
 exercises actual setup/results/restart interactions in Chromium and Firefox.
 
+## NanoPlot 1.48.0
+
+Set `QUALIDOCK_NANOPLOT` to an existing `NanoPlot` executable, or put it on PATH.
+Only the genuinely tested **1.48.0** contract is enabled. The application installs
+no packages or browsers. Tool dependencies stay outside QualiDock's runtime
+dependencies; CI uses an isolated environment and records installed versions.
+
+Choose **NanoPlot long-read QC** with authorized FASTQ/FASTQ.gz or exact registered
+derived datasets. Each file stays an independent observation. Pair/lane metadata
+is retained without merging files or applying short-read classifications. The
+existing full structure/gzip/SHA validator precedes execution; reported read/base
+totals must match before publication. Missing or malformed reports are failures,
+and incomplete namespaces are never registered as successful artifacts.
+
+Approved arguments: `--fastq`, `--threads`, `--outdir`, `--tsv_stats`, `--plots dot`,
+`--no_static`, `--include-js embedded`, normally `--only-report`. Defaults save
+NanoStats, one combined standalone HTML and the upstream log. Advanced controls
+add logarithmic length plots or preserve individual interactive HTML files.
+Opening reports never reruns QC. The original embedded Plotly report uses the
+existing opaque-origin viewer, without CDN allowances or CSP changes. All original
+files retain authenticated attachment downloads.
+
+Native tables preserve original NanoStats strings/rounding and compound fields.
+`Reads >Q…` percentages count **reads**, not Q20/Q30 bases; Mb fields are rounded
+upstream values. Mean read quality comes from NanoPlot/nanomath and is independent
+of nanoq's mean and FastQC's per-base values. No statistic is reconstructed.
+Ordinary FASTQ has no channel/start-time metadata: activity maps and yield **over
+time** are unavailable. Yield **by length** is a different supported upstream
+plot. Rich FASTQ, sequencing summaries, alignment/POD5 sources, filters, pickle/raw
+dumps and arbitrary CLI options are out of scope.
+
+Input is extracted before plotting. The upstream scatter can select up to 10,000
+random read points; plot-point selection has no reproducibility promise. NanoStats
+still describes the full input. This does not bound source I/O or initial memory.
+The approved profile does not request `--downsample`.
+
+**PNG is explicitly deferred by the confirmed #31 scope decision.** Genuine
+1.48.0 static export calls `get_chrome()`; legacy scatter also failed with modern
+seaborn (`stat_func`). Both paths stay disabled rather than installing a browser,
+patching the scientific tool or offering a broken control. Supported original
+visual artifacts are combined/individual interactive HTML. Investigated older
+NanoPlot versions are not offered or claimed compatible.
+
+Small actual ONT benchmark input: 20 reads / 26,248 bases / 23,565 gzip bytes.
+One local observation measured 4.821 s baseline vs 4.846 s advanced analysis wall
+time and 4,727,207 vs 37,377,624 registered report bytes. These include setup/full
+validation and are not repeated performance acceptance. SHA-256 matched before
+and after. Evidence under `validation/nanoplot/{baseline,advanced}/benchmark.json`
+retains scan bytes, stage timings, waited-child CPU and labeled memory/I/O.
+Local macOS cannot validate process-tree RSS enforcement; Linux CI supplies its
+own observation. No giant-input, NFS/Lustre or 11 GB summary acceptance is claimed;
+#5 stays open. PNG is the only intentionally deferred output format for #31.
+
 ## FastQ Screen 0.16.x (tested 0.16.0)
 
 Optional operator configuration:

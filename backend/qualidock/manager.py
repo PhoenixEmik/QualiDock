@@ -108,7 +108,7 @@ class RunManager:
 
     async def detect_tools(self):
         signature = []
-        for name in (self.settings.fastqc, self.settings.multiqc, self.settings.fastp, self.settings.seqkit, self.settings.nanoq, self.settings.fastq_screen, self.settings.bowtie2):
+        for name in (self.settings.fastqc, self.settings.multiqc, self.settings.fastp, self.settings.seqkit, self.settings.nanoq, self.settings.nanoplot, self.settings.fastq_screen, self.settings.bowtie2):
             executable = shutil.which(name)
             try:
                 stat = Path(executable).stat() if executable else None
@@ -117,7 +117,7 @@ class RunManager:
                 signature.append((name, None, None))
         async with self.tool_lock:
             if signature != self.tool_signature or time.monotonic() - self.tool_checked_at >= 60:
-                names = ("fastqc", "multiqc", "fastp", "seqkit", "nanoq", "fastq_screen", "bowtie2")
+                names = ("fastqc", "multiqc", "fastp", "seqkit", "nanoq", "nanoplot", "fastq_screen", "bowtie2")
                 detected = await asyncio.gather(*(detect_tool(name, getattr(self.settings, name)) for name in names))
                 self.tool_info = dict(zip(names, detected))
                 self.tool_signature = signature

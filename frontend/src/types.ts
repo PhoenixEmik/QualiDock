@@ -49,6 +49,7 @@ export interface Run {
     | "both"
     | "fastqc"
     | "multiqc"
+    | "nanoplot"
     | "nanoq"
     | "fastq-screen"
     | "fastp"
@@ -87,7 +88,7 @@ export interface Run {
   }[];
   processing?: ProcessingResult;
   qc?: {
-    tool: "nanoq" | "fastq_screen";
+    tool: "nanoq" | "nanoplot" | "fastq_screen";
     options: Record<string, unknown>;
     reference_panel?: {
       id: string;
@@ -103,6 +104,12 @@ export interface Run {
       error: string | null;
       report: string;
       source_sha256?: string;
+      nanoplot?: {
+        columns: string[];
+        rows: string[][];
+        html: string;
+        plots: string[];
+      };
       screen?: {
         columns: string[];
         rows: string[][];
@@ -233,7 +240,7 @@ export interface OutputLocation {
   error: string | null;
 }
 export interface RerunConfiguration extends SampleConfiguration {
-  qc_options?: ScreenOptions;
+  qc_options?: ScreenOptions | NanoPlotOptions;
   input_datasets?: DatasetReference[];
   name: string;
   mode: Run["mode"];
@@ -327,11 +334,16 @@ export interface Config {
     fastp?: boolean;
     seqkit?: boolean;
     nanoq?: boolean;
+    nanoplot?: boolean;
     fastq_screen?: boolean;
     bowtie2?: boolean;
   };
   prefix: string;
   tool_details?: Record<string, ToolInfo>;
+}
+export interface NanoPlotOptions {
+  loglength: boolean;
+  individual_plots: boolean;
 }
 export interface ScreenOptions {
   panel: string;

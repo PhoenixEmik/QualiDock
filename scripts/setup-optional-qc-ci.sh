@@ -18,7 +18,7 @@ chmod 700 "$qc_bin/FastQ-Screen-0.16.0/fastq_screen"
 bowtie2 --version
 if [ -n "${GITHUB_PATH:-}" ]; then echo "$qc_bin" >> "$GITHUB_PATH"; fi
 if [ -n "${GITHUB_PATH:-}" ]; then echo "$qc_bin/FastQ-Screen-0.16.0" >> "$GITHUB_PATH"; fi
-if [ "${1:-}" = "--falco-benchmark" ]; then
+if [[ " $* " == *" --falco-benchmark "* ]]; then
   # Qualification only. There is deliberately no Falco execution mode in the app.
   curl -fsSL https://github.com/smithlabcode/falco/releases/download/v2.0.3/falco-2.0.3-Linux.tar.gz -o "$qc_bin/falco.tar.gz"
   echo "a6e62934a84ee5210f1d7945ee2a806edf01083a52c3afad9abf31a054218d14  $qc_bin/falco.tar.gz" | sha256sum --check --status
@@ -28,4 +28,15 @@ if [ "${1:-}" = "--falco-benchmark" ]; then
   curl -fsSL https://raw.githubusercontent.com/nf-core/test-datasets/d5a0422243620ef4e32c19812ab12edb5dfc882e/testdata/sample_1.fastq.gz -o /tmp/qualidock-million-reads.fastq.gz
   echo "ee1fc6f0213515c1b5d0253ff37e1ad84207c43c059f73011baefd1c97ea9208  /tmp/qualidock-million-reads.fastq.gz" | sha256sum --check --status
   chmod 400 /tmp/qualidock-million-reads.fastq.gz
+fi
+if [[ " $* " == *" --nanoplot "* ]]; then
+  # Isolated external-tool installation, never an application dependency/install.
+  python -m venv "$qc_bin/nanoplot-env"
+  "$qc_bin/nanoplot-env/bin/pip" install 'NanoPlot==1.48.0' 'nanoget==1.19.6' \
+    'numpy==2.2.6' 'pandas==2.2.3' 'scipy==1.15.3' 'plotly==6.1.2'
+  "$qc_bin/nanoplot-env/bin/NanoPlot" --version
+  mkdir -p validation
+  "$qc_bin/nanoplot-env/bin/pip" freeze > validation/nanoplot-tooling.txt
+  # Expose only the tool; do not shadow the application's python/pip interpreter.
+  ln -s "$qc_bin/nanoplot-env/bin/NanoPlot" "$qc_bin/NanoPlot"
 fi

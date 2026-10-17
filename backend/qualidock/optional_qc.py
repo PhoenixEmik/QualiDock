@@ -9,12 +9,14 @@ from .outcomes import stop
 from .processing import local_file, validate
 from .metrics import bounded_text
 from .store import now, save_json
-from . import fastq_screen, multiqc
+from . import fastq_screen, multiqc, nanoplot
 
-MODES = {'nanoq', 'fastq-screen'}
+MODES = {'nanoq', 'fastq-screen', 'nanoplot'}
 
 
 def options(mode, supplied):
+    if mode == 'nanoplot':
+        return nanoplot.Options.model_validate(supplied or {}).model_dump()
     if mode == 'fastq-screen':
         return fastq_screen.Options.model_validate(supplied or {}).model_dump()
     if supplied:
@@ -23,6 +25,8 @@ def options(mode, supplied):
 
 
 def required(mode, value):
+    if mode == 'nanoplot':
+        return ['nanoplot']
     return ['nanoq'] if mode == 'nanoq' else ['fastq_screen', 'bowtie2', *(['multiqc'] if value['multiqc'] else [])]
 
 
@@ -67,7 +71,7 @@ def parse_nanoq(path):
 def records(paths, tool):
     from .outcomes import plan
     return [{**{key: row[key] for key in ('id', 'path', 'name', 'state', 'error', 'exit_code', 'finished_at')},
-             'report': f'qc/{row["id"]}/{row["id"]}_screen.txt' if tool == 'fastq-screen' else f'qc/{row["id"]}/{tool}.json', 'summary': None} for row in plan(paths)]
+             'report': f'qc/{row["id"]}/{row["id"]}_screen.txt' if tool == 'fastq-screen' else f'qc/{row["id"]}/NanoStats.txt' if tool == 'nanoplot' else f'qc/{row["id"]}/{tool}.json', 'summary': None} for row in plan(paths)]
 
 
 async def execute(manager, run, metrics, errors):
@@ -89,8 +93,12 @@ async def execute(manager, run, metrics, errors):
             await asyncio.to_thread(manager.checked_inputs, run)
             row['state'] = 'running'
             manager.update(run, stage=f'{run["qc"]["tool"]} · {row["name"]}')
-            summary, screen = None, None
-            if run['mode'] == 'fastq-screen':
+            summary, screen, plots = None, None, None
+            if run['mode'] == 'nanoplot':
+                plots = await nanoplot.execute(manager, run, row, source)
+                if run['id'] in manager.cancelled:
+                    break
+            elif run['mode'] == 'fastq-screen':
                 screen = await fastq_screen.execute(manager, run, row, source)
                 if run['id'] in manager.cancelled:
                     break
@@ -114,6 +122,8 @@ async def execute(manager, run, metrics, errors):
             row.update(state='completed', summary=summary, source_sha256=source['sha256'], error=None)
             if screen is not None:
                 row['screen'] = screen
+            if plots is not None:
+                row['nanoplot'] = plots
             run['report_input_map'][row['report']] = {'id': row['id'], 'path': row['path']}
         except (ValueError, OSError, KeyError, TypeError) as exc:
             row.update(state='failed', summary=None, error=str(exc))

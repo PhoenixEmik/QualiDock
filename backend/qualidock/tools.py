@@ -15,6 +15,7 @@ TOOL_SPECS = {
     'fastp': ('--version', (0, 23, 0), (2, 0, 0), '0.23 or newer, below 2'),
     'seqkit': ('version', (2, 6, 0), (3, 0, 0), '2.6 or newer, below 3'),
     'nanoq': ('--version', (0, 10, 0), (0, 10, 1), 'tested nanoq 0.10.0'),
+    'nanoplot': ('--version', (1, 48, 0), (1, 48, 1), 'tested NanoPlot 1.48.0'),
     'fastq_screen': ('--version', (0, 16, 0), (0, 17, 0), 'FastQ Screen 0.16.x'),
     'bowtie2': ('--version', (2, 4, 0), (3, 0, 0), 'Bowtie2 2.4 or newer, below 3'),
     'falco': ('--version', (2, 0, 3), (2, 1, 0), 'Falco 2.0.3–2.0.x'),

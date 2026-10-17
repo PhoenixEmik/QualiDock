@@ -34,3 +34,22 @@ test("preview query escapes paths and names and stays relative to the proxy pref
   assert.equal([...target.searchParams].length, 2);
   assert.ok(!relative.includes("<img"));
 });
+
+test("NanoPlot combined report precedes individual original plot HTML", () => {
+  const paths = [
+    "qc/id/LengthvsQualityScatterPlot_dot.html",
+    "qc/id/NanoPlot-report.html",
+    "qc/id/NanoStats.txt",
+  ];
+  assert.deepEqual(
+    htmlReports(paths.map((path) => ({ path, size: 100 }))).map((r) => r.path),
+    [paths[1], paths[0]],
+  );
+  assert.equal(
+    htmlReports([
+      ...paths.map((path) => ({ path, size: 100 })),
+      { path: "multiqc/multiqc_report.html", size: 100 },
+    ])[0].path,
+    "multiqc/multiqc_report.html",
+  );
+});

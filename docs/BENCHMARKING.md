@@ -136,3 +136,21 @@ matrix is `backend/tests/test_benchmark.py`; Linux CI additionally exercises the
 existing resource/cancellation validator. These tests establish benchmark
 implementation correctness only. Authorized large-file, cache/concurrent-load,
 NFS/Lustre, insufficient-space and site tuning acceptance remains pending.
+
+## NanoPlot plotting overhead
+
+The same benchmark supports the verified optional NanoPlot 1.48.0 profile:
+
+```sh
+QUALIDOCK_NANOPLOT=/path/to/NanoPlot python scripts/benchmark-analysis.py \
+  --input /authorized/reads.fastq.gz --output /new/private/nanoplot-baseline \
+  --mode nanoplot --threads 1 --hash-inputs
+```
+
+Repeat with a different new output plus `--nanoplot-loglength
+--nanoplot-individual-plots` for the optional larger plotting preset. Original
+input/derived-output classification stays unchanged: this QC operation creates
+no FASTQs. Evidence includes actual full validation bytes and registered report
+size. CPU/RSS/I/O retain the same measurement scopes above; no source throughput
+or initial-memory reduction is inferred from plot downsampling. NanoPlot reads
+the complete input first. See [supported plotting and PNG limitations](OPTIONAL-QC.md#nanoplot-1480).

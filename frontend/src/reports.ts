@@ -4,8 +4,13 @@ export function htmlReports(reports: Run["reports"]) {
   return reports
     .filter((report) => report.path.toLowerCase().endsWith(".html"))
     .sort((a, b) => {
-      const combined = (path: string) => path === "multiqc/multiqc_report.html";
-      return Number(combined(b.path)) - Number(combined(a.path));
+      const priority = (path: string) =>
+        path === "multiqc/multiqc_report.html"
+          ? 2
+          : path.endsWith("/NanoPlot-report.html")
+            ? 1
+            : 0;
+      return priority(b.path) - priority(a.path);
     });
 }
 

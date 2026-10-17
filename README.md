@@ -43,6 +43,10 @@ Optional [nanoq 0.10.0 long-read QC](docs/OPTIONAL-QC.md) provides read-only cou
 N50, length and read-quality summaries through the existing Quality Control view.
 Configure `QUALIDOCK_NANOQ` or place the executable on PATH; it is independent of
 FastQC and no tool is installed automatically.
+Optional [NanoPlot 1.48.0](docs/OPTIONAL-QC.md#nanoplot-1480) adds original long-read
+interactive HTML, NanoStats and optional individual plot HTML. Configure
+`QUALIDOCK_NANOPLOT`. PNG export is explicitly deferred to avoid upstream browser
+downloads and incompatible legacy export; existing report isolation is unchanged.
 Optional [FastQ Screen](docs/OPTIONAL-QC.md#fastq-screen-016x-tested-0160) uses
 administrator-approved, prebuilt Bowtie2 reference panels for read-level source
 screening. Original reports and verified MultiQC aggregation remain available;
