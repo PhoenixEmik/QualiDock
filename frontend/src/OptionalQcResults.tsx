@@ -104,6 +104,7 @@ export default function OptionalQcResults({ run }: { run: Run }) {
               </details>
               <a
                 className="button small"
+                download
                 href={url(
                   `api/runs/${run.id}/download?path=${encodeURIComponent(row.report)}`,
                 )}
@@ -186,11 +187,16 @@ function NanoPlotResults({ run }: { run: Run }) {
                   </tbody>
                 </table>
               </div>
-              <a className="button secondary small" href={download(row.report)}>
+              <a
+                download
+                className="button secondary small"
+                href={download(row.report)}
+              >
                 Download original NanoStats
               </a>{" "}
               <a
                 className="button secondary small"
+                download
                 href={download(row.nanoplot.html)}
               >
                 Download original NanoPlot HTML
@@ -200,7 +206,7 @@ function NanoPlotResults({ run }: { run: Run }) {
                   <summary>Original plot files</summary>
                   {row.nanoplot.plots.map((path) => (
                     <p key={path}>
-                      <a href={download(path)}>
+                      <a download href={download(path)}>
                         Download {path.split("/").pop()}
                       </a>
                     </p>
@@ -297,6 +303,7 @@ function ScreenResults({ run }: { run: Run }) {
               </div>
               <a
                 className="button small"
+                download
                 href={url(
                   `api/runs/${run.id}/download?path=${encodeURIComponent(row.report)}`,
                 )}

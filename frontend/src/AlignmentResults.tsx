@@ -90,6 +90,7 @@ export default function AlignmentResults({ run }: { run: Run }) {
                   <a
                     key={name}
                     className="button small"
+                    download
                     href={url(
                       `api/runs/${run.id}/download?path=${encodeURIComponent(path)}`,
                     )}

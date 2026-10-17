@@ -231,7 +231,13 @@ async def execute(manager, run, metrics, errors):
         manager.update(run, sample_count=sum(r['state'] == 'completed' for r in run['qc']['results']))
     metrics['qc'] = run['qc']
     if run['id'] not in manager.cancelled and run['qc']['options']['multiqc']:
-        reports = [directory/path for row in run['qc']['results'] if row['state'] == 'completed' for name, path in row['alignment']['reports'].items() if name in {'flagstat', 'stats'}]
+        # Genuine 1.25.1 flagstat aggregation divides N/A (None) by total and
+        # crashes. Feed original stats only; never replace N/A or rewrite reports.
+        legacy = run['tools']['multiqc']['version'] == '1.25.1'
+        sections = {'stats'} if legacy else {'flagstat', 'stats'}
+        if legacy:
+            run['warnings'].append('MultiQC 1.25.1 aggregates SAMtools stats only: its flagstat module fails on N/A percentages. Original flagstat and native counts remain available.')
+        reports = [directory/path for row in run['qc']['results'] if row['state'] == 'completed' for name, path in row['alignment']['reports'].items() if name in sections]
         if reports:
             problem = await multiqc.execute(manager, run, reports)
             if problem:

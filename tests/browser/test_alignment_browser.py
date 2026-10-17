@@ -45,6 +45,8 @@ def test_alignment_selection_stats_reports_reference_and_restart(workspace,brows
         with page.expect_download() as downloaded:
             panel.get_by_role('link',name='Download original flagstat',exact=True).click()
         assert downloaded.value.suggested_filename.endswith('.flagstat.txt')
+        # Attachment navigation must not leave live SSE updates at running.
+        playwright.expect(page.locator('.state.completed')).to_be_visible(timeout=10000)
         page.set_viewport_size({'width':390,'height':844})
         page.wait_for_function('() => document.documentElement.scrollWidth<=innerWidth+1')
         suffix=workspace.settings.prefix.replace('/','-') or '-root'

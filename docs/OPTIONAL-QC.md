@@ -214,7 +214,12 @@ source mappings are accepted only from the verified Samtools stats/flagstat
 sections. Original reports remain available if aggregation/mapping fails. This
 is separate from importing arbitrary external SAMtools directories; that new
 import workflow is not offered. MultiQC original HTML uses the unchanged isolated
-viewer. Initial version-matrix acceptance is recorded after required CI finishes.
+viewer. Genuine MultiQC **1.25.1** crashes in its flagstat module when reported
+percentages are `N/A` (`None / total`). That version therefore aggregates the
+original **stats only**, with an explicit run warning and no false flagstat source
+mapping. Original flagstat remains natively viewable/downloadable, unchanged;
+no missing value is converted to zero. MultiQC **1.35** supports both sections.
+Version-matrix acceptance is recorded after required CI finishes.
 
 Small synthetic SAM/reference fixtures explicitly define 8 alignment records
 (primary 6, secondary 1, supplementary 1) and original SAMtools outputs. Tests

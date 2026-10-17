@@ -28,7 +28,7 @@ fixture = importlib.util.module_from_spec(spec);spec.loader.exec_module(fixture)
 def inputs(tmp_path):
     bam, cram, ref = fixture.prepare(tmp_path/'inputs', TOOL)
     config = Settings(roots=[tmp_path/'inputs'], output=tmp_path/'results', frontend=tmp_path/'frontend', token='alignment-test',
-                      samtools=TOOL, alignment_references={'test': str(ref)}, cpus=1, memory_mb=2048, allow_root=True)
+                      samtools=TOOL, multiqc=os.environ.get('QUALIDOCK_MULTIQC','multiqc'), alignment_references={'test': str(ref)}, cpus=1, memory_mb=2048, allow_root=True)
     return config, bam, cram, ref
 
 
@@ -64,7 +64,9 @@ def test_actual_reports_metrics_multicq_provenance_and_restart(inputs, kind):
         created = c.post('/api/runs', json={'mode': 'samtools', 'paths': [str(source)], 'qc_options': {'reference': 'test' if kind == 'cram' else None, 'multiqc': bool(shutil.which(config.multiqc))}})
         assert created.status_code == 201, created.text
         run = wait(c, created.json()['id'], timeout=60)
-        assert run['state'] == 'completed', run['error']
+        retained = Path('validation/alignment')/kind
+        shutil.copytree(config.output/run['id'], retained, dirs_exist_ok=True)
+        assert run['state'] == 'completed', (run['error'], (config.output/run['id']/'analysis.log').read_text()[-10000:])
         assert run['tools']['samtools']['version'] == run['tools']['samtools']['htslib_version'] == '1.22.1'
         assert not run['input_pairing'] and not run['sample_groups'] and not run.get('derived_datasets')
         row = run['qc']['results'][0]; data = row['alignment']
@@ -78,12 +80,15 @@ def test_actual_reports_metrics_multicq_provenance_and_restart(inputs, kind):
         assert not any(e['argv'][1] in {'index', 'sort', 'view', 'faidx'} for e in run['executions'] if e['tool'] == 'samtools')
         assert all(e['environment']['REF_PATH'] == '/dev/null' and e['environment']['REF_CACHE'] == '/dev/null' for e in run['executions'] if e['tool'] == 'samtools')
         if 'multiqc' in run['tools']:
-            assert all(v.get('multiqc_name') for v in run['report_input_map'].values())
-            assert len(set(v['multiqc_name'] for v in run['report_input_map'].values())) == 1
+            names = {v['multiqc_name'] for v in run['report_input_map'].values() if v.get('multiqc_name')}
+            assert len(names) == 1
+            for path, mapping in run['report_input_map'].items():
+                excluded = run['tools']['multiqc']['version'] == '1.25.1' and path.endswith('.flagstat.txt')
+                assert bool(mapping.get('multiqc_name')) is not excluded
+            if run['tools']['multiqc']['version'] == '1.25.1':
+                assert any('stats only' in message for message in run['warnings'])
         assert c.get(f'/api/runs/{run["id"]}/configuration').json()['mode'] == 'samtools'
         assert c.get('/api/history?mode=samtools').json()['total'] == 1
-        retained = Path('validation/alignment')/kind
-        shutil.copytree(config.output/run['id'], retained, dirs_exist_ok=True)
     with TestClient(create_app(config)) as c:
         auth(c, config)
         assert c.get(f'/api/runs/{run["id"]}').json()['qc'] == run['qc']
@@ -232,9 +237,9 @@ def test_hostile_and_colliding_filenames_preserve_multiqc_sources(inputs):
         created=c.post('/api/runs',json={'mode':'samtools','paths':names,'qc_options':{'multiqc':True}})
         assert created.status_code==201,created.text
         run=wait(c,created.json()['id'],timeout=60)
-        assert run['state']=='completed',run['error']
+        assert run['state']=='completed',(run['error'],(config.output/run['id']/'analysis.log').read_text()[-10000:])
         mappings=run['report_input_map']
-        assert len(mappings)==4 and len({r['multiqc_name'] for r in mappings.values()})==2
+        assert len(mappings)==4 and len({r['multiqc_name'] for r in mappings.values() if r.get('multiqc_name')})==2
         assert {r['path'] for r in mappings.values()}==set(names)
         # Private/failed namespaces and arbitrary paths never become attachments.
         artifact=next(r['path'] for r in run['reports'] if r['path'].endswith('.stats.txt'))
