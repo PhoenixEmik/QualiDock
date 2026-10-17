@@ -69,6 +69,14 @@ jobs:
         run: bash scripts/setup-optional-qc-ci.sh ${{ matrix.multiqc == '1.35' && '--falco-benchmark --nanoplot' || '' }}
       - name: Provision alignment QC tool
         run: bash scripts/setup-alignment-ci.sh ${{ matrix.multiqc == '1.35' && '--mosdepth' || '' }}
+      - name: Verify actual RNA-seq CLI and original reports
+        if: matrix.multiqc == '1.35'
+        run: bash scripts/setup-rna-ci.sh
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.multiqc == '1.35'
+        with:
+          name: rna-tool-study
+          path: validation/rna-tool-study
       - name: Actual SAMtools, CRAM reference safety and MultiQC compatibility
         env:
           QUALIDOCK_REQUIRE_ALIGNMENT_TESTS: '1'

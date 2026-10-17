@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Test-only upstream environment. QualiDock never installs scientific tools.
+set -euo pipefail
+rna_tools="${RUNNER_TEMP:-/tmp}/qualidock-rna-tools"
+mkdir -p "$rna_tools" validation/rna-tool-study
+python -m venv "$rna_tools/venv"
+"$rna_tools/venv/bin/python" -m pip install 'RSeQC==5.0.5'
+"$rna_tools/venv/bin/python" -m pip freeze > validation/rna-tool-study/dependencies.txt
+for operation in infer_experiment read_distribution; do
+  "$rna_tools/venv/bin/$operation.py" --version > "validation/rna-tool-study/$operation.version.txt"
+  "$rna_tools/venv/bin/$operation.py" --help > "validation/rna-tool-study/$operation.help.txt"
+done
+python scripts/prepare-rna-test.py --output "$rna_tools/fixture"
+"$rna_tools/venv/bin/infer_experiment.py" -i "$rna_tools/fixture/input.bam" -r "$rna_tools/fixture/genes.bed12" -s 200000 -q 30 > validation/rna-tool-study/input.infer_experiment.txt 2> validation/rna-tool-study/input.infer_experiment.log
+"$rna_tools/venv/bin/read_distribution.py" -i "$rna_tools/fixture/input.bam" -r "$rna_tools/fixture/genes.bed12" > validation/rna-tool-study/input.read_distribution.txt 2> validation/rna-tool-study/input.read_distribution.log
+cp "$rna_tools/fixture/genes.bed12" "$rna_tools/fixture/input.sam" validation/rna-tool-study/
+if [ -n "${GITHUB_PATH:-}" ]; then echo "$rna_tools/venv/bin" >> "$GITHUB_PATH"; fi
