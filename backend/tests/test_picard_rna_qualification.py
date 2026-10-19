@@ -74,3 +74,15 @@ def test_fixture_generation_stays_test_only_and_preserves_gene_identity(tmp_path
     fields=(path.parent/'genes.refFlat').read_text().strip().split('\t')
     assert fields==['geneA','txA','chrRNA','+','100','900','200','800','2','100,500,','300,900,']
     assert 'CollectRnaSeqMetrics' not in (ROOT/'backend/qualidock/optional_qc.py').read_text()
+
+
+@pytest.mark.parametrize('include_empty',[False,True])
+def test_actual_multiqc_empty_trace_contract_preserves_every_reported_point(include_empty):
+    expected={'uniform':STUDY.metrics(FIX/'flat-plus-NONE.rna_metrics.txt')['histogram'],'unavailable':[]}
+    lines=[{'name':'uniform','pairs':expected['uniform']}]
+    if include_empty:lines.append({'name':'unavailable','pairs':[]})
+    assert STUDY.verify_coverage_traces(lines,expected)==(['unavailable'] if include_empty else [])
+    for invalid in [[],[{'name':'other','pairs':[]}],lines+[lines[0]],
+                    [{'name':'uniform','pairs':[[0,'2']]}],
+                    [*lines,{'name':'unavailable','pairs':[[0,'0']]}]]:
+        with pytest.raises(AssertionError):STUDY.verify_coverage_traces(invalid,expected)

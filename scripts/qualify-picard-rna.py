@@ -103,6 +103,18 @@ def fixture(directory, kind):
     return directory/'input.bam'
 
 
+def verify_coverage_traces(lines, expected):
+    """1.25.1 retains empty traces; 1.35 omits them. Neither invents points."""
+    seen=set()
+    for line in lines:
+        name=line['name']
+        assert name in expected and name not in seen,'Unknown/duplicate coverage sample'
+        seen.add(name)
+        assert [(Decimal(str(p)),Decimal(str(v))) for p,v in line['pairs']]==[(Decimal(p),Decimal(v)) for p,v in expected[name]],'Coverage differs from original report'
+    assert {name for name,pairs in expected.items() if pairs} <= seen,'Missing available coverage'
+    return sorted(name for name in seen if not expected[name])
+
+
 async def qualify_multiqc(root, executable, run):
     from qualidock.import_formats import source_mappings
     before={p:digest(p) for p in root.glob('*.rna_metrics.txt')}
@@ -145,11 +157,12 @@ async def qualify_multiqc(root, executable, run):
                 assert general[names[0]]['PCT_MRNA_BASES']==mapped['PCT_MRNA_BASES']
                 if original['PCT_RIBOSOMAL_BASES']:
                     assert abs(Decimal(str(general[names[0]]['PCT_RIBOSOMAL_BASES']))-Decimal(original['PCT_RIBOSOMAL_BASES'])*100)<Decimal('0.00000001')
+            expected={}
+            for report,source_name in zip(reports,['flat-plus-NONE','bias-plus-NONE','with-rrna']):
+                sample=next(sample for sample,path in sources.items() if Path(path)==report)
+                expected[sample]=metrics(root/(source_name+'.rna_metrics.txt'))['histogram']
             lines=data['report_plot_data']['picard_rna_coverage']['datasets'][0]['lines']
-            assert len(lines)==2 # The rRNA category fixture has no eligible profile.
-            for line,source_name in zip(sorted(lines,key=lambda line:line['name']),['flat-plus-NONE','bias-plus-NONE']):
-                original=metrics(root/(source_name+'.rna_metrics.txt'))['histogram']
-                assert [(int(p),Decimal(str(v))) for p,v in line['pairs']]==[(int(p),Decimal(v)) for p,v in original]
+            configurations[name]['empty_coverage_traces']=verify_coverage_traces(lines,expected)
             # The production allowlist intentionally has no RNA entry yet.
             # Record that a subsequent adapter must add it, never guess names.
             production=source_mappings(directory/'multiqc/multiqc_data/multiqc_data.json')

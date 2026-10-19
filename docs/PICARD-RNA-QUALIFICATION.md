@@ -206,6 +206,12 @@ The current production source-map allowlist supports InsertSizeMetrics only;
 its rejection of RNA entries is retained and tested. A later adapter needs one
 explicit section addition and verified names, not a new mapper.
 
+MultiQC 1.25.1 retains a sample's empty coverage trace when no eligible transcript
+profile exists; 1.35 omits that empty trace. The contract verifies every existing
+trace against its original histogram, requires all available profiles and rejects
+unknown, duplicated, altered or fabricated points. It explicitly permits either
+representation of unavailable coverage; an empty trace is not a zero-valued curve.
+
 LIBRARY +ALL_READS reports are studied but not approved for combined native
 sample identity: the official RNA module reads a population without preserving
 all independent accumulation semantics. A future mode should initially permit
