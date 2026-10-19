@@ -4,6 +4,46 @@ QualiDock remains `0.1.0.dev0`; no release is tagged or published. This is the
 current acceptance record. Development-phase documents describe historical
 implementation environments and do not override this record.
 
+## RSeQC gene-body coverage — 2026-10-19
+
+[CI 39192950625](https://github.com/PhoenixEmik/QualiDock/actions/runs/39192950625)
+on code `27ac706` passed **all eight jobs**. This completes #34 on top of the
+merged #36 genuine-tool qualification. No release/tag is prepared or published;
+#35 has not started. Scientific contracts, provenance and the complete change
+footprint are in [RNA-QC.md](RNA-QC.md#rseqc-gene-body-coverage-505-34).
+
+| Check | Accepted evidence |
+| --- | --- |
+| Complete backend CI | 517 passed /195 missing-optional-tool skips; provisioned jobs run the genuine tools |
+| Gene-body parser + actual tools | 49 passed, no skips; sorted BAM, BAI/CSI, exact 1–100 values, public hg19 subset, original R PNG, zero/constant/short profiles, malformed output, cancellation, restart and source/index immutability |
+| Existing #36 qualification | 9 pure report-contract tests retained, genuine version/help/original table/PNG/hash study rerun |
+| MultiQC | 1.25.1 /1.35 /latest 1.x compatibility jobs passed; original 100 values and source mappings, duplicate BAM basenames and failed aggregation preserved independently |
+| Frontend | 150 passed; TypeScript/Vite build passed; actual ECharts visibility actions, original-value tooltips and responsive SVG rendering |
+| Chromium /Firefox | 75 /51 cases, zero failures/errors/skips; six RNA cases per browser across the three existing prefix contexts; original downloads, native chart/export, mobile and restart |
+| Existing scientific/resource/security regressions | FastQC/MultiQC, fastp/SeqKit, SAMtools/CRAM, mosdepth, nanoq/NanoPlot/Screen, authenticated artifact/report isolation, derived reuse, lineage and Linux 1 CPU /1 GiB cgroup jobs passed |
+| Local complete backend | 579 passed /131 missing-optional-tool skips /2 sandbox-blocked remote-search canaries deselected; both canaries remain enabled in accepted Linux CI |
+
+Actual source values and manifests were independently checked from downloaded
+`genebody-qc-evidence` (49-case JUnit, no skips); all 100 strings agree with the
+original table for BAI, CSI, alternate BAI naming and the public hg19 fixture.
+Browser JUnit and desktop Chromium/mobile Firefox screenshots were inspected
+under ignored `validation/genebody-browser`. Original R min-max normalization is
+explicitly distinguished from the native unnormalized table; no pixel-perfect
+claim, bias threshold, invented ratio or absolute-depth claim is made.
+
+Tested: RSeQC 5.0.5 (CLI 5.05), SAMtools 1.22.1, MultiQC 1.25.1/1.35, Rscript
+4.4.1 on macOS and 4.3.3 in Linux CI. Existing process/resource/cancellation and
+artifact security controls are reused. Special output-root HTSlib markers cannot
+alter controlled relative index arguments. Failed PNG/aggregation bundles are
+not registered, including after restart. No original BAM/index/annotation is
+modified; all test-generated indexes stay in test-owned directories.
+
+Limits remain explicit: BAM only; annotation name/coordinate compatibility is
+not independent assembly verification; indexed-count agreement is operational
+evidence rather than cryptographic proof of every index interval. Exact short-
+transcript reports with inconsistent percentile counts are rejected, not filled.
+Tiny fixtures are not large-BAM/NFS/Lustre performance acceptance; #5 stays open.
+
 ## RNA-seq and library alignment QC — 2026-10-17
 
 [CI 39023607426](https://github.com/PhoenixEmik/QualiDock/actions/runs/39023607426)

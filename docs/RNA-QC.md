@@ -413,11 +413,62 @@ its maximum is 1, while the source table maximum is 2. This is normalization,
 not a discrepancy to "correct" by editing upstream reports.
 
 Local genuine execution additionally uses RSeQC 5.0.5, SAMtools 1.22.1 and
-Rscript 4.4.1. Linux CI uses its existing pinned R runtime and executes required
+Rscript 4.4.1. Linux CI uses its existing provisioned R runtime and executes required
 index, original-report, cancellation, restart, plot-failure and scientific-value
-regressions. Final accepted CI/test results are recorded in VALIDATION.md after
-completion. Tiny fixtures are fidelity/security evidence only: full hashing adds
+regressions. Accepted CI/test results are recorded in [VALIDATION.md](VALIDATION.md#rseqc-gene-body-coverage--2026-10-19). Tiny fixtures are fidelity/security evidence only: full hashing adds
 two BAM passes and the indexed-count check another mapped-record pass in addition
 to existing stats and scientific work. No large-BAM, NFS/Lustre throughput or
 representative memory-performance acceptance is claimed; #5 remains independent.
 CRAM and Picard CollectRnaSeqMetrics (#35) remain outside this milestone.
+
+
+### Final acceptance and footprint
+
+Code `27ac706` passed [CI 39192950625](https://github.com/PhoenixEmik/QualiDock/actions/runs/39192950625),
+**all eight jobs**. The required Gene Body job passed **49 tests with no skips**;
+the **9 original #36 qualification tests** remain enabled in the complete backend
+job. Frontend **150 passed** with TypeScript/Vite build. Downloaded browser JUnit
+records contain **75 Chromium /51 Firefox**, zero failures/errors/skips. Both
+browsers cover root and the two existing reverse-proxy prefixes, real execution,
+original PNG/table downloads, SVG export, parameter submission, file browsing,
+mobile layout and restart. Desktop Chromium and mobile Firefox screenshots were
+visually reviewed against the original R PNG/table; this is not pixel equivalence.
+The table's raw maximum 2 versus the original normalized PNG maximum 1 is
+intentional and explained in the UI.
+
+Evidence artifacts: `genebody-qc-evidence`, `rna-gene-body-tool-study`,
+`rna-multiqc-1.25.1-evidence`, `rna-multiqc-1.35-evidence`,
+`rna-multiqc-latest-1x-evidence`, and `report-browser-*`. Local copies are under
+ignored `validation/genebody-accepted` and `validation/genebody-browser`.
+Independent artifact inspection confirmed all 100 original strings and persisted
+source/index hashes for BAI, CSI, alternate BAI spelling and the public hg19
+subset. The latter is sorted/indexed only in test-owned storage; its committed
+original and annotation remain unchanged. Browser-generated BAM/index files
+also stay in isolated test-owned directories.
+
+Tested tools: **RSeQC 5.0.5 /CLI 5.05**, **SAMtools 1.22.1**, **MultiQC 1.25.1 and
+1.35**, **Rscript 4.4.1 locally /4.3.3 in Linux CI**. Local complete backend:
+**579 passed /131 missing-optional-tool skips /2 sandbox-blocked remote-search
+canaries deselected**. The canaries stay enabled in the accepted Linux backend
+job (**517 passed /195 missing-tool skips**); required provisioned jobs execute
+actual supported tools, including existing FASTQ/processing/alignment workflows.
+The existing Vite chunk-size warning remains; no assertions or supported tests
+were disabled to achieve acceptance.
+
+Relative to merged qualification baseline `d4e5fe2`, application production code
+changes **+268 /-60 lines, net +208**, across 20 files. Overall scope including
+this validation record: **10 added /28 modified /0 deleted files**. No runtime
+dependency, database, executor or persistence migration is added. The only new
+production file is `frontend/src/geneBodyChart.ts`; existing `rseqc.py` owns the
+focused adapter/parser and existing `NativePlot` /`ReportedTable` provide chart
+lifecycle, exports and raw-data inspection.
+
+Added tests: `backend/tests/test_genebody.py`, `backend/tests/test_genebody_real.py`,
+`frontend/tests/genebody.test.ts`; six genuine fixture/provenance files are in
+`backend/tests/fixtures/rseqc-5.0.5/genebody`. The existing #36 qualification
+script/test/workflow are reused, with a strict version/help/hash study extension.
+The full [file inventory and review diff](https://github.com/PhoenixEmik/QualiDock/compare/d4e5fe2...27ac706)
+records the small alignment/tool/config/API/history/artifact wiring, RNA setup/
+results/types, source-mapping compatibility, browser tests and documentation.
+There is no release, OOD/PBS change, #35 implementation or representative
+large/shared-storage acceptance (#5 remains open).
