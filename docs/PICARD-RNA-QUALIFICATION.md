@@ -107,8 +107,10 @@ BED12 supplies coordinates, strand and one name, but not necessarily distinct
 unambiguous gene/transcript IDs. An explicit offline conversion is feasible only
 with an independently curated transcript→gene mapping and verified CDS semantics:
 absolute exon starts = chromStart + blockStart; exon ends add blockSize;
-transcript and thick bounds retain their half-open convention. Ordinary BED12
-alone is insufficient. No runtime conversion, gene-name guessing, download,
+transcript and thick bounds retain their half-open convention. The study explicitly converts its known BED12 fixture offline using a separately
+supplied transcript→gene JSON, verifies byte-identical refFlat, then verifies
+identical original Picard metric rows. This qualifies that fixture conversion,
+not arbitrary BED12 annotation semantics. Ordinary BED12 alone is insufficient. No runtime conversion, gene-name guessing, download,
 reference manager or annotation database is proposed or implemented.
 
 ## Independently checked scientific observations
@@ -234,3 +236,15 @@ Smallest subsequent changes after review:
 No merge, #35 closure, production mode or release is performed by this study.
 CI evidence/results and any remaining qualification limitations are recorded
 below once the branch's actual workflows complete.
+
+## Pinned upstream definitions
+
+Picard is MIT-licensed; the JAR and R installation are not added as application
+dependencies or committed with this study. Scientific definitions are checked
+against original 3.5.0 sources and genuine output:
+
+- [CollectRnaSeqMetrics CLI](https://github.com/broadinstitute/picard/blob/3.5.0/src/main/java/picard/analysis/CollectRnaSeqMetrics.java)
+- [Original metric definitions](https://github.com/broadinstitute/picard/blob/3.5.0/src/main/java/picard/analysis/RnaSeqMetrics.java)
+- [Collector, eligibility and normalization](https://github.com/broadinstitute/picard/blob/3.5.0/src/main/java/picard/analysis/directed/RnaSeqMetricsCollector.java)
+- [RefFlatReader](https://github.com/broadinstitute/picard/blob/3.5.0/src/main/java/picard/annotation/RefFlatReader.java)
+- [Gene coverage-counter boundary](https://github.com/broadinstitute/picard/blob/3.5.0/src/main/java/picard/annotation/Gene.java)

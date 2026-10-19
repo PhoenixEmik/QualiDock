@@ -111,7 +111,7 @@ async def qualify_multiqc(root, executable, run):
     config={'picard_config':{'s_name_filenames':True}} if version=='1.25.1' else {'use_filename_as_sample_name':['picard']}
     # Duplicate original BAM basenames; only report filenames/namespaces differ.
     reports=[]
-    for i,source in enumerate(['flat-plus-NONE','bias-plus-NONE'],1):
+    for i,source in enumerate(['flat-plus-NONE','bias-plus-NONE','with-rrna'],1):
         path=root/f'source-{i}'/f'i_{i}.rna_metrics.txt';path.parent.mkdir()
         shutil.copyfile(root/(source+'.rna_metrics.txt'),path);reports.append(path)
     configurations={}
@@ -127,8 +127,8 @@ async def qualify_multiqc(root, executable, run):
         configurations[name]={'samples':sorted(rows),'source_mapping':sources,'general_statistics':data['report_general_stats_data'],
                               'plot_ids':sorted(data['report_plot_data'])}
         if name=='filenames':
-            assert len(rows)==2 and set(sources)==set(rows)
-            for report,source_name in zip(reports,['flat-plus-NONE','bias-plus-NONE']):
+            assert len(rows)==3 and set(sources)==set(rows)
+            for report,source_name in zip(reports,['flat-plus-NONE','bias-plus-NONE','with-rrna']):
                 names=[sample for sample,path in sources.items() if Path(path)==report]
                 assert len(names)==1
                 original=metrics(root/(source_name+'.rna_metrics.txt'))['rows'][0]
@@ -137,8 +137,19 @@ async def qualify_multiqc(root, executable, run):
                     assert Decimal(str(mapped[key]))==Decimal(original[key]),(version,key,mapped[key],original[key])
                 # MultiQC explicitly scales fraction metrics to percent units.
                 assert abs(Decimal(str(mapped['PCT_MRNA_BASES']))-Decimal(original['PCT_MRNA_BASES'])*100)<Decimal('0.00000001')
-                assert mapped['RIBOSOMAL_BASES'] in {'NA',None}
-            assert any('rna' in key.lower() and 'cov' in key.lower() for key in data['report_plot_data'])
+                if original['RIBOSOMAL_BASES']:
+                    assert Decimal(str(mapped['RIBOSOMAL_BASES']))==Decimal(original['RIBOSOMAL_BASES'])
+                else:assert mapped['RIBOSOMAL_BASES'] in {'NA',None}
+                general=data['report_general_stats_data']
+                general=general['picard'] if isinstance(general,dict) else general[0]
+                assert general[names[0]]['PCT_MRNA_BASES']==mapped['PCT_MRNA_BASES']
+                if original['PCT_RIBOSOMAL_BASES']:
+                    assert abs(Decimal(str(general[names[0]]['PCT_RIBOSOMAL_BASES']))-Decimal(original['PCT_RIBOSOMAL_BASES'])*100)<Decimal('0.00000001')
+            lines=data['report_plot_data']['picard_rna_coverage']['datasets'][0]['lines']
+            assert len(lines)==2 # The rRNA category fixture has no eligible profile.
+            for line,source_name in zip(sorted(lines,key=lambda line:line['name']),['flat-plus-NONE','bias-plus-NONE']):
+                original=metrics(root/(source_name+'.rna_metrics.txt'))['histogram']
+                assert [(int(p),Decimal(str(v))) for p,v in line['pairs']]==[(int(p),Decimal(v)) for p,v in original]
             # The production allowlist intentionally has no RNA entry yet.
             # Record that a subsequent adapter must add it, never guess names.
             production=source_mappings(directory/'multiqc/multiqc_data/multiqc_data.json')
@@ -272,6 +283,21 @@ async def qualify(args):
     assert await collect('length-ineligible',root/'flat-plus/input.bam',root/'flat-plus/genes.refFlat',extra=['MINIMUM_LENGTH=700'])==0
     assert not populations['length-ineligible']['histogram']
     assert not populations['boundary-spliced-NONE']['histogram']
+    # One explicit OFFLINE fixture conversion with a separately supplied gene
+    # identity. This is not a runtime converter or proof arbitrary BED12 suffices.
+    bed=root/'offline.bed12'
+    bed.write_text('chrRNA\t100\t900\ttxA\t0\t+\t200\t800\t0\t2\t200,400,\t0,400,\n')
+    mapping=root/'offline-transcript-gene.json';mapping.write_text(json.dumps({'txA':'geneA'}))
+    chrom,start,end,transcript,_score,strand,cds_start,cds_end,_rgb,count,sizes,offsets=bed.read_text().strip().split('\t')
+    starts=[int(start)+int(v) for v in offsets.rstrip(',').split(',')]
+    ends=[v+int(size) for v,size in zip(starts,sizes.rstrip(',').split(','))]
+    converted=root/'offline.refFlat'
+    converted.write_text('\t'.join([json.loads(mapping.read_text())[transcript],transcript,chrom,strand,start,end,cds_start,cds_end,count,
+                                    ','.join(map(str,starts))+',',','.join(map(str,ends))+','])+'\n')
+    assert converted.read_text()==REF
+    for path in [bed,mapping,converted]:inputs[path]=digest(path)
+    assert await collect('explicit-offline-conversion',root/'categories/input.bam',converted)==0
+    assert populations['explicit-offline-conversion']['rows']==populations['categories-NONE']['rows']
     # Upstream acceptance is studied separately from a future strict local contract.
     bam=root/'categories/input.bam';annotation=bam.parent/'genes.refFlat'
     variants={'wrong-contig':REF.replace('chrRNA','chrOther'), 'malformed':'not\ta\trefFlat\n',
