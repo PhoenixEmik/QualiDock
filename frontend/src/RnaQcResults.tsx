@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { url } from "./api";
 import { NativePlot } from "./AnalyticsChart";
 import { geneBodyView } from "./geneBodyChart";
+import ReportedTable from "./ReportedTable";
 import type { Run } from "./types";
 
 export default function RnaQcResults({ run }: { run: Run }) {
@@ -103,37 +104,11 @@ export default function RnaQcResults({ run }: { run: Run }) {
             </>
           )}
           {!!data.rows.length && (
-            <div
-              className="table-scroll"
-              tabIndex={0}
-              role="region"
-              aria-label="Original RSeQC values"
-            >
-              <table>
-                <thead>
-                  <tr>
-                    {data.columns.map((c) => (
-                      <th key={c}>{c}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.rows.map((values, i) => (
-                    <tr key={i}>
-                      {values.map((v, j) =>
-                        j ? (
-                          <td key={j}>{v || "Unavailable"}</td>
-                        ) : (
-                          <th key={j} scope="row">
-                            {v}
-                          </th>
-                        ),
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <ReportedTable
+              label="Original RSeQC values"
+              data={{ columns: data.columns, rows: data.rows, total_rows: data.rows.length }}
+              open={!geneBody}
+            />
           )}
           <details>
             <summary>Annotation and execution provenance</summary>

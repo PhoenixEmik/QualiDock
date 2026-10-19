@@ -60,7 +60,8 @@ native coverage CDFs and approved BED target/threshold reports for sorted, index
 BAM/CRAM. Source alignments/indexes remain unchanged. Reported and omitted
 reference denominators are explicit; per-base output is disabled by default.
 Optional [RSeQC and Picard](docs/RNA-QC.md) add read-only RNA-seq strandedness,
-annotation distribution and original insert-size metrics/histograms for BAM.
+annotation distribution, indexed-BAM gene-body coverage (native 5′→3′ profile),
+and original insert-size metrics/histograms for BAM.
 RSeQC uses approved BED12 annotations; Picard uses an existing Java17/JAR, with
 optional Rscript PDF generation. Original reports and unavailable values retain
 their upstream meaning; no protocol or contamination classification is inferred.
