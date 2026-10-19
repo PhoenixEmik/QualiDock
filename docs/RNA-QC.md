@@ -333,3 +333,91 @@ files, modifies25 and deletes0. Application plus the existing benchmark CLI net
 +1274 production lines; there are no new runtime dependencies or persistence
 migrations. This final follow-up is documentation only (`[skip ci]`); all
 production/test/workflow changes are included in the accepted code CI above.
+
+## RSeQC gene-body coverage 5.0.5 (#34)
+
+`geneBody_coverage.py` is an optional third RSeQC operation in the existing QC
+setup. Configure `QUALIDOCK_RSEQC_GENEBODY` or provide the original executable on
+PATH. CLI version **5.05** is required. It uses the same approved BED12 models,
+authorized BAM-only inputs, execution slot, resource limits and secure artifacts.
+The application neither installs tools nor sorts, converts or indexes source data.
+
+An existing authorized BAI/CSI is required. SAMtools head/quickcheck/full stats
+must establish a usable dictionary, `SO:coordinate` and actual coordinate sorting.
+An indexed primary-mapped-record scan across the complete reference dictionary
+must match the independent sequential stats count. This detects missing, corrupt,
+truncated and inconsistent indexes; **count agreement is operational evidence,
+not a mathematical proof of every index interval or a cryptographic BAM/index
+binding**. Original BAM and chosen index are SHA-256 hashed before and after;
+snapshots, exact paths, hashes, commands and annotation identity are persisted.
+No source index is created. Private run-owned symlinks expose exactly the selected
+BAM/index with safe names, including CSI under the `.bam.bai` companion spelling
+required by this upstream version. They neither copy data nor appear in downloads.
+Commas, quotes and shell/HTML characters in original filenames never become
+R variable names or shell commands.
+
+Minimum eligible **exonic transcript length** defaults to 100 bp and must be at
+least 100 (the upstream constraint). This is a single-threaded scientific tool;
+the chosen session allocation still bounds its execution. Original transcript
+selection, pileup filtering, percentile calculation and negative-strand reversal
+are performed exclusively by RSeQC. The untouched table describes aggregated
+coverage at transcript-relative percentiles 1–100, oriented **5′ → 3′**. It is not
+absolute genome depth, a transcript expression estimate or a biological fragment
+count. Overlapping transcripts/isoforms can contribute overlapping observations.
+Annotation, eligibility length, alignment characteristics and protocol all affect
+interpretation. QualiDock provides no bias threshold, degradation verdict or
+invented 5′/3′ ratio.
+
+Native ECharts displays exact original values without normalization, smoothing,
+interpolation or fabricated positions; hover retains the reported strings. PNG
+and SVG exports use the existing chart controls. Missing, duplicated or reordered
+positions, ambiguous sample rows, nonfinite/negative values and malformed tables
+fail clearly. Header-only no-eligible-profile output and verified all-zero signal
+are explicitly unavailable. A uniform **positive** profile retains its native
+flat curve; it is not incorrectly classified as absent signal. Original reports
+remain downloadable. Upstream may emit fewer than 100 distinct values for some
+very short models even when its header has 100 labels; such inconsistent tables
+are rejected rather than filled or relabeled.
+
+Numerical execution uses genuine `--skip-plot`. Optional original PNG generation
+runs the **unchanged generated R script** through the same LocalExecutor and
+records R version, exit code and separate diagnostics. Rscript is optional; a
+missing runtime or failed/truncated plot does not discard verified numerical
+results. Only completed, bounded signature/chunk/CRC-checked PNGs are registered;
+failed PNGs remain private even after restart. The R script uses **min-max
+normalization** `(value-min)/(max-min)` whereas the native chart preserves the
+original table. For a constant profile upstream normalization is undefined:
+its verified numerical observations remain visible/downloadable, and the
+original plot is explicitly unavailable. Only the qualified upstream empty/
+constant-profile diagnostics allow these numerical-only outcomes after its
+nonzero exit; arbitrary execution failures are not accepted as scientific success.
+
+Optional MultiQC uses the official `gene_body_coverage` module, saved raw
+`rseqc_gene_body_cov` values and existing source mapping. Internal input IDs
+remain unique across duplicate original basenames; the original table is never
+rewritten. MultiQC's percentage plot is min-max normalized to 0–100 and its
+Counts plot retains original values; neither is interchangeable with absolute
+depth. Non-informative profiles are omitted with a warning to avoid the upstream
+normalization division-by-zero. Aggregation failure preserves successful native
+and original reports.
+
+### Qualification and acceptance evidence
+
+PR [#36](https://github.com/PhoenixEmik/QualiDock/pull/36) was already merged as
+`d4e5fe2`; this implementation extends its existing qualification script/tests.
+Its [successful CI 39185806278](https://github.com/PhoenixEmik/QualiDock/actions/runs/39185806278)
+contains the original `rna-gene-body-tool-study` artifact. The genuine table,
+original R script, diagnostic and immutable source hashes are preserved under
+`backend/tests/fixtures/rseqc-5.0.5/genebody`. The PNG was visually inspected:
+its maximum is 1, while the source table maximum is 2. This is normalization,
+not a discrepancy to "correct" by editing upstream reports.
+
+Local genuine execution additionally uses RSeQC 5.0.5, SAMtools 1.22.1 and
+Rscript 4.4.1. Linux CI uses its existing pinned R runtime and executes required
+index, original-report, cancellation, restart, plot-failure and scientific-value
+regressions. Final accepted CI/test results are recorded in VALIDATION.md after
+completion. Tiny fixtures are fidelity/security evidence only: full hashing adds
+two BAM passes and the indexed-count check another mapped-record pass in addition
+to existing stats and scientific work. No large-BAM, NFS/Lustre throughput or
+representative memory-performance acceptance is claimed; #5 remains independent.
+CRAM and Picard CollectRnaSeqMetrics (#35) remain outside this milestone.

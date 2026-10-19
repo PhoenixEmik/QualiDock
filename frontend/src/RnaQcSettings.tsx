@@ -39,6 +39,7 @@ export default function RnaQcSettings({
         onChange={(e) => setMode(e.target.value as Run["mode"])}
         disabled={busy}
       >
+        <option value="rseqc-genebody">Gene-body coverage (5′ → 3′)</option>
         <option value="rseqc-infer">Library strandedness fractions</option>
         <option value="rseqc-distribution">
           Read distribution across annotations
@@ -72,7 +73,15 @@ export default function RnaQcSettings({
         alignment header; this does not independently verify genome assembly
         identity. No reference downloads, index creation or source editing.
       </p>
-      {mode === "rseqc-infer" ? (
+      {mode === "rseqc-genebody" ? (
+        <details className="processing-advanced">
+          <summary>Gene-body settings (optional)</summary>
+          <p>Coordinate-sorted BAM with an existing matching BAI/CSI index required. This upstream operation is single-threaded; the selected CPU budget remains enforced.</p>
+          <label>Minimum exonic transcript length (bp) <input type="number" min={100} max={10000000} value={value.minimum_length ?? 100} disabled={busy} onChange={e => change({...value, minimum_length:Number(e.target.value)})} /></label>
+          <label><input type="checkbox" checked={!!value.original_plot} disabled={busy} onChange={e => change({...value,original_plot:e.target.checked})} /> Generate original PNG using installed Rscript</label>
+          <p className="inline-note">Native chart and original percentile table are available without R. Original PNG uses upstream min-max normalization; no automatic bias classification.</p>
+        </details>
+      ) : mode === "rseqc-infer" ? (
         <details className="processing-advanced">
           <summary>Strandedness settings (optional)</summary>
           <label>

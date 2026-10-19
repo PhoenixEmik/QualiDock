@@ -227,7 +227,7 @@ async def execute(manager, run, metrics, errors):
                 if run['id'] in manager.cancelled:
                     return
             elif is_rna:
-                result = await rseqc.execute(manager, run, row, contigs, outputs, env)
+                result = await rseqc.execute(manager, run, row, contigs, outputs, env, stats)
                 if run['id'] in manager.cancelled:
                     return
             elif is_picard:
@@ -252,6 +252,7 @@ async def execute(manager, run, metrics, errors):
                 for name in ('flagstat', 'stats'):
                     run['report_input_map'][outputs[name]] = {'id': row['id'], 'path': row['path']}
         except (ValueError, OSError, KeyError, TypeError, UnicodeError) as exc:
+            if run['id'] in manager.cancelled:return
             row.update(state='failed', error=str(exc))
             errors.append(f'{row["name"]}: {exc}')
         row['finished_at'] = now()
@@ -262,10 +263,10 @@ async def execute(manager, run, metrics, errors):
         if is_rna or is_picard:
             key = 'rseqc' if is_rna else 'picard'
             reports = [directory/row['report'] for row in run['qc']['results']
-                       if row['state']=='completed' and row[key].get('status','available')=='available']
+                       if row['state']=='completed' and row[key].get('status','available')=='available' and row[key].get('multiqc_supported',True)]
             for row in run['qc']['results']:
-                if row['state']=='completed' and row[key].get('status','available')!='available':
-                    run['warnings'].append(f"MultiQC omitted {row['name']}: no supported observations were reported; original diagnostics remain available.")
+                if row['state']=='completed' and (row[key].get('status','available')!='available' or not row[key].get('multiqc_supported',True)):
+                    run['warnings'].append(f"MultiQC omitted {row['name']}: no compatible MultiQC observations were reported; original diagnostics remain available.")
             for path in reports:
                 row = next(r for r in run['qc']['results'] if r['report']==str(path.relative_to(directory)))
                 run['report_input_map'][row['report']] = {'id':row['id'],'path':row['path']}

@@ -113,7 +113,7 @@ export default function NewAnalysisForm({
       : isRnaQC(mode)
         ? [
             "samtools",
-            mode === "rseqc-infer" ? "rseqc_infer" : "rseqc_distribution",
+            mode === "rseqc-genebody" ? "rseqc_genebody" : mode === "rseqc-infer" ? "rseqc_infer" : "rseqc_distribution",
             ...(rnaOptions.multiqc ? ["multiqc"] : []),
           ]
         : mode === "mosdepth"
@@ -660,6 +660,7 @@ export default function NewAnalysisForm({
               (!config?.rna_annotations?.some(
                 (a) => a.id === rnaOptions.annotation && a.available,
               ) ||
+                (mode === "rseqc-genebody" && (!Number.isInteger(rnaOptions.minimum_length ?? 100) || (rnaOptions.minimum_length ?? 100) < 100 || (rnaOptions.minimum_length ?? 100) > 10000000)) ||
                 (mode === "rseqc-infer" &&
                   (!Number.isInteger(rnaOptions.sample_size) ||
                     rnaOptions.sample_size < 1 ||

@@ -130,3 +130,22 @@ def test_application_originals_survive_aggregation_and_restart(tmp_path,mode,agg
         if aggregation_failure:assert c.get(f'/api/runs/{run["id"]}/download',params={'path':'multiqc/multiqc_report.html'}).status_code==403
         assert c.get('/api/runs/'+run['id']+'/configuration').json()['qc_options']['multiqc']
     assert all(p.read_bytes()==raw for p,raw in originals.items())
+
+
+@pytest.mark.skipif(not MULTIQC,reason='Actual MultiQC required')
+def test_original_genebody_report_values_and_source_mapping(tmp_path):
+    source=FIX/'rseqc-5.0.5/genebody/gene-body.geneBodyCoverage.txt'
+    report=tmp_path/'input.geneBodyCoverage.txt';report.write_bytes(source.read_bytes())
+    listing=tmp_path/'files.txt';listing.write_text(str(report)+'\n')
+    subprocess.run([MULTIQC,'--file-list',str(listing),'--outdir',str(tmp_path/'multiqc'),'--force','--no-version-check','--data-format','json'],check=True,capture_output=True)
+    data=json.loads((tmp_path/'multiqc/multiqc_data/multiqc_data.json').read_text())
+    rows=data['report_saved_raw_data']['rseqc_gene_body_cov']['input']
+    expected=source.read_text().splitlines()[1].split('\t')[1:]
+    assert [Decimal(str(rows[str(i)])) for i in range(1,101)]==list(map(Decimal,expected))
+    names=asyncio.run(multiqc.alignment_sample_names(tmp_path,'rseqc-genebody'))
+    mapping=asyncio.run(multiqc.report_names(tmp_path,[report],sample_names=names))
+    assert mapping=={report.name:'input'}
+    assert report.read_bytes()==source.read_bytes()
+    version=subprocess.run([MULTIQC,'--version'],check=True,capture_output=True,text=True).stdout.strip().split()[-1]
+    saved=Path('validation/rna-multiqc')/version;saved.mkdir(parents=True,exist_ok=True)
+    shutil.copyfile(tmp_path/'multiqc/multiqc_data/multiqc_data.json',saved/'genebody-data.json')

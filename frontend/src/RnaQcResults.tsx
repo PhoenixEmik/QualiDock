@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { url } from "./api";
+import { NativePlot } from "./AnalyticsChart";
+import { geneBodyView } from "./geneBodyChart";
 import type { Run } from "./types";
 
 export default function RnaQcResults({ run }: { run: Run }) {
@@ -8,12 +10,14 @@ export default function RnaQcResults({ run }: { run: Run }) {
   const row = rows.find((r) => r.id === selected) || rows[0];
   const data = row?.state === "completed" ? row.rseqc : undefined;
   const infer = run.mode === "rseqc-infer";
-  const tool = infer ? "rseqc_infer" : "rseqc_distribution";
+  const geneBody = run.mode === "rseqc-genebody";
+  const view = useMemo(() => data && geneBody ? geneBodyView(data.rows, row?.name || "") : null, [data, geneBody, row?.name]);
+  const tool = geneBody ? "rseqc_genebody" : infer ? "rseqc_infer" : "rseqc_distribution";
   const registered = new Set(run.reports.map((r) => r.path));
   return (
     <section className="form-section" aria-label="RSeQC results">
       <h2>
-        {infer ? "RSeQC library strandedness" : "RSeQC read distribution"}
+        {geneBody ? "RSeQC gene-body coverage" : infer ? "RSeQC library strandedness" : "RSeQC read distribution"}
       </h2>
       <p className="inline-note">
         RSeQC{" "}
@@ -50,7 +54,13 @@ export default function RnaQcResults({ run }: { run: Run }) {
       )}
       {data && (
         <>
-          {infer ? (
+          {geneBody ? (
+            <>
+              <p className="inline-note">5′ → 3′ along eligible transcripts (minimum exonic length {data.minimum_length} bp). Original upstream aggregate percentile coverage is not absolute sequencing depth. The original R plot uses min-max normalization; this native chart retains the untouched table values. Annotation, transcript length, alignment distribution and protocol affect the profile; no bias threshold or 5′/3′ ratio is inferred.</p>
+              <p>Original plot: {data.plot?.status || "Unavailable"}</p>
+              {data.status === "available" && view ? <NativePlot view={view} /> : <p role="status">No informative gene-body profile was reported. Missing or zero coverage is not shown as a meaningful curve; original numerical observations remain downloadable.</p>}
+            </>
+          ) : infer ? (
             <>
               <p>
                 Upstream alignment layout: <strong>{data.layout}</strong>.
@@ -135,6 +145,7 @@ export default function RnaQcResults({ run }: { run: Run }) {
               {run.qc?.annotation?.path}
             </p>
             <p>{run.qc?.annotation?.identity}</p>
+            {geneBody && <><p>BAM SHA-256 <span className="mono">{data.source_sha256}</span></p><p className="mono output-destination">Index: {data.index?.path}</p><p>Index SHA-256 <span className="mono">{data.index?.sha256}</span></p><p>{data.index?.validation}</p></>}
             <pre>{JSON.stringify(run.qc?.options, null, 2)}</pre>
           </details>
           <div className="inline-actions">

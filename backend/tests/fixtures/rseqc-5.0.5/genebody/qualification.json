@@ -1,0 +1,40 @@
+{
+  "status": "qualified-percentile-table",
+  "scope": "test-only indexed BAM copy; not an integrated QualiDock QC mode",
+  "command": [
+    "/home/runner/work/_temp/qualidock-rna-tools/venv/bin/geneBody_coverage.py",
+    "-i",
+    "/home/runner/work/QualiDock/QualiDock/validation/rna-gene-body-tool-study/input.bam",
+    "-r",
+    "/home/runner/work/_temp/qualidock-rna-tools/fixture/genes.bed12",
+    "-o",
+    "/home/runner/work/QualiDock/QualiDock/validation/rna-gene-body-tool-study/gene-body",
+    "-l",
+    "100",
+    "-f",
+    "png"
+  ],
+  "input_sha256": {
+    "bam": "36ae28557d86172308602340e18680d8b7de0a04077d36d905bf505dcc8a2fc6",
+    "bed": "e9f844824259d1cdff2a672bf243da05b1547412eac984b1386c817c1310bebe"
+  },
+  "test_index": "input.bam.bai",
+  "profile": {
+    "sample": "input",
+    "percentiles": 100,
+    "first": "0.0",
+    "last": "0.0",
+    "minimum": 0.0,
+    "maximum": 2.0,
+    "all_zero": false,
+    "raw_sha256": "813f9a9939bf6f47cba257c4b159e7eda157be86fe40ccc4344b5d65f1127702"
+  },
+  "upstream_plot_files": [
+    "gene-body.geneBodyCoverage.curves.png"
+  ],
+  "limitations": [
+    "These observations are not large-BAM/NFS/Lustre resource acceptance",
+    "An upstream exit code or generated R script is not proof a scientific plot was rendered",
+    "The source fixture contains explicit synthetic RNA alignment geometry"
+  ]
+}

@@ -94,7 +94,7 @@ def index(manager, source):
                 if len(fields) != 6 or any(not f.lstrip(b'-').isdigit() for f in fields):
                     raise ValueError('Invalid CRAI index header')
             return {'path':str(path), **snapshot(path.stat()), 'identity':'filesystem snapshot and upstream index decoding, not a cryptographic binding to the alignment'}
-    raise ValueError('mosdepth requires an existing matching BAI/CSI or CRAI index; QualiDock never creates alignment indexes')
+    raise ValueError('Alignment coverage requires an existing matching BAI/CSI or CRAI index; QualiDock never creates alignment indexes')
 
 
 def lines(path, compressed=False):

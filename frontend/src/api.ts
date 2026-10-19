@@ -35,12 +35,14 @@ export async function api<T>(
   return response.json();
 }
 export const isRnaQC = (mode: string) =>
-  mode === "rseqc-infer" || mode === "rseqc-distribution";
+  mode === "rseqc-infer" || mode === "rseqc-distribution" || mode === "rseqc-genebody";
 export const isBamOnlyQC = (mode: string) => isRnaQC(mode) || mode === "picard";
 export const isAlignmentQC = (mode: string) =>
   mode === "samtools" || mode === "mosdepth" || isBamOnlyQC(mode);
 export const modeLabel = (mode: string) =>
-  mode === "picard"
+  mode === "rseqc-genebody"
+    ? "RSeQC gene-body coverage"
+    : mode === "picard"
     ? "Picard insert-size QC"
     : mode === "rseqc-infer"
       ? "RSeQC strandedness"

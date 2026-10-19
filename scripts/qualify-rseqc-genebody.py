@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Qualify genuine RSeQC geneBody_coverage.py outputs; no application feature yet.
+"""Qualify genuine RSeQC geneBody_coverage.py outputs; reused original tool study.
 
 This tool-study creates a TEST-ONLY BAM copy and index. It never writes an
 index beside the caller's source alignment or modifies the annotation.
@@ -46,7 +46,7 @@ def parse_profile(path):
 
 def checked(command, root, label, timeout):
     execution = subprocess.run(command, text=True, errors="replace",
-                               capture_output=True, timeout=timeout, check=False)
+                               capture_output=True, timeout=timeout, check=False, cwd=root)
     (root / (label + ".stdout.txt")).write_text(execution.stdout)
     (root / (label + ".stderr.txt")).write_text(execution.stderr)
     if execution.returncode:
@@ -75,6 +75,7 @@ def qualify(args):
     probe = checked([args.rseqc, "--version"], destination, "rseqc-version", args.timeout)
     if "geneBody_coverage.py" not in probe.stdout + probe.stderr:
         raise ValueError("Upstream executable identity could not be verified")
+    checked([args.rseqc, "--help"], destination, "rseqc-help", args.timeout)
     prefix = destination / "gene-body"
     command = [args.rseqc, "-i", str(copied), "-r", str(annotation),
                "-o", str(prefix), "-l", "100", "-f", "png"]

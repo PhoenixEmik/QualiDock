@@ -8,7 +8,7 @@ FIELDS = ('id', 'name', 'mode', 'state', 'stage', 'created_at', 'updated_at',
 def page(runs, revision, *, offset=0, limit=25, search='', state='all', mode='all', order='created-desc'):
     if offset < 0 or not 1 <= limit <= 100 or len(search) > 120:
         raise ValueError('Invalid history pagination or search')
-    if state not in {'all', 'active', 'issues', 'queued', 'running', 'completed', 'partial', 'failed', 'cancelled', 'interrupted'} or mode not in {'all', 'fastqc', 'both', 'multiqc', 'nanoq', 'nanoplot', 'fastq-screen', 'samtools', 'mosdepth', 'rseqc-infer', 'rseqc-distribution', 'picard', 'fastp', 'seqkit-stats', 'seqkit-sample', 'seqkit-filter', 'seqkit-extract'} or order not in {'created-asc', 'created-desc', 'finished-asc', 'finished-desc'}:
+    if state not in {'all', 'active', 'issues', 'queued', 'running', 'completed', 'partial', 'failed', 'cancelled', 'interrupted'} or mode not in {'all', 'fastqc', 'both', 'multiqc', 'nanoq', 'nanoplot', 'fastq-screen', 'samtools', 'mosdepth', 'rseqc-infer', 'rseqc-distribution', 'rseqc-genebody', 'picard', 'fastp', 'seqkit-stats', 'seqkit-sample', 'seqkit-filter', 'seqkit-extract'} or order not in {'created-asc', 'created-desc', 'finished-asc', 'finished-desc'}:
         raise ValueError('Invalid history filters')
     def matches(run):
         states = {'queued','running'} if state == 'active' else {'failed','partial','interrupted'} if state == 'issues' else {state}

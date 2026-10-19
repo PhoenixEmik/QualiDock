@@ -601,3 +601,10 @@ Manifests add optional `qc` metadata with per-file results/provenance. Existing
 manifest fields, report IDs, API modes and derived-input authorization remain
 compatible; historical analyses need no migration. There is deliberately no
 `falco` application mode. No release was tagged or published.
+
+RSeQC's existing RNA setup also includes optional **gene-body coverage** for
+coordinate-sorted BAM with an existing authorized BAI/CSI and approved BED12.
+Native 5′→3′ percentiles retain the untouched original table. Optional original
+R PNG and MultiQC plots use upstream normalization, explicitly distinguished
+from native values. See [RNA QC contracts and evidence](RNA-QC.md#rseqc-gene-body-coverage-505-34).
+No CRAM, source editing, automatic index creation or protocol classification.

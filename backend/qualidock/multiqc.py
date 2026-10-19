@@ -53,7 +53,7 @@ async def alignment_sample_names(directory, mode):
     data = await asyncio.to_thread(bounded_text, directory/'multiqc/multiqc_data/multiqc_data.json')
     value = json.loads(data)
     raw = value.get('report_saved_raw_data', {}) if isinstance(value,dict) else {}
-    key = {'rseqc-infer':'multiqc_rseqc_infer_experiment',
+    key = {'rseqc-genebody':'rseqc_gene_body_cov', 'rseqc-infer':'multiqc_rseqc_infer_experiment',
            'rseqc-distribution':'multiqc_rseqc_read_distribution',
            'picard':'multiqc_picard_insertSize'}[mode]
     rows = raw.get(key, {}) if isinstance(raw, dict) else {}

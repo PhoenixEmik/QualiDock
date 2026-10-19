@@ -22,6 +22,7 @@ TOOL_SPECS = {
     'samtools': ('--version', (1, 22, 1), (1, 22, 2), 'tested SAMtools/HTSlib 1.22.1'),
     'rseqc_infer': ('--version', (5, 5, 0), (5, 5, 1), 'RSeQC 5.0.5 (CLI 5.05)'),
     'rseqc_distribution': ('--version', (5, 5, 0), (5, 5, 1), 'RSeQC 5.0.5 (CLI 5.05)'),
+    'rseqc_genebody': ('--version', (5, 5, 0), (5, 5, 1), 'RSeQC 5.0.5 (CLI 5.05)'),
     'java': ('--version', (17, 0, 0), (18, 0, 0), 'qualified Java 17'),
     'picard': ('--version', (3, 5, 0), (3, 5, 1), 'qualified Picard 3.5.0 JAR'),
     'fastq_screen': ('--version', (0, 16, 0), (0, 17, 0), 'FastQ Screen 0.16.x'),
@@ -105,7 +106,8 @@ async def detect_tool(name: str, executable: str, *, java='java') -> dict:
         if name == 'samtools':
             match = re.search(r'(?m)^samtools ([0-9]+\.[0-9]+\.[0-9]+)$', response)
         if name.startswith('rseqc_'):
-            script = 'infer_experiment' if name == 'rseqc_infer' else 'read_distribution'
+            script = {'rseqc_infer':'infer_experiment', 'rseqc_distribution':'read_distribution', 'rseqc_genebody':'geneBody_coverage'}[name]
+            if name == 'rseqc_genebody': result['rscript_executable'] = shutil.which('Rscript')
             match = re.fullmatch(re.escape(script)+r'\.py (5\.05)', response)
             if match: result['suite_version'] = '5.0.5'
         if name == 'java':

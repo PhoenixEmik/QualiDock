@@ -78,7 +78,7 @@ class IntegrityRequest(BaseModel):
 
 class AnalysisRequest(BaseModel):
     name: str = Field(default="", max_length=120)
-    mode: Literal["both", "fastqc", "multiqc", "nanoq", "nanoplot", "fastq-screen", "samtools", "mosdepth", "rseqc-infer", "rseqc-distribution", "picard", "fastp", "seqkit-stats", "seqkit-sample", "seqkit-filter", "seqkit-extract"] = "both"
+    mode: Literal["both", "fastqc", "multiqc", "nanoq", "nanoplot", "fastq-screen", "samtools", "mosdepth", "rseqc-infer", "rseqc-distribution", "rseqc-genebody", "picard", "fastp", "seqkit-stats", "seqkit-sample", "seqkit-filter", "seqkit-extract"] = "both"
     paths: list[str] = Field(min_length=1, max_length=500)
     threads: int = Field(default=1, ge=1, le=32)
     input_pairing: list[ReadAssignment] | None = Field(default=None, max_length=500)

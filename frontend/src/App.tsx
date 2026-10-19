@@ -623,6 +623,8 @@ export default function App() {
       setRnaOptions({
         annotation: value.annotation || "",
         multiqc: value.multiqc ?? false,
+        minimum_length: value.minimum_length ?? 100,
+        original_plot: value.original_plot ?? false,
         sample_size: value.sample_size ?? 200000,
         mapq: value.mapq ?? 30,
       });

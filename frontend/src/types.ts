@@ -53,6 +53,7 @@ export interface Run {
     | "samtools"
     | "rseqc-infer"
     | "rseqc-distribution"
+    | "rseqc-genebody"
     | "picard"
     | "nanoplot"
     | "nanoq"
@@ -101,6 +102,7 @@ export interface Run {
       | "mosdepth"
       | "rseqc-infer"
       | "rseqc-distribution"
+    | "rseqc-genebody"
       | "picard";
     options: Record<string, unknown>;
     annotation?: { id: string; path: string; sha256: string; identity: string };
@@ -144,6 +146,11 @@ export interface Run {
         layout?: string;
         status?: string;
         totals?: string[][];
+        sample?: string;
+        minimum_length?: number;
+        source_sha256?: string;
+        index?: { path: string; sha256: string; validation: string };
+        plot?: { status: string; normalization: string; version?: string };
       };
       mosdepth?: CoverageMetrics;
       alignment?: {
@@ -385,6 +392,8 @@ export interface RnaOptions {
   annotation: string;
   sample_size: number;
   mapq: number;
+  minimum_length?: number;
+  original_plot?: boolean;
 }
 export interface Config {
   rna_annotations?: {
@@ -429,6 +438,7 @@ export interface Config {
     picard?: boolean;
     rseqc_infer?: boolean;
     rseqc_distribution?: boolean;
+    rseqc_genebody?: boolean;
     fastq_screen?: boolean;
     bowtie2?: boolean;
   };

@@ -107,7 +107,7 @@ class RunManager:
         return sorted(self.runs.values(), key=lambda r: r["created_at"], reverse=True)
 
     async def detect_tools(self):
-        names = ("fastqc", "multiqc", "fastp", "seqkit", "nanoq", "nanoplot", "fastq_screen", "bowtie2", "samtools", "mosdepth", "rseqc_infer", "rseqc_distribution", "java", "picard")
+        names = ("fastqc", "multiqc", "fastp", "seqkit", "nanoq", "nanoplot", "fastq_screen", "bowtie2", "samtools", "mosdepth", "rseqc_infer", "rseqc_distribution", "rseqc_genebody", "java", "picard")
         signature = []
         for name in names:
             configured = getattr(self.settings,name)
@@ -611,17 +611,21 @@ class RunManager:
         multiqc_execution = next((e for e in reversed(run.get('executions', [])) if e.get('tool')=='multiqc'), None)
         registered = {record['path'] for record in run.get('reports', [])}
         coverage_reports = {path for row in run.get('qc', {}).get('results', []) if row['state'] == 'completed' for path in row.get('mosdepth', {}).get('reports', {}).values()}
+        gene_reports = {path for row in run.get('qc', {}).get('results', []) if row['state']=='completed' for path in row.get('rseqc',{}).get('reports',{}).values()} if run['mode']=='rseqc-genebody' else None
         picard_reports = {path for row in run.get('qc', {}).get('results', []) if row['state']=='completed' for path in row.get('picard',{}).get('reports',{}).values()}
         for path in sorted(directory.rglob("*")):
             coverage_report = path.suffix in {'.gz','.csi'} and str(path.relative_to(directory)) in coverage_reports
+            gene_report = path.suffix == '.r' and str(path.relative_to(directory)) in (gene_reports or set())
             picard_report = path.suffix == '.pdf' and str(path.relative_to(directory)) in picard_reports
-            if path.is_file() and not path.is_symlink() and path.resolve().is_relative_to(directory.resolve()) and (path.suffix in allowed or coverage_report or picard_report):
+            if path.is_file() and not path.is_symlink() and path.resolve().is_relative_to(directory.resolve()) and (path.suffix in allowed or coverage_report or picard_report or gene_report):
                 relative = str(path.relative_to(directory))
                 if relative.startswith('multiqc/') and multiqc_execution is not None and 'exit_code' in multiqc_execution and multiqc_execution['exit_code'] != 0:
                     continue
                 if relative.startswith('processing/private/'):
                     continue
                 if relative.startswith('qc/'):
+                    if gene_reports is not None and relative not in gene_reports:
+                        continue
                     if len(Path(relative).parts)>2 and Path(relative).parts[2]=='private':
                         continue
                     if not any(row['state'] == 'completed' and relative.startswith(f'qc/{row["id"]}/') for row in run.get('qc', {}).get('results', [])):

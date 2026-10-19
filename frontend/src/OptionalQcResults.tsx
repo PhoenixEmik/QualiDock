@@ -19,7 +19,7 @@ const metrics: [string, string, string][] = [
 
 export default function OptionalQcResults({ run }: { run: Run }) {
   if (run.mode === "picard") return <PicardResults run={run} />;
-  if (run.mode === "rseqc-infer" || run.mode === "rseqc-distribution")
+  if (run.mode === "rseqc-infer" || run.mode === "rseqc-distribution" || run.mode === "rseqc-genebody")
     return <RnaQcResults run={run} />;
   if (run.qc?.tool === "mosdepth") return <CoverageResults run={run} />;
   if (run.qc?.tool === "samtools") return <AlignmentResults run={run} />;

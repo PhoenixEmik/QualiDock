@@ -21,8 +21,9 @@ def options(mode, supplied):
             raise ValueError('MultiQC insert-size aggregation is unsupported for per-library reports: upstream combines overlapping populations. Original per-library reports remain available without MultiQC.')
         return value
     if mode in rseqc.MODES:
-        model = rseqc.InferOptions if mode == 'rseqc-infer' else rseqc.Options
-        return model.model_validate(supplied or {}).model_dump()
+        model = rseqc.GeneBodyOptions if mode == 'rseqc-genebody' else rseqc.InferOptions if mode == 'rseqc-infer' else rseqc.Options
+        value = model.model_validate(supplied or {}).model_dump()
+        return value
     if mode == 'mosdepth':
         return coverage.Options.model_validate(supplied or {}).model_dump()
     if mode == 'samtools':
@@ -40,7 +41,7 @@ def required(mode, value):
     if mode == 'picard':
         return ['samtools','java','picard', *(['multiqc'] if value['multiqc'] else [])]
     if mode in rseqc.MODES:
-        return ['samtools', 'rseqc_infer' if mode == 'rseqc-infer' else 'rseqc_distribution', *(['multiqc'] if value['multiqc'] else [])]
+        return ['samtools', rseqc.TOOLS[mode], *(['multiqc'] if value['multiqc'] else [])]
     if mode == 'mosdepth':
         return ['samtools', 'mosdepth']
     if mode == 'samtools':
@@ -92,7 +93,7 @@ def records(paths, tool):
     from .outcomes import plan
     result = []
     for row in plan(paths):
-        filename = {'picard':row['id']+'.insert_size_metrics.txt', 'rseqc-infer':row['id']+'.infer_experiment.txt', 'rseqc-distribution':row['id']+'.read_distribution.txt',
+        filename = {'rseqc-genebody':row['id']+'.geneBodyCoverage.txt', 'picard':row['id']+'.insert_size_metrics.txt', 'rseqc-infer':row['id']+'.infer_experiment.txt', 'rseqc-distribution':row['id']+'.read_distribution.txt',
                     'samtools':row['id']+'.stats.txt', 'mosdepth':row['id']+'.mosdepth.summary.txt',
                     'fastq-screen':row['id']+'_screen.txt', 'nanoplot':'NanoStats.txt', 'nanoq':'nanoq.json'}[tool]
         result.append({**{key:row[key] for key in ('id','path','name','state','error','exit_code','finished_at')},

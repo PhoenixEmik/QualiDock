@@ -1,0 +1,13 @@
+@ 2026-10-19 01:36:39: Read BED file (reference gene model) ...
+@ 2026-10-19 01:36:39: Total 4 transcripts loaded
+@ 2026-10-19 01:36:39: Get BAM file(s) ...
+	/home/runner/work/QualiDock/QualiDock/validation/rna-gene-body-tool-study/input.bam
+@ 2026-10-19 01:36:39: Processing input.bam ...
+
+
+
+	Sample	Skewness
+	input	-8.539365853658806
+@ 2026-10-19 01:36:39: Running R script ...
+@ 2026-10-19 01:36:39: Created: /home/runner/work/QualiDock/QualiDock/validation/rna-gene-body-tool-study/gene-body.geneBodyCoverage.txt
+@ 2026-10-19 01:36:39: Created: /home/runner/work/QualiDock/QualiDock/validation/rna-gene-body-tool-study/gene-body.geneBodyCoverage.r

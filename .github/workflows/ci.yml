@@ -119,6 +119,18 @@ jobs:
         with:
           name: rna-gene-body-tool-study
           path: validation/rna-gene-body-tool-study
+      - name: Genuine gene-body coverage, index integrity, cancellation and restart
+        if: matrix.multiqc == '1.35'
+        env:
+          QUALIDOCK_REQUIRE_GENEBODY_TESTS: '1'
+        run: pytest -q backend/tests/test_genebody.py backend/tests/test_genebody_real.py --junitxml=validation/genebody-tests.xml
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.multiqc == '1.35'
+        with:
+          name: genebody-qc-evidence
+          path: |
+            validation/genebody
+            validation/genebody-tests.xml
       - name: Actual Picard observations, PDF, resources and restart
         if: matrix.multiqc == '1.35'
         env:
