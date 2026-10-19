@@ -90,7 +90,7 @@ def test_gene_body_native_curve_exports_original_plot_and_restart(workspace,brow
     assert tool and samtools,'Genuine RSeQC gene-body and SAMtools are required'
     label='genebody-'+secrets.token_hex(4)
     directory=INPUTS/label;bam,bed=fixture.prepare(directory,samtools)
-    source=INPUTS/(label+' comma, <img onerror=alert(1)>.bam');shutil.copyfile(bam,source)
+    source=directory/(label+' comma, <img onerror=alert(1)>.bam');shutil.copyfile(bam,source)
     subprocess.run([samtools,'index',str(source)],check=True)
     index=Path(str(source)+'.bai')
     originals={p:hashlib.sha256(p.read_bytes()).hexdigest() for p in (source,index,bed)}
@@ -100,6 +100,7 @@ def test_gene_body_native_curve_exports_original_plot_and_restart(workspace,brow
     try:
         page.goto(workspace.base+'?gene-body='+secrets.token_hex(3)+'#token='+workspace.settings.token)
         page.get_by_role('button',name='Files',exact=True).click()
+        page.get_by_role('button',name=label,exact=True).click()
         page.get_by_label('Select file '+source.name,exact=True).check()
         page.get_by_role('button',name='Configure analysis',exact=True).click()
         page.get_by_role('button',name='RSeQC RNA-seq QC',exact=False).click()
