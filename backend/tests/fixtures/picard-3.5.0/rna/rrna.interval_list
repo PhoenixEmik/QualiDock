@@ -1,0 +1,4 @@
+@HD	VN:1.6	SO:coordinate
+@SQ	SN:chrRNA	LN:3000
+@RG	ID:rna	SM:synthetic	LB:library-A	PL:ILLUMINA
+chrRNA	1601	1650	+	rRNA

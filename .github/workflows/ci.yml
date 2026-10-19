@@ -106,6 +106,22 @@ jobs:
         with:
           name: picard-tool-study
           path: validation/picard-tool-study
+      - name: Provision existing Picard dependencies for RNA compatibility targets
+        if: matrix.multiqc != '1.35'
+        run: bash scripts/setup-picard-ci.sh
+      - name: Qualify original Picard RNA metrics and official MultiQC module
+        timeout-minutes: 5
+        run: |
+          python scripts/qualify-picard-rna.py \
+            --jar "$RUNNER_TEMP/qualidock-picard-tools/picard.jar" \
+            --samtools samtools --rscript "$(command -v Rscript)" --multiqc multiqc \
+            --output validation/picard-rna-qualification
+          pytest -q backend/tests/test_picard_rna_qualification.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: picard-rna-${{ matrix.multiqc }}-qualification
+          path: validation/picard-rna-qualification
       - name: Qualify genuine RSeQC gene-body percentile contract on indexed test BAM
         if: matrix.multiqc == '1.35'
         run: |

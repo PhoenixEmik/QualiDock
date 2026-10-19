@@ -1,0 +1,16 @@
+{
+  "categories-NONE.rna_metrics.txt": "222f0ac4ca13a9333a5deafd01fe43b405de43856de5e6b5be50ff626db954df",
+  "categories-FIRST_READ_TRANSCRIPTION_STRAND.rna_metrics.txt": "2b2eb7c5cc0bc598ceadb9658df0a7bb93c299d2a39fec3df331c346ba32ce20",
+  "categories-SECOND_READ_TRANSCRIPTION_STRAND.rna_metrics.txt": "ca997901fd4359023846f19dff49997b0f3a837fbcc1713e41011e92aea22261",
+  "with-rrna.rna_metrics.txt": "68151477eae99dc828b26419158108d50105196453b264eba491376c5231a8fa",
+  "flat-plus-NONE.rna_metrics.txt": "12654e3d7987252a9cfb92c49d6597f34c747a13fd609fac02fcbd9481514532",
+  "flat-minus-NONE.rna_metrics.txt": "195b7a36c0cec5743b3d6990629f8a0d8cd1ecf82b8a11592d801907c159d91c",
+  "bias-plus-NONE.rna_metrics.txt": "d492b60bd060ace67900f58d37273f3977f3198dc0f6954cde2f6e15f6ef4862",
+  "bias-minus-NONE.rna_metrics.txt": "286dc44531869dfbf43a83fb50e640f474b4a8a1979fee99739439fc0017bd8c",
+  "boundary-spliced-NONE.rna_metrics.txt": "70821bc2f5ef1074bfb2fc2779769ba4df70a665cec9fc3627ed5979380b0c2b",
+  "empty-NONE.rna_metrics.txt": "22ac3f24f0de64558d62dbdd461a18d669d3a187c3a959fab41c3f1b3bd617fa",
+  "by-library.rna_metrics.txt": "e20c10daaf9fe2a6c9ce7b9ffd2b4bbc75773149141cec0d6176b04c7daba9d8",
+  "input.sam": "890293a3d26f26961e125724c5f07caedf7538e96416cc109e1e6670cba6439f",
+  "genes.refFlat": "dd3a7612b013e99a6bab56d769ce8a40c2260a0568cd8a761418e17041f91935",
+  "rrna.interval_list": "40fb14c0ba5d4f72345d2796a6c240a78cf5863a99791880e537bdb3daf77a4f"
+}
