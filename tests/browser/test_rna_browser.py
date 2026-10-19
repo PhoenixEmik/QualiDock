@@ -116,6 +116,7 @@ def test_gene_body_native_curve_exports_original_plot_and_restart(workspace,brow
         assert created.value.status==201,created.value.text()
         with workspace.api() as api:run=workspace.finish(api,created.value.json())
         row=run['qc']['results'][0];data=row['rseqc']
+        assert run['qc']['options']['original_plot'] is True and run['qc']['options']['minimum_length']==100
         assert data['status']=='available' and data['plot']['status']=='completed'
         assert max(float(v) for _,v in data['rows'])==2
         page.get_by_role('tab',name='QC metrics',exact=True).click()

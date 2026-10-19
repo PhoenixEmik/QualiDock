@@ -507,7 +507,12 @@ export default function App() {
                       sample_size: rnaOptions.sample_size,
                       mapq: rnaOptions.mapq,
                     }
-                  : {}),
+                  : mode === "rseqc-genebody"
+                    ? {
+                        minimum_length: rnaOptions.minimum_length ?? 100,
+                        original_plot: !!rnaOptions.original_plot,
+                      }
+                    : {}),
               },
             }
           : mode === "picard"

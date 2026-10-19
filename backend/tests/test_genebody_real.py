@@ -243,3 +243,34 @@ def test_changed_input_identity_rejects_even_an_original_complete_table(inputs,t
         auth(c,s);run=launch(c,bam)
         assert run['state']=='failed' and not any(r['path'].startswith('qc/') for r in run['reports'])
         assert 'changed' in run['error'].lower()
+
+
+def test_public_galaxy_hg19_profile_matches_independent_upstream(inputs,tmp_path):
+    s,bam,bed=inputs
+    golden=ROOT/'backend/tests/fixtures/rseqc-5.0.5/galaxy'
+    subprocess.run([SAM,'sort','-o',str(bam),str(golden/'input.bam')],check=True)
+    shutil.copyfile(golden/'genes.bed12',bed)
+    subprocess.run([SAM,'index',str(bam)],check=True)
+    before=hashes(bam.parent);prefix=tmp_path/'galaxy-original'
+    subprocess.run([TOOL,'-i',str(bam),'-r',str(bed),'-o',str(prefix),'--skip-plot'],check=True,capture_output=True,cwd=tmp_path)
+    expected=Path(str(prefix)+'.geneBodyCoverage.txt').read_text().splitlines()[1].split('\t')[1:]
+    with TestClient(create_app(s)) as c:
+        auth(c,s);run=launch(c,bam)
+        assert run['state']=='completed',run['error']
+        assert [v for _,v in run['qc']['results'][0]['rseqc']['rows']]==expected
+        shutil.copytree(s.output/run['id'],ROOT/'validation/genebody/galaxy',dirs_exist_ok=True,ignore=shutil.ignore_patterns('private'))
+    assert before==hashes(bam.parent)
+
+
+@pytest.mark.parametrize('fault',['identity','nan','duplicate-percentile'])
+def test_exit_zero_cannot_publish_mutated_original_table(inputs,fault):
+    import sys
+    s,bam,bed=inputs
+    mutate={'identity':"rows[1][0]='wrong-input'",'nan':"rows[1][8]='NaN'",'duplicate-percentile':"rows[0][10]=rows[0][9]"}[fault]
+    launcher=bam.parent.parent/'malformed-test-only'
+    launcher.write_text(f'#!{sys.executable}\nimport os,sys,subprocess\nfrom pathlib import Path\nif "--version" in sys.argv:os.execv({TOOL!r},[{TOOL!r},*sys.argv[1:]])\nsubprocess.run([{TOOL!r},*sys.argv[1:]],check=True)\np=Path(sys.argv[sys.argv.index("-o")+1]+".geneBodyCoverage.txt")\nrows=[s.split("\\t") for s in p.read_text().splitlines()]\n{mutate}\np.write_text("\\n".join("\\t".join(r) for r in rows)+"\\n")\n');launcher.chmod(0o700)
+    s=replace(s,rseqc_genebody=str(launcher))
+    with TestClient(create_app(s)) as c:
+        auth(c,s);run=launch(c,bam)
+        assert run['state']=='failed' and not any(r['path'].startswith('qc/') for r in run['reports'])
+        assert next(e for e in run['executions'] if e['tool']=='rseqc_genebody')['exit_code']==0

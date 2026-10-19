@@ -73,7 +73,7 @@ def qualify(args):
     if not index.is_file():
         raise ValueError("Samtools produced no index for the test-owned copy")
     probe = checked([args.rseqc, "--version"], destination, "rseqc-version", args.timeout)
-    if "geneBody_coverage.py" not in probe.stdout + probe.stderr:
+    if (probe.stdout + probe.stderr).strip() != "geneBody_coverage.py 5.05":
         raise ValueError("Upstream executable identity could not be verified")
     checked([args.rseqc, "--help"], destination, "rseqc-help", args.timeout)
     prefix = destination / "gene-body"
@@ -90,6 +90,7 @@ def qualify(args):
         "status": "qualified-percentile-table",
         "scope": "test-only indexed BAM copy; not an integrated QualiDock QC mode",
         "command": command, "input_sha256": original, "test_index": index.name,
+        "index_sha256": digest(index), "tool_sha256": digest(args.rseqc),
         "profile": profile,
         "upstream_plot_files": sorted(p.name for p in destination.glob("gene-body.*")
                                       if p.suffix.lower() in {".png", ".pdf", ".jpeg"}),
