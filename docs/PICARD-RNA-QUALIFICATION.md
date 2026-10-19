@@ -254,3 +254,90 @@ against original 3.5.0 sources and genuine output:
 - [Collector, eligibility and normalization](https://github.com/broadinstitute/picard/blob/3.5.0/src/main/java/picard/analysis/directed/RnaSeqMetricsCollector.java)
 - [RefFlatReader](https://github.com/broadinstitute/picard/blob/3.5.0/src/main/java/picard/annotation/RefFlatReader.java)
 - [Gene coverage-counter boundary](https://github.com/broadinstitute/picard/blob/3.5.0/src/main/java/picard/annotation/Gene.java)
+
+## Executed study evidence and measured scope
+
+The final qualification code is `80b9083`. On
+[CI 39233260262](https://github.com/PhoenixEmik/QualiDock/actions/runs/39233260262),
+each target executes **52 recorded commands**, passes **15 contract tests** and
+verifies the preserved SHA-256 of **50 synthetic source files**. Downloaded
+artifacts were independently rehashed under ignored
+`validation/picard-rna-accepted/{1.25.1,1.35,latest-1x}`. The latest-1.x target
+resolved to **MultiQC 1.35**, not an additional qualified version. Actual runtime:
+**Picard 3.5.0**, **Temurin Java 17.0.20.1**, **SAMtools/HTSlib 1.22.1**, and
+**Rscript 4.3.3** (local original-PDF check also used Rscript 4.4.1).
+
+The original three-source file-list aggregation preserves `i_1.rna_metrics`,
+`i_2.rna_metrics`, `i_3.rna_metrics` with distinct source paths. Both real profiles'
+**101 points** match the unchanged Picard tables. The third, unavailable profile
+is an empty trace in 1.25.1 and omitted in 1.35. rRNA General Statistics is checked
+both when absent and when available. Header-only incomplete input returns
+MultiQC exit 0 with no valid scientific result; it is not approved as a report.
+ALL_READS +LIBRARY input is reduced to one population by the official module;
+therefore multi-population aggregation remains outside the proposed contract.
+
+One observed Linux 1.25.1 matrix execution (fresh JVM per Picard command):
+
+| Command | Exit | Wall seconds | Child CPU seconds | Highest sampled process-tree RSS (MiB) | Highest sampled private temporary bytes |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Category metrics | 0 | 1.509 | 1.206 | 116.47 | 703,576 |
+| Explicit offline converted fixture | 0 | 1.308 | 1.154 | 107.02 | 703,576 |
+| Original PDF | 0 | 1.711 | 1.498 | 134.04 | 706,347 |
+| Failure-only R plotting probe | 1 | 61.276 | 1.211 | 109.59 | 703,744 |
+| Filename-safe MultiQC | 0 | 1.310 | 1.169 | 122.84 | 1,261 |
+
+CPU is the sequential child user+system CPU delta, including the executor's
+worker/monitor descendants, not Java-only instrumentation. RSS is sampled every
+0.5 seconds; temporary files every 0.1 seconds. Neither is an exact high-water
+mark. Private temporary storage retained at study end: **168 bytes**. This is
+not total report storage or a guarantee about transient unsampled files. Input
+files total **16,692 bytes**; the category BAM is **472 bytes**, its native refFlat
+**55 bytes**; original metrics text total **50,389 bytes**, original PDF **9,864
+bytes**. The 61-second injected plotting failure is not normal PDF runtime.
+No timeout was triggered. These timings exclude a future application's full
+alignment/annotation preflight and source-identity scans.
+
+The pinned collector allocates coverage arrays for touched transcripts before
+final eligibility/high-expression selection. Raising MINIMUM_LENGTH must not
+be assumed to reduce the initial scan or these allocations. Tiny synthetic data
+establish neither large-input memory suitability nor NFS/Lustre performance;
+representative measurements remain pending #5. No caching, benchmark framework
+or performance guarantee is introduced here.
+
+Additional local independent checks preserve original stdout and argv under
+`validation/picard-rna-qualification-135-complete`: SAMtools `depth -a` confirms
+600 exonic positions with actual depth 1 for the exact-boundary spliced fixture,
+while original Picard has no eligible coverage histogram; numeric Picard
+execution with PATH containing no Rscript returns 0 with identical original
+metric rows. These local checks supplement, and are distinguished from, CI
+artifacts. Neither source BAM changes.
+
+Scope: **21 files** (19 added, 2 modified, none removed). Primary additions are
+`scripts/qualify-picard-rna.py`, `backend/tests/test_picard_rna_qualification.py`,
+this study report and 16 original fixture/provenance files. Existing
+`.github/workflows/ci.yml` and `docs/RNA-QC.md` are extended. **Application
+production code: +0 /−0 lines.** Existing scientific execution, models, UI,
+authentication, persistence and dependency declarations are unchanged.
+
+Final regression acceptance on `80b9083`: **all eight CI jobs succeeded**.
+Default backend: **532 passed /195 missing-optional-tool skips**; the provisioned
+1.35 genuine-tool job runs the required retained scientific integrations without
+missing-tool skips. Frontend: **150 passed**, TypeScript/Vite build passed.
+Linux resource/cgroup validation passed. Downloaded JUnit artifacts independently
+confirm **75 Chromium /51 Firefox** existing-workflow tests, **zero failures,
+errors or skips**, including report isolation, proxy paths, source/derived
+processing, RNA/coverage results, downloads and restart. No new production RNA
+metrics UI is implied by these regression checks. Earlier local full backend:
+553 passed /172 absent-optional-tool skips; final focused contracts: 15 passed.
+The existing Vite chunk-size warning is unchanged.
+
+[Draft PR #38](https://github.com/PhoenixEmik/QualiDock/pull/38) contains the full
+file inventory and original fixtures. The three scientific artifact IDs are
+`12178437780` (1.25.1), `12177363608` (1.35), and `12177163537` (latest-1.x).
+Browser JUnit archives are `12179236962` (Chromium) and `12179206645` (Firefox).
+The documentation-only evidence commit follows the tested code; no further
+scientific, runtime, dependency or CI configuration changes are made.
+
+**Review gate remains in force:** Outcome A is recommended; PR stays Draft,
+#35 stays open. No production integration, merge, issue closure or release is
+performed. Large-data suitability remains unverified rather than extrapolated.
