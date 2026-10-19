@@ -21,3 +21,15 @@ for (const width of [390,1400]) test(`gene-body chart renders finite responsive 
  const c=echarts.init(null,undefined,{renderer:'svg',ssr:true,width,height:420});
  try {c.setOption(geneBodyView(rows,'file <unsafe>').options); const svg=c.renderToSVGString();assert.match(svg,/<svg/);assert.doesNotMatch(svg,/NaN|Infinity|<unsafe>/);}finally{c.dispose();}
 });
+
+test('shared series visibility actions actually hide and restore the gene-body curve',()=>{
+ const c=echarts.init(null,undefined,{renderer:'svg',ssr:true,width:800,height:420});
+ try {
+  const view=geneBodyView(rows,'input.bam');c.setOption(view.options);
+  const name=view.series[0].name;
+  c.dispatchAction({type:'legendUnSelect',name});
+  assert.equal((c.getOption().legend as any[])[0].selected[name],false);
+  c.dispatchAction({type:'legendSelect',name});
+  assert.equal((c.getOption().legend as any[])[0].selected[name],true);
+ }finally{c.dispose();}
+});

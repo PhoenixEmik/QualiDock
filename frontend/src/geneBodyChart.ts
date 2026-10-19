@@ -10,6 +10,7 @@ export function geneBodyView(rows: string[][], sample: string): NativePlotView {
     series: [{ name, label: name }],
     options: {
       animation: false,
+      legend: { show: false, data: [name] },
       grid: { left: 80, right: 30, top: 45, bottom: 115 },
       tooltip: { trigger: "axis", confine: true, renderMode: "richText", formatter: ((items: {data?: {raw: string[]}}[]) => {
         const raw = items[0]?.data?.raw;
