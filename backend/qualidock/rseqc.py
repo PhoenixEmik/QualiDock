@@ -268,10 +268,11 @@ async def gene_body_execute(manager, run, row, contigs, preflight, env, stats):
                'diagnostics':prefix+'.genebody.log', 'index_check':prefix+'.index-check.txt',
                **{'preflight_'+k:v for k,v in preflight.items()}}
     # Decode indexed primary mapped records over the entire reference dictionary.
+    # Controlled relative paths also isolate HTSlib syntax from output-root names.
     # Agreement with the independent sequential stats scan is operational index
     # evidence, not an assertion that BAI/CSI cryptographically binds the BAM.
-    code = await manager.command(run,'samtools',[run['tools']['samtools']['executable'],'view','-c','-F','2308','-M','-L',str(regions),
-                     str(alias)+'##idx##'+str(alias)+'.bai'],directory,stdout=directory/reports['index_check'],env=env)
+    code = await manager.command(run,'samtools',[run['tools']['samtools']['executable'],'view','-c','-F','2308','-M','-L',str(regions.relative_to(directory)),
+                     str(alias.relative_to(directory))+'##idx##'+str(alias.relative_to(directory))+'.bai'],directory,stdout=directory/reports['index_check'],env=env)
     if run['id'] in manager.cancelled:return None
     count = text(local_file(directory,reports['index_check'])).strip()
     if code or not count.isascii() or not count.isdecimal() or Decimal(count) != Decimal(values['reads mapped:']):

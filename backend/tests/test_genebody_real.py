@@ -274,3 +274,33 @@ def test_exit_zero_cannot_publish_mutated_original_table(inputs,fault):
         auth(c,s);run=launch(c,bam)
         assert run['state']=='failed' and not any(r['path'].startswith('qc/') for r in run['reports'])
         assert next(e for e in run['executions'] if e['tool']=='rseqc_genebody')['exit_code']==0
+
+
+def test_special_output_root_cannot_be_interpreted_as_htslib_index_syntax(inputs):
+    s,bam,bed=inputs;s=replace(s,output=s.output.parent/'results ##idx## "quoted"')
+    with TestClient(create_app(s)) as c:
+        auth(c,s);run=launch(c,bam,original_plot=bool(shutil.which("Rscript")))
+        assert run['state']=='completed',run['error']
+        index_command=next(e['argv'] for e in run['executions'] if e['tool']=='samtools' and e['argv'][1]=='view')
+        assert index_command[-1].count('##idx##')==1
+        assert index_command[-1].startswith('qc/')
+
+
+@pytest.mark.skipif(not shutil.which(os.environ.get('QUALIDOCK_MULTIQC','multiqc')),reason='Genuine MultiQC required')
+def test_failed_genuine_multqc_keeps_gene_body_originals_but_not_failed_bundle(inputs):
+    import sys
+    s,bam,bed=inputs;actual=shutil.which(os.environ.get('QUALIDOCK_MULTIQC','multiqc'))
+    launcher=bam.parent.parent/'failed-multiqc-test-only'
+    launcher.write_text(f'#!{sys.executable}\nimport os,sys,subprocess\nif "--version" in sys.argv:os.execv({actual!r},[{actual!r},*sys.argv[1:]])\nsubprocess.run([{actual!r},*sys.argv[1:]],check=True)\nsys.exit(9)\n');launcher.chmod(0o700)
+    s=replace(s,multiqc=str(launcher))
+    with TestClient(create_app(s)) as c:
+        auth(c,s);run=launch(c,bam,multiqc=True)
+        assert run['state']=='partial',run['error']
+        row=run['qc']['results'][0];assert row['state']=='completed' and row['rseqc']['status']=='available'
+        assert c.get(f'/api/runs/{run["id"]}/download',params={'path':row['report']}).status_code==200
+        assert (s.output/run['id']/'multiqc/multiqc_report.html').exists()
+        assert c.get(f'/api/runs/{run["id"]}/download',params={'path':'multiqc/multiqc_report.html'}).status_code==403
+    with TestClient(create_app(s)) as c:
+        auth(c,s)
+        assert c.get(f'/api/runs/{run["id"]}/download',params={'path':row['report']}).status_code==200
+        assert c.get(f'/api/runs/{run["id"]}/download',params={'path':'multiqc/multiqc_report.html'}).status_code==403
