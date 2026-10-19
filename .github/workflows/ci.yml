@@ -106,6 +106,19 @@ jobs:
         with:
           name: picard-tool-study
           path: validation/picard-tool-study
+      - name: Qualify genuine RSeQC gene-body percentile contract on indexed test BAM
+        if: matrix.multiqc == '1.35'
+        run: |
+          python scripts/qualify-rseqc-genebody.py \
+            --bam "$RUNNER_TEMP/qualidock-rna-tools/fixture/input.bam" \
+            --bed "$RUNNER_TEMP/qualidock-rna-tools/fixture/genes.bed12" \
+            --rseqc "$RUNNER_TEMP/qualidock-rna-tools/venv/bin/geneBody_coverage.py" \
+            --output validation/rna-gene-body-tool-study
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.multiqc == '1.35'
+        with:
+          name: rna-gene-body-tool-study
+          path: validation/rna-gene-body-tool-study
       - name: Actual Picard observations, PDF, resources and restart
         if: matrix.multiqc == '1.35'
         env:
