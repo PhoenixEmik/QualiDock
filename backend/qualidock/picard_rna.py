@@ -1,6 +1,7 @@
 """Pinned Picard 3.5.0 RNA metrics and approved native annotations; no calculations."""
 import asyncio
 import hashlib
+from decimal import Decimal
 from pathlib import Path
 import re
 from typing import Literal
@@ -30,58 +31,60 @@ def approved(settings, identity, kind='refflat'):
         raise ValueError('Approved '+label+' must be an absolute local path')
     try:path = approved_file(Path(configured[identity]).expanduser())
     except OSError as exc:raise ValueError('Approved '+label+' is unavailable or unreadable') from exc
-    before = snapshot(path.stat())
-    digest,size,records,exons = hashlib.sha256(),0,0,0
-    contigs,genes,transcripts = {},{},set()
-    in_intervals = False
-    with path.open('rb') as stream:
-        while raw := stream.readline(16385):
-            size += len(raw);digest.update(raw)
-            if len(raw)>16384 or size>128*1024*1024:
-                raise ValueError(label+' exceeds 16 KiB line /128 MiB total bounds')
-            line=raw.decode('utf-8').rstrip('\r\n')
-            if not line or line.startswith('#'):continue
-            f=line.split('\t')
-            if kind=='refflat':
-                if len(f)!=11 or any(not v or len(v)>16000 or any(c.isspace() or ord(c)<32 for c in v) for v in f):
-                    raise ValueError('refFlat requires eleven nonempty tab-separated fields')
-                gene,tx,chrom,strand,start,end,cds_start,cds_end,count,starts,ends=f
-                if any(len(v)>1024 for v in (gene,tx,chrom)) or gene==tx or tx in transcripts or strand not in {'+','-'} or any(not v.isascii() or not v.isdecimal() for v in (start,end,cds_start,cds_end,count)):
-                    raise ValueError('Invalid/duplicate refFlat gene, transcript, contig, strand or integer')
-                start,end,cds_start,cds_end,count=map(int,(start,end,cds_start,cds_end,count))
-                if not start<=cds_start<=cds_end<=end or start==end or not 1<=count<=1000 or end>2**31-1:
-                    raise ValueError('Invalid refFlat transcript/coding bounds or exon count')
-                if gene in genes and genes[gene]!=(chrom,strand):raise ValueError('Ambiguous refFlat gene chromosome/strand')
-                begins,finishes=starts.removesuffix(',').split(','),ends.removesuffix(',').split(',')
-                if len(begins)!=count or len(finishes)!=count or any(not v.isascii() or not v.isdecimal() for v in begins+finishes):raise ValueError('Invalid refFlat exon arrays')
-                previous=start
-                for left,right in zip(map(int,begins),map(int,finishes)):
-                    if not previous<=left<right<=end:raise ValueError('refFlat exons must be ordered, nonoverlapping and inside transcript')
-                    previous=right
-                if int(begins[0])!=start or previous!=end:raise ValueError('refFlat exons must span transcript bounds')
-                transcripts.add(tx);genes[gene]=(chrom,strand);exons+=count
-                contigs[chrom]=max(contigs.get(chrom,0),end)
-            else:
-                if line.startswith('@'):
-                    if in_intervals:raise ValueError('interval_list header follows intervals')
-                    if f[0]=='@SQ':
-                        pairs=[v.split(':',1) for v in f[1:] if ':' in v]
-                        tags=dict(pairs)
-                        if len(tags)!=len(pairs) or len(pairs)!=len(f)-1:raise ValueError('Duplicate/malformed interval_list dictionary tags')
-                        chrom,length=tags.get('SN'),tags.get('LN','')
-                        if not chrom or len(chrom)>1024 or chrom in contigs or not length.isascii() or not length.isdecimal() or not 0<int(length)<=2**31-1:raise ValueError('Invalid interval_list sequence dictionary')
-                        contigs[chrom]=int(length)
-                    elif f[0] not in {'@HD','@RG','@PG','@CO'}:raise ValueError('Unsupported interval_list header')
-                    if len(contigs)>100000:raise ValueError('Too many interval_list references')
-                    continue
-                in_intervals=True
-                if len(f)!=5 or f[0] not in contigs or f[3] not in {'+','-'} or not f[4] or any(not v.isascii() or not v.isdecimal() for v in f[1:3]) or not 1<=int(f[1])<=int(f[2])<=contigs[f[0]]:
-                    raise ValueError('Invalid 1-based inclusive interval_list coordinates')
-            records+=1
-            if records>1000000 or exons>2000000 or len(contigs)>100000:raise ValueError(label+' exceeds annotation record/exon/contig limits')
-    if not records or snapshot(path.stat())!=before:raise ValueError('Empty or changed '+label)
-    return {'id':identity,'path':str(path),'snapshot':before,'sha256':digest.hexdigest(),'bytes':size,'records':records,'contigs':contigs,
-            'identity':label+' SHA-256 and BAM dictionary names/coordinate bounds'+(' and lengths' if kind!='refflat' else '')+'; not independent reference-sequence or assembly verification'}
+    try:
+        before = snapshot(path.stat())
+        digest,size,records,exons = hashlib.sha256(),0,0,0
+        contigs,genes,transcripts = {},{},set()
+        in_intervals = False
+        with path.open('rb') as stream:
+            while raw := stream.readline(16385):
+                size += len(raw);digest.update(raw)
+                if len(raw)>16384 or size>128*1024*1024:
+                    raise ValueError(label+' exceeds 16 KiB line /128 MiB total bounds')
+                line=raw.decode('utf-8').rstrip('\r\n')
+                if not line or line.startswith('#'):continue
+                f=line.split('\t')
+                if kind=='refflat':
+                    if len(f)!=11 or any(not v or len(v)>16000 or any(c.isspace() or ord(c)<32 for c in v) for v in f):
+                        raise ValueError('refFlat requires eleven nonempty tab-separated fields')
+                    gene,tx,chrom,strand,start,end,cds_start,cds_end,count,starts,ends=f
+                    if any(len(v)>1024 for v in (gene,tx,chrom)) or gene==tx or tx in transcripts or strand not in {'+','-'} or any(not v.isascii() or not v.isdecimal() for v in (start,end,cds_start,cds_end,count)):
+                        raise ValueError('Invalid/duplicate refFlat gene, transcript, contig, strand or integer')
+                    start,end,cds_start,cds_end,count=map(int,(start,end,cds_start,cds_end,count))
+                    if not start<=cds_start<=cds_end<=end or start==end or not 1<=count<=1000 or end>2**31-1:
+                        raise ValueError('Invalid refFlat transcript/coding bounds or exon count')
+                    if gene in genes and genes[gene]!=(chrom,strand):raise ValueError('Ambiguous refFlat gene chromosome/strand')
+                    begins,finishes=starts.removesuffix(',').split(','),ends.removesuffix(',').split(',')
+                    if len(begins)!=count or len(finishes)!=count or any(not v.isascii() or not v.isdecimal() for v in begins+finishes):raise ValueError('Invalid refFlat exon arrays')
+                    previous=start
+                    for left,right in zip(map(int,begins),map(int,finishes)):
+                        if not previous<=left<right<=end:raise ValueError('refFlat exons must be ordered, nonoverlapping and inside transcript')
+                        previous=right
+                    if int(begins[0])!=start or previous!=end:raise ValueError('refFlat exons must span transcript bounds')
+                    transcripts.add(tx);genes[gene]=(chrom,strand);exons+=count
+                    contigs[chrom]=max(contigs.get(chrom,0),end)
+                else:
+                    if line.startswith('@'):
+                        if in_intervals:raise ValueError('interval_list header follows intervals')
+                        if f[0]=='@SQ':
+                            pairs=[v.split(':',1) for v in f[1:] if ':' in v]
+                            tags=dict(pairs)
+                            if len(tags)!=len(pairs) or len(pairs)!=len(f)-1:raise ValueError('Duplicate/malformed interval_list dictionary tags')
+                            chrom,length=tags.get('SN'),tags.get('LN','')
+                            if not chrom or len(chrom)>1024 or any(c.isspace() or ord(c)<33 for c in chrom) or chrom in contigs or not length.isascii() or not length.isdecimal() or not 0<int(length)<=2**31-1:raise ValueError('Invalid interval_list sequence dictionary')
+                            contigs[chrom]=int(length)
+                        elif f[0] not in {'@HD','@RG','@PG','@CO'}:raise ValueError('Unsupported interval_list header')
+                        if len(contigs)>100000:raise ValueError('Too many interval_list references')
+                        continue
+                    in_intervals=True
+                    if len(f)!=5 or f[0] not in contigs or f[3] not in {'+','-'} or not f[4] or any(not v.isascii() or not v.isdecimal() for v in f[1:3]) or not 1<=int(f[1])<=int(f[2])<=contigs[f[0]]:
+                        raise ValueError('Invalid 1-based inclusive interval_list coordinates')
+                records+=1
+                if records>1000000 or exons>2000000 or len(contigs)>100000:raise ValueError(label+' exceeds annotation record/exon/contig limits')
+        if not records or snapshot(path.stat())!=before:raise ValueError('Empty or changed '+label)
+        return {'id':identity,'path':str(path),'snapshot':before,'sha256':digest.hexdigest(),'bytes':size,'records':records,'contigs':contigs,
+                'identity':label+' SHA-256 and BAM dictionary names/coordinate bounds'+(' and lengths' if kind!='refflat' else '')+'; not independent reference-sequence or assembly verification'}
+    except OSError as exc:raise ValueError('Approved '+label+' became unavailable during validation') from exc
 
 
 def listing(settings,kind):
@@ -133,6 +136,15 @@ def parse(path):
             if sum(number(k) for k in ['CODING_BASES','UTR_BASES','INTRONIC_BASES','INTERGENIC_BASES','RIBOSOMAL_BASES'])!=number('PF_ALIGNED_BASES'):
                 raise ValueError('Inconsistent Picard RNA aligned-base categories')
             if bool(f[2])!=bool(f[15]):raise ValueError('Incomplete Picard RNA rRNA evidence')
+            # Validate upstream's six-decimal fractions against its own counts;
+            # retain the original strings, never replace them with these checks.
+            numerators={k:number(k.removeprefix('PCT_')) for k in ['PCT_CODING_BASES','PCT_UTR_BASES','PCT_INTRONIC_BASES','PCT_INTERGENIC_BASES','PCT_RIBOSOMAL_BASES']}
+            numerators.update(PCT_MRNA_BASES=number('CODING_BASES')+number('UTR_BASES'),PCT_USABLE_BASES=number('CODING_BASES')+number('UTR_BASES'))
+            for key,numerator in numerators.items():
+                denominator=number('PF_BASES' if key=='PCT_USABLE_BASES' else 'PF_ALIGNED_BASES')
+                value=f[COLUMNS.index(key)]
+                if value and ((not denominator and picard.numeric(value)!=0) or (denominator and abs(picard.numeric(value)-numerator/denominator)>Decimal('0.0000005'))):
+                    raise ValueError('Inconsistent Picard RNA fraction denominator')
         elif state=='histogram-columns':
             if f!=HISTOGRAM:raise ValueError('Unsupported Picard RNA histogram population')
             state='histogram'
@@ -141,6 +153,7 @@ def parse(path):
             picard.numeric(f[1]);rows.append(f)
         else:raise ValueError('Unexpected Picard RNA report data')
     if values is None or state not in {'metrics','histogram'} or (state=='histogram' and len(rows)!=101):raise ValueError('Incomplete Picard RNA metrics or coverage')
+    if rows and (values[1]=='0' or not any(picard.numeric(r[1])>0 for r in rows)):raise ValueError('Non-informative/inconsistent Picard RNA coverage histogram')
     return {'status':'available','metrics':{'columns':COLUMNS,'rows':[values],'total_rows':1},
             'histogram':{'columns':HISTOGRAM,'rows':rows,'total_rows':len(rows)},'coverage_available':bool(rows),
             'units':{k:'fraction' if k.startswith('PCT_') else 'bases' if k.endswith('BASES') else 'reads' if 'READS' in k else 'relative coverage/bias' for k in COLUMNS[:-3]}}

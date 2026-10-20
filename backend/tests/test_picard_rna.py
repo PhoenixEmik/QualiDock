@@ -18,7 +18,7 @@ def test_all_original_reports_preserve_exact_values(name):
     if not parsed['coverage_available']:assert original['rows'][0]['MEDIAN_5PRIME_BIAS']=='0'
 
 
-@pytest.mark.parametrize('fault',['truncated','class','columns','duplicate','population','negative','nan','fraction','category','missing','bin','duplicate-bin','rrna'])
+@pytest.mark.parametrize('fault',['truncated','class','columns','duplicate','population','negative','nan','fraction','category','missing','bin','duplicate-bin','rrna','denominator'])
 def test_malformed_reports_never_become_scientific_results(tmp_path,fault):
     raw=(FIX/'flat-plus-NONE.rna_metrics.txt').read_text()
     if fault=='truncated':raw=raw.rsplit('\n100\t',1)[0]
@@ -33,6 +33,7 @@ def test_malformed_reports_never_become_scientific_results(tmp_path,fault):
     elif fault=='missing':raw=raw.replace('602\t602\t','\t602\t')
     elif fault=='bin':raw=raw.replace('\n100\t1','\n101\t1')
     elif fault=='duplicate-bin':raw=raw.replace('\n99\t1','\n98\t1')
+    elif fault=='denominator':raw=raw.replace('0.664452','0.1')
     elif fault=='rrna':raw=raw.replace('602\t602\t\t','602\t602\t0\t')
     path=tmp_path/'report';path.write_text(raw)
     with pytest.raises(ValueError):rna.parse(path)

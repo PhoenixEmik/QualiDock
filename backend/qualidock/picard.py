@@ -1,4 +1,4 @@
-"""Picard CollectInsertSizeMetrics 3.5.0; no independent scientific calculations."""
+"""Picard 3.5.0 insert-size metrics and shared bounded JVM/R setup."""
 import asyncio
 from decimal import Decimal, InvalidOperation
 import os

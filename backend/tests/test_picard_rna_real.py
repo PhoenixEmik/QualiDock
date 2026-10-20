@@ -235,3 +235,21 @@ def test_partial_input_failure_and_literal_unsafe_sample_names(inputs):
         assert not (cfg.output/run['id']/'injected').exists()
         assert c.get(f'/api/runs/{run["id"]}/download',params={'path':run['qc']['results'][0]['report']}).status_code==200
     assert before==hashes(bam.parent)
+
+
+def test_changed_annotation_during_real_execution_invalidates_results(inputs,monkeypatch):
+    from qualidock.manager import RunManager
+    cfg,bam=inputs
+    original=RunManager.command
+    async def changed(manager,run,tool,*args,**kwargs):
+        code=await original(manager,run,tool,*args,**kwargs)
+        if tool=='picard':
+            path=Path(cfg.rna_refflat_annotations['genes'])
+            path.write_text(path.read_text().replace('geneA','geneB'))
+        return code
+    monkeypatch.setattr(RunManager,'command',changed)
+    with TestClient(create_app(cfg)) as c:
+        auth(c,cfg);run=submit(c,bam)
+        assert run['state']=='failed' and 'changed' in run['error']
+        assert any(e['tool']=='picard' and e['exit_code']==0 for e in run['executions'])
+        assert not any(r['path'].startswith('qc/') for r in run['reports'])

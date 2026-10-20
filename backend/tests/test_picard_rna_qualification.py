@@ -1,4 +1,4 @@
-"""Test-only CollectRnaSeqMetrics contracts, not a production adapter."""
+"""Independent qualification contracts retained alongside the production adapter."""
 from decimal import Decimal
 import importlib.util
 import json
@@ -73,7 +73,6 @@ def test_fixture_generation_stays_test_only_and_preserves_gene_identity(tmp_path
     assert not path.exists() # Actual BAM creation is exclusively upstream samtools.
     fields=(path.parent/'genes.refFlat').read_text().strip().split('\t')
     assert fields==['geneA','txA','chrRNA','+','100','900','200','800','2','100,500,','300,900,']
-    assert 'CollectRnaSeqMetrics' not in (ROOT/'backend/qualidock/optional_qc.py').read_text()
 
 
 @pytest.mark.parametrize('include_empty',[False,True])
