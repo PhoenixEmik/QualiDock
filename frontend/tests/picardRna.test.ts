@@ -15,6 +15,8 @@ test('Picard original 0–100 profile and raw precision are independent from RSe
  assert.match((view.options.tooltip as any).formatter([{data:series.data[0]}]),new RegExp(rows[0][1]));
  assert.equal((view.options.xAxis as any).min,0);assert.equal((view.options.xAxis as any).max,100);
  assert.match(view.summary,/not absolute depth/);
+ assert.equal((view.options.yAxis as any).nameLocation,"middle");
+ assert.equal((view.options.yAxis as any).nameGap,55);
 });
 for (const width of [390,1400]) test('Picard RNA finite responsive chart '+width,()=>{
  const c=echarts.init(null,undefined,{renderer:'svg',ssr:true,width,height:420});

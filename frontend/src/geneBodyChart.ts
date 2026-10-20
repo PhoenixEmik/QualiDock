@@ -42,7 +42,7 @@ export function picardRnaView(rows: string[][], sample: string): NativePlotView 
         return raw ? "Transcript-relative position: "+raw[0]+"\nOriginal normalized coverage: "+raw[1]+"\n5′ → 3′; not absolute depth" : "Unavailable";
       }) as never},
       xAxis:{type:"value",min:0,max:100,minInterval:1,name:"Transcript-relative position · 5′ (0) → 3′ (100)",nameLocation:"middle",nameGap:32},
-      yAxis:{type:"value",min:0,name:"Picard normalized coverage"},
+      yAxis:{type:"value",min:0,name:"Picard normalized coverage",nameLocation:"middle",nameGap:55},
       dataZoom:[{type:"inside",filterMode:"none"},{type:"slider",bottom:45,height:18,filterMode:"none"}],
       series:[{name,type:"line",smooth:false,connectNulls:false,showSymbol:false,
         lineStyle:{color:overlayColors[0],width:2},itemStyle:{color:overlayColors[0]},
