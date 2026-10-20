@@ -19,7 +19,7 @@ from .metrics import parse_report
 from .import_formats import fastp_metadata
 from .reports import discover, metadata
 from .tools import detect_tool, locate_tool
-from . import coverage, alignment, processing, datasets, multiqc, optional_qc, fastq_screen, rseqc
+from . import coverage, alignment, processing, datasets, multiqc, optional_qc, fastq_screen, rseqc, picard_rna
 from .store import ResultStores, now, save_json
 from .sample_metadata import validate_configuration
 from .outcomes import plan, batches, stop, counts
@@ -177,7 +177,7 @@ class RunManager:
                 raise ValueError('Alignment QC does not accept FASTQ datasets, pairing or sample grouping')
             for path in paths:
                 await asyncio.to_thread(alignment.readable, path)
-                if mode in {*rseqc.MODES,'picard'} and path.suffix.lower() != '.bam':
+                if mode in {*rseqc.MODES,'picard','picard-rna'} and path.suffix.lower() != '.bam':
                     raise ValueError('RSeQC/Picard currently support BAM only; CRAM is not qualified')
         elif mode == "multiqc":
             try:
@@ -209,13 +209,16 @@ class RunManager:
             if info and not info["compatible"]:
                 raise ValueError(info["error"])
         processing.check_features(mode, operation_options, self.tool_info)
-        if mode == 'picard' and qc_options['histogram_pdf'] and not self.tool_info['picard'].get('rscript_executable'):
+        if mode in {'picard','picard-rna'} and qc_options['histogram_pdf'] and not self.tool_info['picard'].get('rscript_executable'):
             raise ValueError('Original Picard PDF requires Rscript. Disable PDF to retain original numeric histogram/metrics without R.')
         screen_panel = None
         bed_panel = None
         if mode == "mosdepth" and qc_options["panel"]:
             bed_panel = await asyncio.to_thread(coverage.panel, self.settings, qc_options["panel"])
         approved_annotation = await asyncio.to_thread(rseqc.annotation, self.settings, qc_options['annotation']) if mode in rseqc.MODES else None
+        if mode == 'picard-rna':
+            approved_annotation = await asyncio.to_thread(picard_rna.approved, self.settings, qc_options['annotation'])
+        approved_rrna = await asyncio.to_thread(picard_rna.approved, self.settings, qc_options['rrna'], 'rrna') if mode == 'picard-rna' and qc_options['rrna'] else None
         approved_reference = None
         if mode in alignment.MODES:
             if qc_options.get('reference'):
@@ -257,6 +260,8 @@ class RunManager:
                 run['qc']['reference'] = approved_reference
             if approved_annotation:
                 run['qc']['annotation'] = approved_annotation
+            if approved_rrna:
+                run['qc']['rrna'] = approved_rrna
             if bed_panel:
                 run['qc']['bed_panel'] = bed_panel
         self.runs[run_id] = run
@@ -619,11 +624,15 @@ class RunManager:
             picard_report = path.suffix == '.pdf' and str(path.relative_to(directory)) in picard_reports
             if path.is_file() and not path.is_symlink() and path.resolve().is_relative_to(directory.resolve()) and (path.suffix in allowed or coverage_report or picard_report or gene_report):
                 relative = str(path.relative_to(directory))
+                if relative.startswith('multiqc/') and run.get('qc',{}).get('multiqc_status')=='invalid':
+                    continue
                 if relative.startswith('multiqc/') and multiqc_execution is not None and 'exit_code' in multiqc_execution and multiqc_execution['exit_code'] != 0:
                     continue
                 if relative.startswith('processing/private/'):
                     continue
                 if relative.startswith('qc/'):
+                    if run['mode']=='picard-rna' and relative not in picard_reports:
+                        continue
                     if gene_reports is not None and relative not in gene_reports:
                         continue
                     if len(Path(relative).parts)>2 and Path(relative).parts[2]=='private':

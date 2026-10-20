@@ -55,6 +55,8 @@ class Settings:
     rseqc_genebody: str = "geneBody_coverage.py"
     java: str = "java"
     picard: str = "picard.jar"
+    rna_refflat_annotations: dict[str, str] = field(default_factory=dict)
+    rrna_intervals: dict[str, str] = field(default_factory=dict)
     rna_annotations: dict[str, str] = field(default_factory=dict)
     coverage_panels: dict[str, str] = field(default_factory=dict)
     alignment_references: dict[str, str] = field(default_factory=dict)
@@ -92,6 +94,8 @@ class Settings:
             rseqc_genebody=os.environ.get("QUALIDOCK_RSEQC_GENEBODY", "geneBody_coverage.py"),
             java=os.environ.get("QUALIDOCK_JAVA", "java"),
             picard=os.environ.get("QUALIDOCK_PICARD", "picard.jar"),
+            rna_refflat_annotations=json.loads(os.environ.get("QUALIDOCK_RNA_REFFLAT_ANNOTATIONS", "{}")),
+            rrna_intervals=json.loads(os.environ.get("QUALIDOCK_RRNA_INTERVALS", "{}")),
             rna_annotations=json.loads(os.environ.get("QUALIDOCK_RNA_ANNOTATIONS", "{}")),
             coverage_panels=json.loads(os.environ.get("QUALIDOCK_COVERAGE_PANELS", "{}")),
             alignment_references=json.loads(os.environ.get("QUALIDOCK_ALIGNMENT_REFERENCES", "{}")),

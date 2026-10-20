@@ -22,6 +22,7 @@ from .fastq_screen import listing as screen_panels
 from .alignment import references as alignment_references
 from .coverage import panels as coverage_panels
 from .rseqc import annotations as rna_annotations
+from .picard_rna import listing as picard_rna_annotations
 
 
 class SessionRequest(BaseModel):
@@ -78,7 +79,7 @@ class IntegrityRequest(BaseModel):
 
 class AnalysisRequest(BaseModel):
     name: str = Field(default="", max_length=120)
-    mode: Literal["both", "fastqc", "multiqc", "nanoq", "nanoplot", "fastq-screen", "samtools", "mosdepth", "rseqc-infer", "rseqc-distribution", "rseqc-genebody", "picard", "fastp", "seqkit-stats", "seqkit-sample", "seqkit-filter", "seqkit-extract"] = "both"
+    mode: Literal["both", "fastqc", "multiqc", "nanoq", "nanoplot", "fastq-screen", "samtools", "mosdepth", "rseqc-infer", "rseqc-distribution", "rseqc-genebody", "picard", "picard-rna", "fastp", "seqkit-stats", "seqkit-sample", "seqkit-filter", "seqkit-extract"] = "both"
     paths: list[str] = Field(min_length=1, max_length=500)
     threads: int = Field(default=1, ge=1, le=32)
     input_pairing: list[ReadAssignment] | None = Field(default=None, max_length=500)
@@ -183,6 +184,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "screen_panels": await asyncio.to_thread(screen_panels, settings),
                 "alignment_references": await asyncio.to_thread(alignment_references, settings),
                 "rna_annotations": await asyncio.to_thread(rna_annotations, settings),
+                "rna_refflat_annotations": await asyncio.to_thread(picard_rna_annotations, settings, "refflat"),
+                "rrna_intervals": await asyncio.to_thread(picard_rna_annotations, settings, "rrna"),
                 "coverage_panels": await asyncio.to_thread(coverage_panels, settings)}
 
     @app.get("/api/files")
