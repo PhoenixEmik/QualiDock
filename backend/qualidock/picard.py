@@ -1,4 +1,4 @@
-"""Picard CollectInsertSizeMetrics 3.5.0; no independent scientific calculations."""
+"""Picard 3.5.0 insert-size metrics and shared bounded JVM/R setup."""
 import asyncio
 from decimal import Decimal, InvalidOperation
 import os
@@ -108,27 +108,8 @@ async def execute(manager,run,row,stats,preflight,env):
         raise ValueError('Picard profile requires coordinate-sorted BAM; QualiDock never sorts inputs')
     options=run['qc']['options']
     if options['by_library']:await asyncio.to_thread(libraries,local_file(directory,preflight['header']))
-    prefix=f'qc/{row["id"]}/{row["id"]}'
-    temporary=manager.stores.subdirectory(run['id'],f'qc/{row["id"]}/private',exist_ok=True)
-    environment={**env,**{k:'' for k in ('JAVA_TOOL_OPTIONS','JDK_JAVA_OPTIONS','_JAVA_OPTIONS')},
-                 **{k:str(temporary) for k in ('TMPDIR','TEMP','TMP')},
-                 **{k:os.devnull for k in ('R_PROFILE','R_PROFILE_USER','R_ENVIRON','R_ENVIRON_USER')}}
-    reports={'stdout':prefix+'.picard.stdout.log','diagnostics':prefix+'.picard.stderr.log',
-             **{'preflight_'+k:v for k,v in preflight.items()}}
-    runtime_version=None
-    if options['histogram_pdf']:
-        runtime=run['tools']['picard'].get('rscript_executable')
-        if not runtime:raise ValueError('Original Picard PDF requires Rscript; numeric histogram metrics remain available with PDF disabled')
-        reports.update(r_version_stdout=prefix+'.R.version.txt',r_version_stderr=prefix+'.R.version.log')
-        code=await manager.command(run,'Rscript',[runtime,'--version'],directory,stdout=directory/reports['r_version_stdout'],stderr=directory/reports['r_version_stderr'],env=environment)
-        if run['id'] in manager.cancelled:return None
-        raw=await asyncio.to_thread(text,local_file(directory,reports['r_version_stdout']))
-        raw+='\n'+await asyncio.to_thread(text,local_file(directory,reports['r_version_stderr']))
-        match=re.search(r'(?m)^Rscript \(R\) version ([0-9]+\.[0-9]+\.[0-9]+)\b',raw)
-        if code or not match:raise ValueError('Cannot identify Rscript runtime for the requested original PDF')
-        runtime_version=match[1]
-        environment['PATH']=str(Path(runtime).parent)+os.pathsep+os.environ.get('PATH','')
-    heap=max(128,(manager.settings.memory_mb-256)*3//4)
+    prefix,temporary,environment,reports,heap,runtime_version=await runtime(manager,run,row,preflight,env)
+    if run['id'] in manager.cancelled:return None
     metrics=prefix+'.insert_size_metrics.txt'
     argv=[run['tools']['java']['executable'],'-Xms64m',f'-Xmx{heap}m',f'-XX:ActiveProcessorCount={run["threads"]}',
           '-XX:-UsePerfData','-Djava.io.tmpdir='+str(temporary),'-jar',run['tools']['picard']['executable'],'CollectInsertSizeMetrics',
@@ -157,3 +138,30 @@ async def execute(manager,run,row,stats,preflight,env):
             await asyncio.to_thread(pdf,local_file(directory,pdf_path))
             reports['histogram_pdf']=pdf_path
     return {**result,'reports':reports,'heap_mb':heap,'minimum_orientation_fraction':'0.05','deviations':'10','rscript_version':runtime_version}
+
+
+async def runtime(manager,run,row,preflight,env):
+    directory=manager.directory(run['id'])
+    options=run['qc']['options']
+    prefix=f'qc/{row["id"]}/{row["id"]}'
+    temporary=manager.stores.subdirectory(run['id'],f'qc/{row["id"]}/private',exist_ok=True)
+    environment={**env,**{k:'' for k in ('JAVA_TOOL_OPTIONS','JDK_JAVA_OPTIONS','_JAVA_OPTIONS')},
+                 **{k:str(temporary) for k in ('TMPDIR','TEMP','TMP')},
+                 **{k:os.devnull for k in ('R_PROFILE','R_PROFILE_USER','R_ENVIRON','R_ENVIRON_USER')}}
+    reports={'stdout':prefix+'.picard.stdout.log','diagnostics':prefix+'.picard.stderr.log',
+             **{'preflight_'+k:v for k,v in preflight.items()}}
+    runtime_version=None
+    if options['histogram_pdf']:
+        runtime=run['tools']['picard'].get('rscript_executable')
+        if not runtime:raise ValueError('Original Picard PDF requires Rscript; numeric histogram metrics remain available with PDF disabled')
+        reports.update(r_version_stdout=prefix+'.R.version.txt',r_version_stderr=prefix+'.R.version.log')
+        code=await manager.command(run,'Rscript',[runtime,'--version'],directory,stdout=directory/reports['r_version_stdout'],stderr=directory/reports['r_version_stderr'],env=environment)
+        if run['id'] in manager.cancelled:return prefix,temporary,environment,reports,0,None
+        raw=await asyncio.to_thread(text,local_file(directory,reports['r_version_stdout']))
+        raw+='\n'+await asyncio.to_thread(text,local_file(directory,reports['r_version_stderr']))
+        match=re.search(r'(?m)^Rscript \(R\) version ([0-9]+\.[0-9]+\.[0-9]+)\b',raw)
+        if code or not match:raise ValueError('Cannot identify Rscript runtime for the requested original PDF')
+        runtime_version=match[1]
+        environment['PATH']=str(Path(runtime).parent)+os.pathsep+os.environ.get('PATH','')
+    heap=max(128,(manager.settings.memory_mb-256)*3//4)
+    return prefix,temporary,environment,reports,heap,runtime_version

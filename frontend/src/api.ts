@@ -36,11 +36,13 @@ export async function api<T>(
 }
 export const isRnaQC = (mode: string) =>
   mode === "rseqc-infer" || mode === "rseqc-distribution" || mode === "rseqc-genebody";
-export const isBamOnlyQC = (mode: string) => isRnaQC(mode) || mode === "picard";
+export const isBamOnlyQC = (mode: string) => isRnaQC(mode) || mode === "picard" || mode === "picard-rna";
 export const isAlignmentQC = (mode: string) =>
   mode === "samtools" || mode === "mosdepth" || isBamOnlyQC(mode);
 export const modeLabel = (mode: string) =>
-  mode === "rseqc-genebody"
+  mode === "picard-rna"
+    ? "Picard RNA-seq metrics"
+    : mode === "rseqc-genebody"
     ? "RSeQC gene-body coverage"
     : mode === "picard"
     ? "Picard insert-size QC"

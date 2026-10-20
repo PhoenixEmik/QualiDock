@@ -163,11 +163,11 @@ async def qualify_multiqc(root, executable, run):
                 expected[sample]=metrics(root/(source_name+'.rna_metrics.txt'))['histogram']
             lines=data['report_plot_data']['picard_rna_coverage']['datasets'][0]['lines']
             configurations[name]['empty_coverage_traces']=verify_coverage_traces(lines,expected)
-            # The production allowlist intentionally has no RNA entry yet.
-            # Record that a subsequent adapter must add it, never guess names.
+            # Production now explicitly permits this qualified RNA source section;
+            # preserve the original path/sample relationship, never guess names.
             production=source_mappings(directory/'multiqc/multiqc_data/multiqc_data.json')
-            assert production=={}
-            configurations[name]['current_production_mapping']=production
+            assert production=={str(report):{sample} for sample,report in sources.items()}
+            configurations[name]['current_production_mapping']={path:sorted(names) for path,names in production.items()}
     # Original multi-population report is preserved; study official support,
     # rather than silently aggregating ALL_READS and LIBRARY in production.
     for name,source in [('by-library','by-library.rna_metrics.txt'),('incomplete',None)]:

@@ -41,6 +41,7 @@ import type {
   CoverageOptions,
   RnaOptions,
   PicardOptions,
+  PicardRnaOptions,
 } from "./types";
 import { Empty } from "./Feedback";
 import FileExplorer from "./FileExplorer";
@@ -102,6 +103,9 @@ export default function App() {
   const [nanoPlotOptions, setNanoPlotOptions] = useState<NanoPlotOptions>({
     loglength: false,
     individual_plots: false,
+  });
+  const [picardRnaOptions, setPicardRnaOptions] = useState<PicardRnaOptions>({
+    annotation: "", strand: "", rrna: null, histogram_pdf: false, multiqc: false,
   });
   const [picardOptions, setPicardOptions] = useState<PicardOptions>({
     by_library: false,
@@ -515,6 +519,8 @@ export default function App() {
                     : {}),
               },
             }
+          : mode === "picard-rna"
+            ? { qc_options: picardRnaOptions }
           : mode === "picard"
             ? { qc_options: picardOptions }
             : isAlignmentQC(mode)
@@ -621,6 +627,8 @@ export default function App() {
     );
     setName(draft.name);
     setMode(draft.mode);
+    if (draft.mode === "picard-rna" && draft.qc_options)
+      setPicardRnaOptions(draft.qc_options as PicardRnaOptions);
     if (draft.mode === "picard" && draft.qc_options)
       setPicardOptions(draft.qc_options as PicardOptions);
     if (isRnaQC(draft.mode) && draft.qc_options) {
@@ -1025,6 +1033,8 @@ export default function App() {
             <NewAnalysisForm
               coverageOptions={coverageOptions}
               setCoverageOptions={setCoverageOptions}
+              picardRnaOptions={picardRnaOptions}
+              setPicardRnaOptions={setPicardRnaOptions}
               picardOptions={picardOptions}
               setPicardOptions={setPicardOptions}
               rnaOptions={rnaOptions}

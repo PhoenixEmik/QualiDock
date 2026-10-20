@@ -12,6 +12,7 @@ import {
 import { bytes, modeLabel, isAlignmentQC, isRnaQC, isBamOnlyQC } from "./api";
 import { Empty } from "./Feedback";
 import { ReadRelationships } from "./SampleEditor";
+import { PicardRnaSettings } from "./PicardSettings";
 import PicardSettings from "./PicardSettings";
 import RnaQcSettings from "./RnaQcSettings";
 import OutputDirectory from "./OutputDirectory";
@@ -26,9 +27,12 @@ import type {
   CoverageOptions,
   RnaOptions,
   PicardOptions,
+  PicardRnaOptions,
 } from "./types";
 
 interface Props {
+  picardRnaOptions: PicardRnaOptions;
+  setPicardRnaOptions: (value: PicardRnaOptions) => void;
   picardOptions: PicardOptions;
   setPicardOptions: (value: PicardOptions) => void;
   rnaOptions: RnaOptions;
@@ -62,6 +66,8 @@ interface Props {
   submit: () => Promise<void>;
 }
 export default function NewAnalysisForm({
+  picardRnaOptions,
+  setPicardRnaOptions,
   picardOptions,
   setPicardOptions,
   rnaOptions,
@@ -103,7 +109,9 @@ export default function NewAnalysisForm({
         : entry.kind === "fastq";
   const configuredPaths = [...selected.values()].filter(suitable);
   const required =
-    mode === "picard"
+    mode === "picard-rna"
+      ? ["samtools", "java", "picard", ...(picardRnaOptions.multiqc ? ["multiqc"] : [])]
+    : mode === "picard"
       ? [
           "samtools",
           "java",
@@ -171,7 +179,7 @@ export default function NewAnalysisForm({
                 ...([...selected.values()].some(
                   (entry) => entry.kind === "alignment",
                 )
-                  ? (["samtools", "mosdepth", "rseqc-infer", "picard"] as const)
+                  ? (["samtools", "mosdepth", "rseqc-infer", "picard", "picard-rna"] as const)
                   : []),
               ] as const
             ).map((value) => (
@@ -191,7 +199,9 @@ export default function NewAnalysisForm({
                     : modeLabel(value)}
                 </strong>
                 <small>
-                  {value === "picard"
+                  {value === "picard-rna"
+                    ? "Original base-assignment and transcript-bias metrics with approved refFlat"
+                    : value === "picard"
                     ? "Original insert-size and orientation metrics for BAM libraries"
                     : value === "rseqc-infer"
                       ? "Strandedness and alignment-block distribution with approved BED12"
@@ -215,6 +225,7 @@ export default function NewAnalysisForm({
               </button>
             ))}
           </div>
+          {mode === "picard-rna" && <PicardRnaSettings value={picardRnaOptions} change={setPicardRnaOptions} config={config} busy={busy} />}
           {mode === "picard" && (
             <PicardSettings
               value={picardOptions}
@@ -653,6 +664,12 @@ export default function NewAnalysisForm({
           className="button primary"
           disabled={
             busy ||
+            (mode === "picard-rna" && (
+              !picardRnaOptions.strand ||
+              !config?.rna_refflat_annotations?.some(a => a.id === picardRnaOptions.annotation && a.available) ||
+              (!!picardRnaOptions.rrna && !config?.rrna_intervals?.some(a => a.id === picardRnaOptions.rrna && a.available)) ||
+              (picardRnaOptions.histogram_pdf && !config?.tool_details?.picard?.rscript_executable)
+            )) ||
             (mode === "picard" &&
               picardOptions.histogram_pdf &&
               !config?.tool_details?.picard?.rscript_executable) ||

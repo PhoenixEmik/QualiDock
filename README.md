@@ -182,3 +182,5 @@ Licensed under [GNU GPLv3](LICENSE). FastQC, MultiQC, Apache ECharts, and other 
 
 MultiQC-only imports also accept existing fastp JSON reports without processing
 FASTQs. See [QC imports](docs/QC-IMPORTS.md).
+
+Picard RNA-seq QC (`picard-rna`) supports approved native refFlat, explicit strand specificity, optional rRNA intervals and original PDF/MultiQC reports. See [RNA QC contracts](docs/RNA-QC.md#picard-rna-seq-metrics-350-39). BAM-only/ALL_READS; no automatic annotation conversion or reference downloads.

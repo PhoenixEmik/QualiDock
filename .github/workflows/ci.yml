@@ -122,6 +122,17 @@ jobs:
         with:
           name: picard-rna-${{ matrix.multiqc }}-qualification
           path: validation/picard-rna-qualification
+      - name: Genuine production Picard RNA, provenance and MultiQC contract
+        env:
+          QUALIDOCK_REQUIRE_PICARD_RNA_TESTS: '1'
+        run: pytest -q backend/tests/test_picard_rna.py backend/tests/test_picard_rna_real.py --junitxml=validation/picard-rna-production-tests.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: picard-rna-${{ matrix.multiqc }}-production
+          path: |
+            validation/picard-rna-production
+            validation/picard-rna-production-tests.xml
       - name: Qualify genuine RSeQC gene-body percentile contract on indexed test BAM
         if: matrix.multiqc == '1.35'
         run: |
@@ -285,6 +296,10 @@ jobs:
         env:
           QUALIDOCK_BROWSER: ${{ matrix.browser }}
         run: pytest -q tests/browser/test_picard_browser.py --junitxml=validation/picard-browser.xml
+      - name: Native Picard RNA fractions, original plots, restart and rerun
+        env:
+          QUALIDOCK_BROWSER: ${{ matrix.browser }}
+        run: pytest -q tests/browser/test_picard_rna_browser.py --junitxml=validation/picard-rna-browser.xml
       - name: Native RNA-seq annotations, original values and restart
         env:
           QUALIDOCK_BROWSER: ${{ matrix.browser }}
@@ -322,7 +337,7 @@ jobs:
         if: matrix.browser == 'chromium'
         env:
           QUALIDOCK_BROWSER: ${{ matrix.browser }}
-        run: pytest -q tests/browser --ignore=tests/browser/test_picard_browser.py --ignore=tests/browser/test_rna_browser.py --ignore=tests/browser/test_coverage_browser.py --ignore=tests/browser/test_alignment_browser.py --ignore=tests/browser/test_nanoplot_browser.py --ignore=tests/browser/test_optional_qc_browser.py --ignore=tests/browser/test_processing_browser.py --ignore=tests/browser/test_inspector_browser.py --ignore=tests/browser/test_lineage_browser.py --junitxml=validation/report-browser.xml
+        run: pytest -q tests/browser --ignore=tests/browser/test_picard_rna_browser.py --ignore=tests/browser/test_picard_browser.py --ignore=tests/browser/test_rna_browser.py --ignore=tests/browser/test_coverage_browser.py --ignore=tests/browser/test_alignment_browser.py --ignore=tests/browser/test_nanoplot_browser.py --ignore=tests/browser/test_optional_qc_browser.py --ignore=tests/browser/test_processing_browser.py --ignore=tests/browser/test_inspector_browser.py --ignore=tests/browser/test_lineage_browser.py --junitxml=validation/report-browser.xml
       - name: Firefox critical report isolation and interaction
         if: matrix.browser == 'firefox'
         env:
@@ -333,6 +348,8 @@ jobs:
         with:
           name: report-browser-${{ matrix.browser }}
           path: |
+            validation/picard-rna-browser.xml
+            validation/picard-rna-native*.png
             validation/picard-browser.xml
             validation/picard-native*.png
             validation/rna-browser.xml

@@ -13,9 +13,9 @@ from .integrity import snapshot
 from .metrics import bounded_text
 from .processing import local_file
 from .store import now, save_json
-from . import multiqc, coverage, rseqc, picard
+from . import multiqc, coverage, rseqc, picard, picard_rna
 
-MODES = {'samtools', 'mosdepth', 'picard', *rseqc.MODES}
+MODES = {'samtools', 'mosdepth', 'picard', 'picard-rna', *rseqc.MODES}
 
 
 class Options(BaseModel):
@@ -182,7 +182,7 @@ async def execute(manager, run, metrics, errors):
     env = {'REF_PATH': '/dev/null', 'REF_CACHE': '/dev/null', 'HTS_PATH': ''}
     is_coverage = run['mode'] == 'mosdepth'
     is_rna = run['mode'] in rseqc.MODES
-    is_picard = run['mode'] == 'picard'
+    is_picard = run['mode'] in {'picard','picard-rna'}
     for row in run['qc']['results']:
         if run['id'] in manager.cancelled:
             break
@@ -231,7 +231,7 @@ async def execute(manager, run, metrics, errors):
                 if run['id'] in manager.cancelled:
                     return
             elif is_picard:
-                result = await picard.execute(manager,run,row,stats,outputs,env)
+                result = await picard_rna.execute(manager,run,row,contigs,stats,outputs,env) if run['mode']=='picard-rna' else await picard.execute(manager,run,row,stats,outputs,env)
                 if run['id'] in manager.cancelled:
                     return
             if snapshot(source.stat()) != before:
@@ -246,6 +246,9 @@ async def execute(manager, run, metrics, errors):
                 row['rseqc'] = {**result, 'source_snapshot': before}
             elif is_picard:
                 row['picard'] = {**result, 'source_snapshot': before}
+                for warning in result.get('warnings',[]):
+                    errors.append(row['name']+': '+warning)
+                    run['warnings'].append(row['name']+': '+warning)
             else:
                 row['alignment'] = {'format': source.suffix[1:].upper(), 'quickcheck': 'passed (header/EOF only)',
                     'source_snapshot': before, 'contigs': contigs, 'reports': outputs, 'flagstat': flagstat, 'stats': stats}
@@ -281,6 +284,7 @@ async def execute(manager, run, metrics, errors):
                 run['warnings'].append('MultiQC 1.25.1 aggregates SAMtools stats only: its flagstat module fails on N/A percentages. Original flagstat and native counts remain available.')
             reports = [directory/path for row in run['qc']['results'] if row['state']=='completed' for name,path in row['alignment']['reports'].items() if name in sections]
         if reports:
+            if run['mode']=='picard-rna':run['qc']['multiqc_status']='invalid'
             try:
                 problem = await multiqc.execute(manager, run, reports, config=config)
             except (ValueError,OSError) as exc:
@@ -292,11 +296,15 @@ async def execute(manager, run, metrics, errors):
                 try:
                     samples = await multiqc.alignment_sample_names(directory,run['mode']) if is_rna or is_picard else None
                     names = await multiqc.report_names(directory,reports,metrics['multiqc'],sample_names=samples)
+                    if run['mode']=='picard-rna':
+                        await multiqc.verify_picard_rna(directory, run, names)
+                        run['qc']['multiqc_status']='available'
                     for report, name in names.items():
                         if name is None:
                             errors.append(f'No unique MultiQC {run["mode"]} source mapping for {report}; original reports remain available')
                         else:
                             run['report_input_map'][report]['multiqc_name'] = name
                 except (ValueError,OSError,TypeError,UnicodeError) as exc:
+                    if run['mode']=='picard-rna':metrics.pop('multiqc',None)
                     errors.append(f'Cannot verify MultiQC source mapping: {exc}; original reports remain available')
     await asyncio.to_thread(save_json, directory/'metrics.json', metrics)

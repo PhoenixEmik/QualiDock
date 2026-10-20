@@ -1,9 +1,9 @@
 # Picard 3.5.0 CollectRnaSeqMetrics qualification (#35)
 
-This is a test-only scientific qualification, not an integrated QC operation.
-No production API, settings, UI, metric calculation, manifest or execution
-adapter is changed. Issue #35 and the Draft PR remain open for evidence review.
-No release is prepared.
+This historical test-only qualification changed no production API, settings, UI,
+scientific calculations or execution adapter. Its evidence was accepted and #38
+merged; #35 is completed. Subsequent production integration is separately tracked
+in #39 / #40 and documented in RNA-QC.md. No release is prepared.
 
 ## Reproduce and evidence
 
@@ -202,9 +202,10 @@ The study asserts exact original counts and bias values in
 MultiQC deliberately converts original `PCT_*` fractions to percent-unit values
 by ×100. Missing rRNA becomes `NA`, not zero. Both transformations are recorded;
 do not silently treat MultiQC JSON as unchanged original Picard strings.
-The current production source-map allowlist supports InsertSizeMetrics only;
-its rejection of RNA entries is retained and tested. A later adapter needs one
-explicit section addition and verified names, not a new mapper.
+At qualification time the production source-map allowlist supported only
+InsertSizeMetrics. Production #39 adds the single explicit RnaSeqMetrics section
+and verified names; the independent study now checks those mappings without
+changing original scientific fixtures.
 
 MultiQC 1.25.1 retains a sample's empty coverage trace when no eligible transcript
 profile exists; 1.35 omits that empty trace. The contract verifies every existing
@@ -331,7 +332,7 @@ metrics UI is implied by these regression checks. Earlier local full backend:
 553 passed /172 absent-optional-tool skips; final focused contracts: 15 passed.
 The existing Vite chunk-size warning is unchanged.
 
-[Draft PR #38](https://github.com/PhoenixEmik/QualiDock/pull/38) contains the full
+[Qualification PR #38](https://github.com/PhoenixEmik/QualiDock/pull/38) contains the full
 file inventory and original fixtures. The three scientific artifact IDs are
 `12178437780` (1.25.1), `12177363608` (1.35), and `12177163537` (latest-1.x).
 Browser JUnit archives are `12179236962` (Chromium) and `12179206645` (Firefox).
