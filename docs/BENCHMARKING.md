@@ -283,3 +283,11 @@ configured limit, not allocated/measured memory. No throughput, exact tree peak,
 network I/O, large-BAM scaling or site resource recommendation is inferred.
 Full JSON retains individual counters, version/argv/parameter evidence, registered
 report sizes, in-process API observations and the measurement-scope labels.
+
+
+Picard RNA-seq production integration (#39) does not add a benchmark refFlat/
+explicit-strand settings contract. The benchmark CLI therefore does not expose
+picard-rna; its BED12 options must not be misused as refFlat configuration.
+Use the existing genuine RNA qualification/production test evidence for small
+functional observations. Native RNA benchmark settings and representative large
+BAM measurements remain pending #5; no NFS/Lustre acceptance is claimed.

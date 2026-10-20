@@ -73,7 +73,7 @@ def parser():
     result=argparse.ArgumentParser(description=__doc__)
     result.add_argument('--input',type=Path,nargs='+',required=True)
     result.add_argument('--output',type=Path,required=True,help='New private directory; must not already exist')
-    result.add_argument('--mode',choices=['fastqc','both','nanoq','nanoplot',*sorted(alignment.MODES),*sorted(processing.MODES)],default='both')
+    result.add_argument('--mode',choices=['fastqc','both','nanoq','nanoplot',*sorted(alignment.MODES-{'picard-rna'}),*sorted(processing.MODES)],default='both')
     result.add_argument('--alignment-reference', help='Approved local reference ID for a SAMtools/coverage CRAM benchmark')
     result.add_argument('--coverage-panel', help='Approved BED panel ID for coverage benchmarking')
     result.add_argument('--nanoplot-loglength',action='store_true')

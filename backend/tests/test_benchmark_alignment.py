@@ -91,3 +91,11 @@ def test_benchmark_rejects_unrelated_tool_options_without_creating_output(tmp_pa
     args=benchmark.parser().parse_args(['--input',str(source),'--output',str(tmp_path/'unused'),'--mode','fastqc',*flags])
     with pytest.raises(ValueError):benchmark.main(args)
     assert not args.output.exists()
+
+
+
+def test_unqualified_rna_benchmark_is_not_advertised_without_native_annotation_settings():
+    # Production RNA mode is available through the app. The benchmark's BED12
+    # arguments are not a native refFlat/explicit-strand contract (pending #5).
+    with pytest.raises(SystemExit):
+        benchmark.parser().parse_args(['--input','input.bam','--output','new-output','--mode','picard-rna'])
