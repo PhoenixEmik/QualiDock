@@ -55,6 +55,7 @@ export interface Run {
     | "rseqc-distribution"
     | "rseqc-genebody"
     | "picard"
+    | "picard-rna"
     | "nanoplot"
     | "nanoq"
     | "fastq-screen"
@@ -103,8 +104,11 @@ export interface Run {
       | "rseqc-infer"
       | "rseqc-distribution"
     | "rseqc-genebody"
-      | "picard";
+      | "picard"
+    | "picard-rna";
     options: Record<string, unknown>;
+    multiqc_status?: string;
+    rrna?: { id: string; path: string; sha256: string; identity: string };
     annotation?: { id: string; path: string; sha256: string; identity: string };
     reference?: {
       id: string;
@@ -128,13 +132,17 @@ export interface Run {
       source_sha256?: string;
       picard?: {
         status: string;
+        coverage_available?: boolean;
+        units?: Record<string, string>;
+        plot_status?: string;
+        warnings?: string[];
         mapped_pairs_reported?: string;
         metrics: ReportedTable;
         histogram: ReportedTable;
         reports: Record<string, string>;
         heap_mb: number;
-        minimum_orientation_fraction: string;
-        deviations: string;
+        minimum_orientation_fraction?: string;
+        deviations?: string;
         rscript_version: string | null;
       };
       rseqc?: {
@@ -387,6 +395,13 @@ export interface PicardOptions {
   include_duplicates: boolean;
   histogram_pdf: boolean;
 }
+export interface PicardRnaOptions {
+  annotation: string;
+  strand: "" | "NONE" | "FIRST_READ_TRANSCRIPTION_STRAND" | "SECOND_READ_TRANSCRIPTION_STRAND";
+  rrna: string | null;
+  histogram_pdf: boolean;
+  multiqc: boolean;
+}
 export interface RnaOptions {
   multiqc?: boolean;
   annotation: string;
@@ -396,6 +411,8 @@ export interface RnaOptions {
   original_plot?: boolean;
 }
 export interface Config {
+  rna_refflat_annotations?: { id: string; available: boolean; error: string | null }[];
+  rrna_intervals?: { id: string; available: boolean; error: string | null }[];
   rna_annotations?: {
     id: string;
     available: boolean;

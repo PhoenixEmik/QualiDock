@@ -1,3 +1,4 @@
+import { PicardRnaResults } from "./PicardResults";
 import PicardResults from "./PicardResults";
 import RnaQcResults from "./RnaQcResults";
 import CoverageResults from "./CoverageResults";
@@ -18,6 +19,7 @@ const metrics: [string, string, string][] = [
 ];
 
 export default function OptionalQcResults({ run }: { run: Run }) {
+  if (run.mode === "picard-rna") return <PicardRnaResults run={run} />;
   if (run.mode === "picard") return <PicardResults run={run} />;
   if (run.mode === "rseqc-infer" || run.mode === "rseqc-distribution" || run.mode === "rseqc-genebody")
     return <RnaQcResults run={run} />;

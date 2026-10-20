@@ -481,3 +481,79 @@ Picard RNA metrics are **not a production QC operation**. The focused
 contracts and official MultiQC compatibility evidence. No new application mode,
 annotation configuration, parser or frontend is enabled by this study.
 A proposed native refFlat contract and implementation require separate review.
+
+## Picard RNA-seq metrics 3.5.0 (#39)
+
+The accepted [qualification](PICARD-RNA-QUALIFICATION.md) (#35 /merged #38) is
+the scientific contract. `picard-rna` is separate from insert-size QC and reuses
+the existing SAMtools/Java17/Picard3.5.0 execution lifecycle. Select an authorized
+coordinate-sorted **BAM**, an approved native refFlat, and explicitly choose
+`NONE`, `FIRST_READ_TRANSCRIPTION_STRAND` or `SECOND_READ_TRANSCRIPTION_STRAND`.
+No selection is inferred from RSeQC, filenames or flags. CRAM and per-library
+accumulation are unsupported. No indexing, sorting or source writes.
+
+```sh
+export QUALIDOCK_RNA_REFFLAT_ANNOTATIONS='{"genes":"/references/genes.refFlat"}'
+export QUALIDOCK_RRNA_INTERVALS='{"ribosomal":"/references/rrna.interval_list"}'
+```
+
+These are separate logical-ID→absolute-local-file allowlists, not a catalog or
+runtime BED12 converter. Approved files follow the existing owner/root,
+canonical/no-symlink, readable/non-shared-writable policy. refFlat is exactly
+eleven tab-separated fields with distinct gene/transcript identity, consistent
+gene chromosome/strand, unique transcript names, half-open transcript/CDS bounds
+and ordered nonoverlapping exon arrays spanning transcript bounds. Parsing is
+bounded to 128 MiB,16 KiB/line,1 million transcripts,2 million exons,100,000 contigs
+and 1,000 exons/transcript. Native annotations are never rewritten.
+
+Optional rRNA interval_list uses its original SAM dictionary and **1-based
+inclusive** intervals. Names, order and lengths must match the BAM dictionary.
+refFlat contigs/maximum ends must fit that dictionary. Original SHA-256 and
+filesystem snapshots are retained and rechecked before/after execution,
+detecting queued/execution-time changes. Name/bounds agreement is **not
+independent sequence/assembly verification**. Operators choose the assembly.
+Missing rRNA intervals mean unavailable evidence, never biological absence.
+
+The command explicitly selects MINIMUM_LENGTH=500, END_BIAS_BASES=100,
+RRNA_FRAGMENT_PERCENTAGE=0.8, ALL_READS, STRICT validation, no index/MD5 creation
+and ASSUME_SORTED=false. Full SAMtools stats preflight checks actual coordinate
+ordering. Private temporary files, bounded heap/processor count, restricted JVM
+environment, process-tree limits, cancellation and restart reuse existing Picard.
+
+Native results preserve original field strings and fraction units. PF_BASES
+includes PF sequence from unmapped records. Aligned/category counts are bases,
+not reads/fragments/molecules. Coding/UTR/intronic/intergenic/rRNA fractions
+divide by PF_ALIGNED_BASES; usable fraction is coding+UTR/PF_BASES. Correct/
+incorrect-strand observations are qualifying aligned records, unavailable for
+interpretation with NONE. PCT fields remain fractions 0–1, not percent units.
+Empty/undefined observations remain unavailable.
+
+Coverage uses **101 original positions 0–100**, biological 5′→3′, transcript-mean
+normalization over upstream-selected eligible models. It is not absolute depth
+or RSeQC's 1–100 profile. No smoothing, interpolation, endpoint inference,
+recalculation or automatic quality classification. Without an eligible histogram,
+default-zero bias fields are scientifically unavailable. The pinned 3.5.0
+alignment-block-end counter limitation remains documented and uncorrected.
+Increasing length eligibility does not prevent initial coverage allocations.
+Large-input memory/performance acceptance remains pending #5.
+
+Original metrics, stdout/stderr and preflight artifacts are downloadable.
+Optional genuine PDF requires an existing Rscript installation. Only complete
+verified PDFs are registered. A recognized upstream R plotting failure after
+complete valid metrics produces **partial** status with numerical results retained,
+actual nonzero exit recorded and no incomplete PDF published. Other upstream
+failures do not become successes. No dependency installation occurs.
+
+Optional MultiQC uses the shared adapter and official RnaSeqMetrics module.
+1.25.1/1.35 use version-specific filename naming, duplicate-basename isolation
+and exact report-source mapping. Original reports are unchanged. Counts and
+all 101 available coverage points are verified; MultiQC explicitly converts PCT
+fractions to percent units. A 1e-10 percent-unit tolerance covers only binary
+floating-point JSON multiplication tails; native strings remain unchanged.
+Empty unavailable traces in 1.25.1 and omitted traces in 1.35 remain unavailable.
+Incomplete/mismapped bundles are not published; original successful reports survive.
+
+Additive manifests store qc.annotation, optional qc.rrna, explicit qc.options
+and qc.results[].picard. Existing manifests need no migration. History, artifacts
+and rerun retain provenance; reruns revalidate current annotations and sources.
+No authentication or report sandbox policy is relaxed.

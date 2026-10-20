@@ -608,3 +608,7 @@ Native 5′→3′ percentiles retain the untouched original table. Optional ori
 R PNG and MultiQC plots use upstream normalization, explicitly distinguished
 from native values. See [RNA QC contracts and evidence](RNA-QC.md#rseqc-gene-body-coverage-505-34).
 No CRAM, source editing, automatic index creation or protocol classification.
+
+### Picard RNA-seq metrics
+
+`picard-rna` provides Picard 3.5.0/Java17 ALL_READS base-assignment, explicit strand-counting and eligible transcript-normalized coverage. BAM only; separately approved native refFlat and optional rRNA interval_list. See [RNA QC configuration and scientific contracts](RNA-QC.md#picard-rna-seq-metrics-350-39). Original metrics and optional Rscript PDF use existing secure downloads; MultiQC 1.25.1/1.35 preserves verified filename/source identities.
