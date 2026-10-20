@@ -472,3 +472,12 @@ records the small alignment/tool/config/API/history/artifact wiring, RNA setup/
 results/types, source-mapping compatibility, browser tests and documentation.
 There is no release, OOD/PBS change, #35 implementation or representative
 large/shared-storage acceptance (#5 remains open).
+
+## Qualification only: CollectRnaSeqMetrics (#35)
+
+Picard RNA metrics are **not a production QC operation**. The focused
+[qualification study](PICARD-RNA-QUALIFICATION.md) preserves original Picard
+3.5.0 output, independently checked synthetic geometry, reference/strand/rRNA
+contracts and official MultiQC compatibility evidence. No new application mode,
+annotation configuration, parser or frontend is enabled by this study.
+A proposed native refFlat contract and implementation require separate review.
