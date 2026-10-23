@@ -50,6 +50,7 @@ export interface Run {
     | "fastqc"
     | "multiqc"
     | "mosdepth"
+    | "bcftools"
     | "samtools"
     | "rseqc-infer"
     | "rseqc-distribution"
@@ -99,6 +100,7 @@ export interface Run {
       | "nanoq"
       | "nanoplot"
       | "fastq_screen"
+      | "bcftools"
       | "samtools"
       | "mosdepth"
       | "rseqc-infer"
@@ -160,6 +162,7 @@ export interface Run {
         index?: { path: string; sha256: string; validation: string };
         plot?: { status: string; normalization: string; version?: string };
       };
+      variant?: VariantMetrics;
       mosdepth?: CoverageMetrics;
       alignment?: {
         format: string;
@@ -305,6 +308,7 @@ export interface OutputLocation {
 }
 export interface RerunConfiguration extends SampleConfiguration {
   qc_options?:
+    | VariantOptions
     | PicardOptions
     | Partial<RnaOptions>
     | ScreenOptions
@@ -337,7 +341,7 @@ export interface InputPairing {
 export interface Entry {
   name: string;
   path: string;
-  kind: "directory" | "fastq" | "fastqc" | "qcreport" | "alignment" | "file";
+  kind: "directory" | "fastq" | "fastqc" | "qcreport" | "alignment" | "variant" | "file";
   size: number | null;
   modified: number;
   read: string | null;
@@ -443,6 +447,7 @@ export interface Config {
   memory_mb: number;
   max_threads: number;
   tools: {
+    bcftools?: boolean;
     fastqc: boolean;
     multiqc: boolean;
     fastp?: boolean;
@@ -601,4 +606,29 @@ export interface CoverageMetrics {
   mapq: number;
   exclude_flags: number;
   precision: number;
+}
+
+export interface VariantOptions { per_sample: boolean; multiqc: boolean }
+export interface VariantMetrics {
+  status: string;
+  summary: ReportedTable;
+  input_format: string;
+  compression: string;
+  sample_count: number;
+  per_sample_requested: boolean;
+  sample_statistics_available: boolean;
+  quality_available: boolean;
+  site_depth_available: boolean;
+  genotype_depth_available: boolean;
+  report_sha256: string;
+  header_tags: {INFO: string[]; FORMAT: string[]};
+  tstv: ReportedTable;
+  tstv_ratio: string | null;
+  quality: ReportedTable & {chart_rows: string[][] | null};
+  depth: ReportedTable & {chart_rows: string[][] | null};
+  substitutions: ReportedTable;
+  sample_counts: ReportedTable;
+  uninterpreted_sections: string[];
+  reports: Record<string, string>;
+  source_snapshot: Record<string, number>;
 }

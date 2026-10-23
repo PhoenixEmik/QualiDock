@@ -40,7 +40,9 @@ export const isBamOnlyQC = (mode: string) => isRnaQC(mode) || mode === "picard" 
 export const isAlignmentQC = (mode: string) =>
   mode === "samtools" || mode === "mosdepth" || isBamOnlyQC(mode);
 export const modeLabel = (mode: string) =>
-  mode === "picard-rna"
+  mode === "bcftools"
+    ? "BCFtools variant QC"
+    : mode === "picard-rna"
     ? "Picard RNA-seq metrics"
     : mode === "rseqc-genebody"
     ? "RSeQC gene-body coverage"

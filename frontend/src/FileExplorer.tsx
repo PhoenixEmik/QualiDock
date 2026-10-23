@@ -376,6 +376,8 @@ export default function FileExplorer({
                             ? "FastQC report"
                             : first.kind === "qcreport"
                               ? "QC JSON (validate on import)"
+                              : first.kind === "variant"
+                                ? first.name.toLowerCase().endsWith(".bcf") ? "BCF" : first.name.toLowerCase().endsWith(".gz") ? "VCF.GZ" : "VCF"
                               : first.kind === "alignment"
                                 ? first.name.toLowerCase().endsWith(".cram")
                                   ? "CRAM"

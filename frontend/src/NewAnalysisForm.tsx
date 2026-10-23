@@ -15,6 +15,7 @@ import { ReadRelationships } from "./SampleEditor";
 import { PicardRnaSettings } from "./PicardSettings";
 import PicardSettings from "./PicardSettings";
 import RnaQcSettings from "./RnaQcSettings";
+import VariantSettings from "./VariantSettings";
 import OutputDirectory from "./OutputDirectory";
 import type { SampleConfiguration } from "./types";
 import type {
@@ -28,9 +29,12 @@ import type {
   RnaOptions,
   PicardOptions,
   PicardRnaOptions,
+  VariantOptions,
 } from "./types";
 
 interface Props {
+  variantOptions: VariantOptions;
+  setVariantOptions: (value: VariantOptions) => void;
   picardRnaOptions: PicardRnaOptions;
   setPicardRnaOptions: (value: PicardRnaOptions) => void;
   picardOptions: PicardOptions;
@@ -66,6 +70,8 @@ interface Props {
   submit: () => Promise<void>;
 }
 export default function NewAnalysisForm({
+  variantOptions,
+  setVariantOptions,
   picardRnaOptions,
   setPicardRnaOptions,
   picardOptions,
@@ -103,13 +109,17 @@ export default function NewAnalysisForm({
   const suitable = (entry: Entry) =>
     mode === "multiqc"
       ? ["fastqc", "qcreport"].includes(entry.kind)
+      : mode === "bcftools"
+        ? entry.kind === "variant"
       : isAlignmentQC(mode)
         ? entry.kind === "alignment" &&
           (!isBamOnlyQC(mode) || /\.bam$/i.test(entry.name))
         : entry.kind === "fastq";
   const configuredPaths = [...selected.values()].filter(suitable);
   const required =
-    mode === "picard-rna"
+    mode === "bcftools"
+      ? ["bcftools", ...(variantOptions.multiqc ? ["multiqc"] : [])]
+    : mode === "picard-rna"
       ? ["samtools", "java", "picard", ...(picardRnaOptions.multiqc ? ["multiqc"] : [])]
     : mode === "picard"
       ? [
@@ -176,6 +186,7 @@ export default function NewAnalysisForm({
                 "nanoq",
                 "nanoplot",
                 "fastq-screen",
+                ...([...selected.values()].some(e => e.kind === "variant") ? ["bcftools"] as const : []),
                 ...([...selected.values()].some(
                   (entry) => entry.kind === "alignment",
                 )
@@ -199,7 +210,9 @@ export default function NewAnalysisForm({
                     : modeLabel(value)}
                 </strong>
                 <small>
-                  {value === "picard-rna"
+                  {value === "bcftools"
+                    ? "Read-only whole-file VCF/BCF statistics; no index required"
+                    : value === "picard-rna"
                     ? "Original base-assignment and transcript-bias metrics with approved refFlat"
                     : value === "picard"
                     ? "Original insert-size and orientation metrics for BAM libraries"
@@ -225,6 +238,7 @@ export default function NewAnalysisForm({
               </button>
             ))}
           </div>
+          {mode === "bcftools" && <VariantSettings value={variantOptions} change={setVariantOptions} config={config} busy={busy} />}
           {mode === "picard-rna" && <PicardRnaSettings value={picardRnaOptions} change={setPicardRnaOptions} config={config} busy={busy} />}
           {mode === "picard" && (
             <PicardSettings
@@ -554,7 +568,9 @@ export default function NewAnalysisForm({
               )}
               <div className="pair-summary">
                 <Dna size={17} />
-                {isAlignmentQC(mode)
+                {mode === "bcftools"
+                  ? "Each variant input is evaluated independently; within-file sample IDs remain separate from input-file identity."
+                  : isAlignmentQC(mode)
                   ? "Alignment files are evaluated independently; read-pair metadata does not apply."
                   : mode === "multiqc"
                     ? "Supported QC reports will be snapshotted into this run."
@@ -565,12 +581,12 @@ export default function NewAnalysisForm({
             <Empty icon={Files} title="Choose your input files">
               {mode === "multiqc"
                 ? "Enter a QC results directory, or select FastQC ZIPs, fastqc_data.txt or fastp.json reports in the workspace."
-                : "Select FASTQ files in the workspace. No upload is needed."}
+                : mode === "bcftools" ? "Select VCF, VCF.GZ or BCF files in the workspace." : "Select FASTQ files in the workspace. No upload is needed."}
             </Empty>
           )}
         </section>
         {mode !== "multiqc" &&
-          !isAlignmentQC(mode) &&
+          mode !== "bcftools" && !isAlignmentQC(mode) &&
           configuredPaths.length > 0 && (
             <ReadRelationships
               value={sampleConfiguration}
