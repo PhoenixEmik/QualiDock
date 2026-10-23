@@ -163,7 +163,7 @@ def original(path, source, header, per_sample):
     tables={code:{'columns':columns,'rows':[],'total_rows':0} for code,columns in SCHEMAS.items()}
     charts={code:[] for code in ['QUAL','DP']}
     seen={code:set() for code in SCHEMAS};declared=set();identities=[];other=set();total=0
-    sample_ids=set(header['samples']);digest=hashlib.sha256();quality_available=False;site_depth=False;genotype_depth=False
+    sample_ids=set(header['samples']);digest=hashlib.sha256();quality_available=False;site_depth=False;genotype_depth=False;gt_observed=False
     dp_counts=[Decimal(0),Decimal(0)];dp_fractions=[Decimal(0),Decimal(0)]
     with path.open('rb') as stream:
         while raw:=stream.readline(65537):
@@ -222,6 +222,7 @@ def original(path, source, header, per_sample):
             elif code=='PSC':
                 if not per_sample or row[0] not in sample_ids:raise ValueError('Unknown/unrequested within-file sample')
                 for i,v in enumerate(row[1:],1):number(v,i!=7)
+                gt_observed|=any(number(v,True)>0 for i,v in enumerate(row[1:],1) if i!=7)
             table=tables[code];table['total_rows']+=1
             if len(table['rows'])<200:table['rows'].append(row)
             if code in charts and charts[code] is not None:
@@ -262,7 +263,7 @@ def original(path, source, header, per_sample):
              'rows':[[v for i,v in enumerate(row) if i!=7] for row in samples['rows']], 'total_rows':samples['total_rows']}
     return {'status':'available','summary':{'columns':['Original BCFtools metric','Reported value'],'rows':summary,'total_rows':len(summary)},
             'input_format':header['format'],'compression':header['compression'],'sample_count':len(header['samples']),
-            'per_sample_requested':per_sample,'sample_statistics_available':per_sample and 'GT' in header['tags']['FORMAT'],
+            'per_sample_requested':per_sample,'sample_statistics_available':per_sample and 'GT' in header['tags']['FORMAT'] and gt_observed,
             'quality_available':quality_available,'site_depth_available':site_depth,'genotype_depth_available':genotype_depth,
             'report_sha256':digest.hexdigest(),'header_tags':header['tags'],'sample_ids':header['samples'],
             'tstv':tables['TSTV'],'tstv_ratio':tstv[2] if tv else None,

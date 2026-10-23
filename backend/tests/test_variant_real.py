@@ -70,9 +70,13 @@ def test_actual_formats_original_report_source_identity_and_restart(inputs,case)
     assert hashes(source.parent)==before
 
 
-@pytest.mark.parametrize('case',['multisample','missing-depth','no-genotype','gvcf'])
+@pytest.mark.parametrize('case',['multisample','missing-depth','no-genotype','declared-unused-gt','gvcf'])
 def test_explicit_sample_statistics_and_sample_absence_contract(inputs,case):
     settings,paths=inputs
+    if case=='declared-unused-gt':
+        source=paths['no-genotype'].with_name('declared-unused-gt.vcf')
+        source.write_text(paths['no-genotype'].read_text().replace('#CHROM','##FORMAT=<ID=GT,Number=1,Type=String,Description="Declared but not present in records">\n#CHROM'))
+        paths[case]=source
     with TestClient(create_app(settings)) as c:
         auth(c,settings)
         assert c.post('/api/runs',json={'mode':'bcftools','paths':[str(paths['snps'])],'qc_options':{'per_sample':True}}).status_code==400
@@ -81,7 +85,12 @@ def test_explicit_sample_statistics_and_sample_absence_contract(inputs,case):
         run=wait(c,response.json()['id'],timeout=60)
         assert run['state']=='completed',run['error']
         assert '--samples' in run['executions'][0]['argv']
-        assert run['qc']['results'][0]['variant']['sample_statistics_available'] is (case!='no-genotype')
+        assert run['qc']['results'][0]['variant']['sample_statistics_available'] is (case not in {'no-genotype','declared-unused-gt'})
+        if case=='declared-unused-gt':
+            row=run['qc']['results'][0];data=row['variant']
+            assert 'GT' in data['header_tags']['FORMAT'] and all(v=='0' for r in data['sample_counts']['rows'] for v in r[1:])
+            evidence=Path('validation/variant-qualification/declared-unused-gt');evidence.mkdir(parents=True,exist_ok=True)
+            shutil.copyfile(settings.output/run['id']/row['report'],evidence/'original.stats.txt')
 
 
 def test_partial_inputs_fail_without_publishing_incomplete_reports(inputs):
