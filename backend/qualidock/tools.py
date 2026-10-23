@@ -94,14 +94,14 @@ async def rseqc_dependencies(path, env):
     interpreter = shutil.which(command[0])
     if not interpreter:
         raise ValueError('RSeQC Python interpreter is unavailable')
-    code = "import json,pysam;from importlib.metadata import version;print(json.dumps({'rseqc':version('RSeQC'),'pysam':version('pysam'),'htslib':pysam.__htslib_version__}))"
+    code = "import ctypes,json,pysam;from importlib.metadata import version;lib=ctypes.CDLL(pysam.libchtslib.__file__);lib.hts_version.restype=ctypes.c_char_p;print(json.dumps({'rseqc':version('RSeQC'),'pysam':version('pysam'),'htslib':lib.hts_version().decode('ascii')}))"
     response, status = await version_response([interpreter, '-I', '-c', code], env)
     if status:
         raise ValueError('Cannot verify HTSlib in the configured RSeQC Python environment')
     data = json.loads(response)
     if data != {'rseqc':'5.0.5', 'pysam':'0.24.1', 'htslib':'1.24'}:
         raise ValueError('RSeQC requires qualified RSeQC 5.0.5 / pysam 0.24.1 / HTSlib 1.24')
-    return {'python_executable':interpreter, 'pysam_version':data['pysam'], 'htslib_version':data['htslib']}
+    return {'python_executable':interpreter, 'pysam_version':data['pysam'], 'htslib_version':data['htslib'], 'htslib_version_source':'native hts_version() from this interpreter\'s pysam.libchtslib'}
 
 
 async def detect_tool(name: str, executable: str, *, java='java') -> dict:

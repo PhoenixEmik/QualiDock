@@ -38,7 +38,7 @@ def test_rseqc_checks_its_own_interpreter_and_exact_dependencies(tmp_path,monkey
     path=executable(tmp_path,'unused')
     async def metadata(argv,env):
         assert Path(argv[0]).absolute()==Path(sys.executable).absolute()
-        assert argv[1:3]==['-I','-c'] and 'pysam.__htslib_version__' in argv[3]
+        assert argv[1:3]==['-I','-c'] and 'ctypes.CDLL(pysam.libchtslib.__file__)' in argv[3] and 'lib.hts_version()' in argv[3]
         return json.dumps({'rseqc':'5.0.5','pysam':pysam,'htslib':library}),status
     monkeypatch.setattr('qualidock.tools.version_response',metadata)
     if expected:
