@@ -291,3 +291,21 @@ picard-rna; its BED12 options must not be misused as refFlat configuration.
 Use the existing genuine RNA qualification/production test evidence for small
 functional observations. Native RNA benchmark settings and representative large
 BAM measurements remain pending #5; no NFS/Lustre acceptance is claimed.
+
+## Read-only variant QC
+
+The same benchmark accepts `--mode bcftools`, `--variant-per-sample` and optional
+`--multiqc`, using `QUALIDOCK_BCFTOOLS`. It preserves input sizes/hashes, wall
+and child CPU time, available sampled memory observations, exact execution
+stages/resource constraints, unchanged original report bytes and optional
+MultiQC overhead. See [Variant QC](VARIANT-QC.md#existing-benchmark) for limits.
+
+A 706-byte multisample VCF measured locally with one thread/1024 MiB took
+1.286 seconds end-to-end (0.934 child CPU seconds); adding MultiQC1.35 took
+2.270 seconds (2.071 child CPU seconds), including a1.275-second MultiQC stage.
+The unchanged original stats report was3771 bytes. These are tiny-fixture
+startup/execution observations on macOS, not representative VCF/BCF throughput,
+a Linux peak-RSS measurement or shared-storage acceptance. CI retains separate
+Linux observations and native cgroup cancellation evidence. Large/private
+files remain operator-supplied under Issue #5; process I/O is not NFS/Lustre
+network throughput.

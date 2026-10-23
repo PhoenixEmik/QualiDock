@@ -76,7 +76,7 @@ jobs:
           QUALIDOCK_REQUIRE_VARIANT_TESTS: '1'
         run: |
           python scripts/qualify-bcftools.py --bcftools bcftools --output validation/variant-qualification/independent
-          pytest -q backend/tests/test_variant_inputs.py backend/tests/test_variant_stats.py backend/tests/test_variant_real.py backend/tests/test_variant_multiqc.py --junitxml=validation/variant-qualification/tests.xml
+          pytest -q backend/tests/test_variant_inputs.py backend/tests/test_variant_stats.py backend/tests/test_variant_real.py backend/tests/test_variant_multiqc.py backend/tests/test_benchmark_variant.py --junitxml=validation/variant-qualification/tests.xml
       - uses: actions/upload-artifact@v4
         if: always()
         with:
