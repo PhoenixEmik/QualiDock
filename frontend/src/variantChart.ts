@@ -7,11 +7,11 @@ function bars(title: string, rows: string[][], columns: [string, number][]): Nat
   if (!rows.length || rows.some(r => columns.some(([, i]) => !/^[0-9]+$/.test(r[i] ?? "") || !Number.isSafeInteger(Number(r[i]))))) return null;
   const series = columns.map(([name]) => ({name, label: name}));
   return {description: title, summary: "Original BCFtools counts; categories are not combined", series,
-    options: {animation: false, grid: {left: 65, right: 25, top: 50, bottom: 100},
+    options: {animation: false, grid: {left: 65, right: 25, top: 50, bottom: 120},
       tooltip: {trigger: "axis", renderMode: "richText", confine: true},
       legend: {bottom: 0}, xAxis: {type: "category", data: rows.map(r => r[0]), name: "Reported category / bin", nameLocation: "middle", nameGap: 30},
       yAxis: {type: "value", min: 0, minInterval: 1, name: "Reported count"},
-      dataZoom: [{type: "inside", filterMode: "none"}, {type: "slider", bottom: 40, filterMode: "none"}],
+      dataZoom: [{type: "inside", filterMode: "none"}, {type: "slider", bottom: 45, height: 18, filterMode: "none"}],
       series: columns.map(([name, i], j) => ({name, type: "bar", data: rows.map(r => Number(r[i])), itemStyle: {color: overlayColors[j % overlayColors.length]}})),
     }};
 }
