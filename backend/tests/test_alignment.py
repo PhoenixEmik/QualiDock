@@ -81,7 +81,7 @@ def test_unavailable_alignment_tool_does_not_break_fastqc(client,setup):
     assert wait(client,created.json()['id'])['state']=='completed'
 
 
-@pytest.mark.parametrize('version,library,compatible', [('1.22.1','1.22.1',True),('1.22.1rc1','1.22.1',False),('1.22.1','1.21',False),('1.21','1.21',False)])
+@pytest.mark.parametrize('version,library,compatible', [('1.24','1.24',True),('1.24rc1','1.24',False),('1.24','1.22.1',False),('1.22.1','1.24',False),('1.22.3','1.22.3',False),('1.23.2','1.23.2',False),('1.24','1.24.1',False),('1.25','1.25',False),('1.22.1','1.22.1',False)])
 def test_explicit_version_contract(tmp_path,version,library,compatible):
     import asyncio,sys
     from qualidock.tools import detect_tool

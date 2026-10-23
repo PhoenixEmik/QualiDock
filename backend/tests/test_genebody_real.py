@@ -150,7 +150,7 @@ def test_cancellation_and_restart_preserve_sources_without_publishing_partial_ou
     import sys
     s,bam,bed=inputs;before=hashes(bam.parent)
     launcher=bam.parent.parent/'slow-genebody'
-    launcher.write_text(f'#!{sys.executable}\nimport os,sys,time\nif "--version" not in sys.argv:time.sleep(30)\nos.execv({TOOL!r},[{TOOL!r},*sys.argv[1:]])\n');launcher.chmod(0o700)
+    launcher.write_text(f'#!{Path(TOOL).read_text().splitlines()[0][2:]}\nimport os,sys,time\nif "--version" not in sys.argv:time.sleep(30)\nos.execv({TOOL!r},[{TOOL!r},*sys.argv[1:]])\n');launcher.chmod(0o700)
     s=replace(s,rseqc_genebody=str(launcher))
     with TestClient(create_app(s)) as c:
         auth(c,s);response=c.post('/api/runs',json={'mode':'rseqc-genebody','paths':[str(bam)],'qc_options':{'annotation':'genes'}})
@@ -237,7 +237,7 @@ def test_changed_input_identity_rejects_even_an_original_complete_table(inputs,t
     s,bam,bed=inputs
     changed={'bam':bam,'index':Path(str(bam)+'.bai'),'annotation':bed}[target]
     launcher=bam.parent.parent/'mutation-test-only'
-    launcher.write_text(f'#!{sys.executable}\nimport os,sys,subprocess\nfrom pathlib import Path\nif "--version" in sys.argv:os.execv({TOOL!r},[{TOOL!r},*sys.argv[1:]])\nr=subprocess.run([{TOOL!r},*sys.argv[1:]])\nwith Path({str(changed)!r}).open("ab") as f:f.write(b"\\n")\nsys.exit(r.returncode)\n');launcher.chmod(0o700)
+    launcher.write_text(f'#!{Path(TOOL).read_text().splitlines()[0][2:]}\nimport os,sys,subprocess\nfrom pathlib import Path\nif "--version" in sys.argv:os.execv({TOOL!r},[{TOOL!r},*sys.argv[1:]])\nr=subprocess.run([{TOOL!r},*sys.argv[1:]])\nwith Path({str(changed)!r}).open("ab") as f:f.write(b"\\n")\nsys.exit(r.returncode)\n');launcher.chmod(0o700)
     s=replace(s,rseqc_genebody=str(launcher))
     with TestClient(create_app(s)) as c:
         auth(c,s);run=launch(c,bam)
@@ -268,7 +268,7 @@ def test_exit_zero_cannot_publish_mutated_original_table(inputs,fault):
     s,bam,bed=inputs
     mutate={'identity':"rows[1][0]='wrong-input'",'nan':"rows[1][8]='NaN'",'duplicate-percentile':"rows[0][10]=rows[0][9]"}[fault]
     launcher=bam.parent.parent/'malformed-test-only'
-    launcher.write_text(f'#!{sys.executable}\nimport os,sys,subprocess\nfrom pathlib import Path\nif "--version" in sys.argv:os.execv({TOOL!r},[{TOOL!r},*sys.argv[1:]])\nsubprocess.run([{TOOL!r},*sys.argv[1:]],check=True)\np=Path(sys.argv[sys.argv.index("-o")+1]+".geneBodyCoverage.txt")\nrows=[s.split("\\t") for s in p.read_text().splitlines()]\n{mutate}\np.write_text("\\n".join("\\t".join(r) for r in rows)+"\\n")\n');launcher.chmod(0o700)
+    launcher.write_text(f'#!{Path(TOOL).read_text().splitlines()[0][2:]}\nimport os,sys,subprocess\nfrom pathlib import Path\nif "--version" in sys.argv:os.execv({TOOL!r},[{TOOL!r},*sys.argv[1:]])\nsubprocess.run([{TOOL!r},*sys.argv[1:]],check=True)\np=Path(sys.argv[sys.argv.index("-o")+1]+".geneBodyCoverage.txt")\nrows=[s.split("\\t") for s in p.read_text().splitlines()]\n{mutate}\np.write_text("\\n".join("\\t".join(r) for r in rows)+"\\n")\n');launcher.chmod(0o700)
     s=replace(s,rseqc_genebody=str(launcher))
     with TestClient(create_app(s)) as c:
         auth(c,s);run=launch(c,bam)

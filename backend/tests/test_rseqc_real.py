@@ -30,6 +30,26 @@ def auth(client,config):
     client.headers.update({'Authorization':'Bearer '+config.token,'X-QualiDock-Request':'1'})
 
 
+@pytest.mark.parametrize('mode',['rseqc-infer','rseqc-distribution'])
+def test_genuine_rseqc_uses_qualified_pysam_despite_inherited_pythonpath(inputs,tmp_path,monkeypatch,mode):
+    from qualidock.tools import RSEQC_ENV
+    config,bam,bed=inputs
+    shadow=tmp_path/'shadow-modules';shadow.mkdir()
+    (shadow/'pysam.py').write_text('raise RuntimeError("Unqualified pysam shadow was imported")\n')
+    monkeypatch.setenv('PYTHONPATH',str(shadow))
+    with TestClient(create_app(config)) as c:
+        auth(c,config)
+        created=c.post('/api/runs',json={'mode':mode,'paths':[str(bam)],'qc_options':{'annotation':'genes'}})
+        assert created.status_code==201,created.text
+        run=wait(c,created.json()['id'],timeout=60)
+        assert run['state']=='completed',run['error']
+        tool='rseqc_infer' if mode=='rseqc-infer' else 'rseqc_distribution'
+        assert run['tools'][tool]['pysam_version']=='0.24.1' and run['tools'][tool]['htslib_version']=='1.24'
+        for execution in run['executions']:
+            if execution['tool']==tool:
+                assert all(execution['environment'][key]==value for key,value in RSEQC_ENV.items())
+
+
 def hashes(directory):
     return {str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in directory.rglob('*') if p.is_file()}
 
@@ -141,7 +161,7 @@ def test_paths_with_shell_and_html_characters_are_literal_and_collision_safe(inp
 def test_cancel_and_restart_do_not_register_unfinished_reports(inputs,interrupt):
     config,bam,bed=inputs;before=hashes(bam.parent)
     launcher=config.output.parent/'slow-infer'
-    launcher.write_text(f'#!{sys.executable}\nimport os,sys,time\nif "--version" not in sys.argv:time.sleep(30)\nos.execv({INFER!r},[{INFER!r},*sys.argv[1:]])\n');launcher.chmod(0o700)
+    launcher.write_text(f'#!{Path(INFER).read_text().splitlines()[0][2:]}\nimport os,sys,time\nif "--version" not in sys.argv:time.sleep(30)\nos.execv({INFER!r},[{INFER!r},*sys.argv[1:]])\n');launcher.chmod(0o700)
     config=replace(config,rseqc_infer=str(launcher))
     with TestClient(create_app(config)) as c:
         auth(c,config);response=c.post('/api/runs',json={'mode':'rseqc-infer','paths':[str(bam)],'qc_options':{'annotation':'genes'}})
@@ -166,7 +186,7 @@ def test_partial_success_and_zero_exit_malformed_report(inputs):
         assert run['state']=='partial' and run['sample_count']==1
         assert sum(r['state']=='completed' for r in run['qc']['results'])==1
     launcher=config.output.parent/'malformed-infer'
-    launcher.write_text(f'#!{sys.executable}\nimport os,sys\nif "--version" in sys.argv:os.execv({INFER!r},[{INFER!r},*sys.argv[1:]])\nprint("incomplete upstream report")\n');launcher.chmod(0o700)
+    launcher.write_text(f'#!{Path(INFER).read_text().splitlines()[0][2:]}\nimport os,sys\nif "--version" in sys.argv:os.execv({INFER!r},[{INFER!r},*sys.argv[1:]])\nprint("incomplete upstream report")\n');launcher.chmod(0o700)
     config=replace(config,rseqc_infer=str(launcher))
     with TestClient(create_app(config)) as c:
         auth(c,config);run=wait(c,c.post('/api/runs',json={'mode':'rseqc-infer','paths':[str(bam)],'qc_options':{'annotation':'genes'}}).json()['id'])

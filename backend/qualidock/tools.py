@@ -1,5 +1,6 @@
 """Bounded, asynchronous runtime detection; never installs or changes tools."""
 import asyncio
+import json
 import os
 from pathlib import Path
 import re
@@ -10,6 +11,7 @@ from .files import approved_file
 
 
 PROBE_TIMEOUT = 10
+RSEQC_ENV = {'PYTHONPATH':'', 'PYTHONHOME':'', 'PYTHONNOUSERSITE':'1', 'PYTHONSAFEPATH':'1'}
 # Explicit probes prevent new tools inheriting MultiQC's compatibility rules.
 TOOL_SPECS = {
     'fastqc': ('--version', (0, 12, 1), (0, 14, 0), '0.12.1–0.13.x'),
@@ -18,8 +20,8 @@ TOOL_SPECS = {
     'seqkit': ('version', (2, 6, 0), (3, 0, 0), '2.6 or newer, below 3'),
     'nanoq': ('--version', (0, 10, 0), (0, 10, 1), 'tested nanoq 0.10.0'),
     'nanoplot': (None, (1, 48, 0), (1, 48, 1), 'tested NanoPlot 1.48.0'),
-    'mosdepth': ('--version', (0, 3, 14), (0, 3, 15), 'tested mosdepth 0.3.14'),
-    'samtools': ('--version', (1, 22, 1), (1, 22, 2), 'tested SAMtools/HTSlib 1.22.1'),
+    'mosdepth': ('--version', (0, 3, 14), (0, 3, 15), 'mosdepth 0.3.14 with verified HTSlib 1.24 version reporting'),
+    'samtools': ('--version', (1, 24, 0), (1, 24, 1), 'qualified SAMtools 1.24 / HTSlib 1.24'),
     'rseqc_infer': ('--version', (5, 5, 0), (5, 5, 1), 'RSeQC 5.0.5 (CLI 5.05)'),
     'rseqc_distribution': ('--version', (5, 5, 0), (5, 5, 1), 'RSeQC 5.0.5 (CLI 5.05)'),
     'rseqc_genebody': ('--version', (5, 5, 0), (5, 5, 1), 'RSeQC 5.0.5 (CLI 5.05)'),
@@ -55,6 +57,53 @@ def locate_tool(name, executable):
     return str(Path(located).absolute()) if located and Path(located).is_file() else None
 
 
+async def version_response(argv, env):
+    """Bound both subprocesses and output, including dependency-only probes."""
+    process = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, start_new_session=True, env=env)
+    try:
+        async def output():
+            chunks, size = [], 0
+            while chunk := await process.stdout.read(min(4096, 16385-size)):
+                size += len(chunk)
+                if size > 16384:
+                    raise ValueError('Version response exceeds 16 KiB')
+                chunks.append(chunk)
+            await process.wait()
+            return b''.join(chunks).decode('utf-8', errors='replace').strip()
+        return await asyncio.wait_for(output(), timeout=PROBE_TIMEOUT), process.returncode
+    finally:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        await process.wait()
+
+
+async def rseqc_dependencies(path, env):
+    # Inspect the configured script's own Python environment, never the web
+    # server's pysam or an unrelated samtools executable on PATH.
+    with Path(path).open('rb') as stream:
+        first = stream.readline(4097).decode('utf-8').strip()
+    if len(first) > 4096 or not first.startswith('#!'):
+        raise ValueError('RSeQC requires a Python console script with an inspectable interpreter')
+    command = shlex.split(first[2:])
+    if len(command) == 2 and command[0] == '/usr/bin/env':
+        command = command[1:]
+    if len(command) != 1 or not re.fullmatch(r'python(?:[0-9.]+)?', Path(command[0]).name):
+        raise ValueError('RSeQC requires a standard Python console script')
+    interpreter = shutil.which(command[0])
+    if not interpreter:
+        raise ValueError('RSeQC Python interpreter is unavailable')
+    code = "import ctypes,json,pysam;from importlib.metadata import version;lib=ctypes.CDLL(pysam.libchtslib.__file__);lib.hts_version.restype=ctypes.c_char_p;print(json.dumps({'rseqc':version('RSeQC'),'pysam':version('pysam'),'htslib':lib.hts_version().decode('ascii')}))"
+    response, status = await version_response([interpreter, '-I', '-c', code], env)
+    if status:
+        raise ValueError('Cannot verify HTSlib in the configured RSeQC Python environment')
+    data = json.loads(response)
+    if data != {'rseqc':'5.0.5', 'pysam':'0.24.1', 'htslib':'1.24'}:
+        raise ValueError('RSeQC requires qualified RSeQC 5.0.5 / pysam 0.24.1 / HTSlib 1.24')
+    return {'python_executable':interpreter, 'pysam_version':data['pysam'], 'htslib_version':data['htslib'], 'htslib_version_source':'native hts_version() from this interpreter\'s pysam.libchtslib'}
+
+
 async def detect_tool(name: str, executable: str, *, java='java') -> dict:
     probe, minimum, maximum, expected = TOOL_SPECS[name]
     path = locate_tool(name, executable)
@@ -62,11 +111,12 @@ async def detect_tool(name: str, executable: str, *, java='java') -> dict:
     if not path:
         result["error"] = "Picard JAR is unavailable. Configure QUALIDOCK_PICARD with the original readable JAR." if name == "picard" else f"{name} is unavailable. Configure its executable path or load it on PATH."
         return result
-    process = None
     try:
         env = os.environ.copy()
         for key in ("QUALIDOCK_TOKEN", "password"):
             env.pop(key, None)
+        if name.startswith('rseqc_'):
+            env.update(RSEQC_ENV)
         if name in {'java','picard'}:
             for key in ('JAVA_TOOL_OPTIONS','JDK_JAVA_OPTIONS','_JAVA_OPTIONS'):
                 env.pop(key,None)
@@ -82,29 +132,16 @@ async def detect_tool(name: str, executable: str, *, java='java') -> dict:
             argv = [runtime,'-Xms32m','-Xmx128m','-XX:ActiveProcessorCount=1','-XX:-UsePerfData','-jar',path,'CollectInsertSizeMetrics','--version']
         if name == 'nanoplot':
             result['version_source'] = 'Python distribution metadata without importing NanoPlot'
-        process = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, start_new_session=True, env=env)
-        async def output():
-            chunks, size = [], 0
-            while True:
-                chunk = await process.stdout.read(min(4096, 16385 - size))
-                if not chunk:
-                    break
-                size += len(chunk)
-                if size > 16384:
-                    raise ValueError("Version response exceeds 16 KiB")
-                chunks.append(chunk)
-            await process.wait()
-            return b"".join(chunks).decode("utf-8", errors="replace").strip()
-        response = await asyncio.wait_for(output(), timeout=PROBE_TIMEOUT)
+        response, status = await version_response(argv, env)
         label = {'fastq_screen': r'FastQ Screen', 'bowtie2': r'bowtie2(?:-align-[sl])?'}.get(name, re.escape(name))
         match = re.search(r"(?i)\b" + label + r"(?:,?\s+(?:version|v))?\s*([0-9]+(?:\.[0-9]+){1,2})\b", response)
         if name == 'nanoplot':
             # Do not truncate e.g. 1.48.1rc1 to 1.48 and admit an untested build.
             match = re.fullmatch(r'NanoPlot\s+([0-9]+\.[0-9]+\.[0-9]+)', response, re.IGNORECASE)
         if name == 'mosdepth':
-            match = re.fullmatch(r'mosdepth ([0-9]+\.[0-9]+\.[0-9]+)', response)
+            match = re.fullmatch(r'mosdepth ([0-9]+\.[0-9]+\.[0-9]+)\nUsing htslib 1\.24', response)
         if name == 'samtools':
-            match = re.search(r'(?m)^samtools ([0-9]+\.[0-9]+\.[0-9]+)$', response)
+            match = re.match(r'samtools (1\.24)\nUsing htslib 1\.24(?:\n|$)', response)
         if name.startswith('rseqc_'):
             script = {'rseqc_infer':'infer_experiment', 'rseqc_distribution':'read_distribution', 'rseqc_genebody':'geneBody_coverage'}[name]
             if name == 'rseqc_genebody': result['rscript_executable'] = shutil.which('Rscript')
@@ -114,29 +151,23 @@ async def detect_tool(name: str, executable: str, *, java='java') -> dict:
             match = re.search(r'(?m)^(?:openjdk|java)(?: version)?\s+"?([0-9]+(?:\.[0-9]+){1,3})(?:[" +\s]|$)', response)
         if name == 'picard':
             match = re.fullmatch(r'Version:([0-9]+\.[0-9]+\.[0-9]+)',response)
-            result['version_probe_exit_code'] = process.returncode
+            result['version_probe_exit_code'] = status
         if name == 'falco' and not match:
             match = re.fullmatch(r'([0-9]+(?:\.[0-9]+){1,2})', response)
-        if process.returncode != (1 if name == 'picard' else 0) or not match:
-            raise ValueError(f"Cannot detect {name} version (exit {process.returncode}): {response[:300]}")
+        if status != (1 if name == 'picard' else 0) or not match:
+            raise ValueError(f"Cannot detect {name} version (exit {status}); expected {expected}: {response[:300]}")
         result["version"] = match[1]
         version = tuple(int(part) for part in match[1].split("."))
         version = (*version, *([0] * (3 - len(version))))
         result["compatible"] = minimum <= version < maximum
         if not result["compatible"]:
             result["error"] = f"Unsupported {name} version {match[1]}; expected {expected}."
-        if name == 'samtools':
-            library = re.search(r'(?m)^Using htslib ([0-9.]+)$', response)
-            result['htslib_version'] = library[1] if library else None
-            if not library or library[1] != '1.22.1':
-                result.update(compatible=False, error='SAMtools requires the verified HTSlib 1.22.1 reference contract')
-    except (OSError, ValueError, asyncio.TimeoutError) as exc:
-        result["error"] = str(exc) or f"{name} version detection timed out."
-    finally:
-        if process is not None:
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            await process.wait()
+        if name in {'samtools', 'mosdepth'}:
+            if response.splitlines().count('Using htslib 1.24') != 1 or len(re.findall(r'(?m)^Using htslib ', response)) != 1:
+                raise ValueError('Ambiguous HTSlib version response')
+            result['htslib_version'] = '1.24'
+        if name.startswith('rseqc_') and result['compatible']:
+            result.update(await rseqc_dependencies(path, env))
+    except (OSError, ValueError, TypeError, asyncio.TimeoutError) as exc:
+        result.update(compatible=False, error=str(exc) or f"{name} version detection timed out.")
     return result

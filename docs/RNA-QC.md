@@ -42,7 +42,7 @@ Unannotated BAM contigs may exist and are not assigned imaginary gene categories
 ### Input and execution
 
 Initially **BAM only**; SAM/CRAM are not qualified. No automatic reference download,
-index creation, format conversion or source writes. SAMtools/HTSlib 1.22.1 head,
+index creation, format conversion or source writes. SAMtools/HTSlib 1.24 head,
 quickcheck and a full stats scan precede either operation, using the existing
 restricted reference environment. quickcheck is header/EOF sanity only. The full
 stats scan adds one source pass and is distinct from RSeQC's scientific scan.

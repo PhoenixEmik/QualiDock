@@ -145,12 +145,14 @@ this is not a pixel-equivalence claim. Reproducible evidence is in the run's
 under ignored `validation/nanoplot-final-{linux,browser}`. #31 is accepted with
 its explicitly confirmed HTML-only output scope; no release is prepared.
 
-## SAMtools 1.22.1 — read-only alignment QC
+## SAMtools 1.24 — read-only alignment QC
 
 Set `QUALIDOCK_SAMTOOLS` or provide `samtools` on PATH. The initial explicit
-contract requires **SAMtools 1.22.1 with HTSlib 1.22.1**; older, prerelease and
+contract requires **SAMtools 1.24 with HTSlib 1.24**; older, prerelease and
 unqualified builds are unavailable without affecting FASTQ tools. No application
 runtime dependency is added. Test provisioning builds the original pinned source.
+The exact security contracts for each native reader, source digests and the
+mosdepth version-only instrumentation are in [HTSlib security](HTSLIB-SECURITY.md).
 
 BAM/CRAM appear as independently selectable alignment inputs in Workspace. Select
 an alignment and choose **SAMtools alignment QC** in the existing Quality Control
@@ -276,7 +278,7 @@ acceptance remains unmeasured.
 ## mosdepth 0.3.14 — coverage QC
 
 Set `QUALIDOCK_MOSDEPTH` or provide `mosdepth` on PATH. The initial verified CLI
-contract is **0.3.14**, with the existing **SAMtools/HTSlib 1.22.1** preflight.
+contract is **0.3.14 with HTSlib 1.24 version reporting**, with the existing **SAMtools/HTSlib 1.24** preflight.
 Select BAM/CRAM and choose **mosdepth coverage QC** in the existing QC form.
 It uses the same alignment authorization, resource slot, executor, stdout limits,
 cancellation, per-file/partial results, JSON persistence and artifact protection.
@@ -380,11 +382,13 @@ authenticated attachments. mosdepth does not create HTML reports, and no synthet
 HTML is generated. Native MultiQC aggregation for mosdepth is not exposed in this
 initial contract; existing integrations and official viewer remain unchanged.
 
-Validation uses genuine mosdepth output and independently specified SAM intervals,
-including mate overlap, filtering, zero coverage and omitted contigs. Local
+Initial qualification used genuine mosdepth output and independently specified SAM intervals,
+including mate overlap, filtering, zero coverage and omitted contigs. That local
 source build: upstream 0.3.14, Nim 2.2.12 with `--mm:refc`, hts-nim 0.3.31 and
-HTSlib 1.22.1, no tool source patch. Linux CI separately tests the official static
-release with its published SHA-256. No representative large-BAM, peak-memory or
+HTSlib 1.22.1, no tool source patch. The original Linux CI used the official static
+release with its published SHA-256. These are historical evidence; current
+admission requires the patched build described in [HTSlib security](HTSLIB-SECURITY.md).
+No representative large-BAM, peak-memory or
 NFS/Lustre acceptance is inferred from the eight-record fixture. Upstream's
 chromosome-sized depth arrays remain governed by existing process-tree/cgroup
 limits; regional selection is not a promise of bounded input I/O or small RAM.
