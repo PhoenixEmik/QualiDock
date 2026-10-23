@@ -9,12 +9,16 @@ from .outcomes import stop
 from .processing import local_file, validate
 from .metrics import bounded_text
 from .store import now, save_json
-from . import coverage, alignment, fastq_screen, multiqc, nanoplot, rseqc, picard, picard_rna
+from . import coverage, alignment, fastq_screen, multiqc, nanoplot, rseqc, picard, picard_rna, variant
 
-MODES = {'nanoq', 'fastq-screen', 'nanoplot', *alignment.MODES}
+MODES = {'nanoq', 'fastq-screen', 'nanoplot', 'bcftools', *alignment.MODES}
 
 
 def options(mode, supplied):
+    if mode=='bcftools':
+        value=variant.Options.model_validate(supplied or {}).model_dump()
+        if value['multiqc']:raise ValueError('Variant MultiQC integration has not passed qualification yet')
+        return value
     if mode == 'picard-rna':
         return picard_rna.Options.model_validate(supplied or {}).model_dump()
     if mode == 'picard':
@@ -40,6 +44,7 @@ def options(mode, supplied):
 
 
 def required(mode, value):
+    if mode=='bcftools':return ['bcftools',*(['multiqc'] if value['multiqc'] else [])]
     if mode in {'picard','picard-rna'}:
         return ['samtools','java','picard', *(['multiqc'] if value['multiqc'] else [])]
     if mode in rseqc.MODES:
@@ -95,7 +100,7 @@ def records(paths, tool):
     from .outcomes import plan
     result = []
     for row in plan(paths):
-        filename = {'rseqc-genebody':row['id']+'.geneBodyCoverage.txt', 'picard':row['id']+'.insert_size_metrics.txt', 'picard-rna':row['id']+'.rna_metrics.txt', 'rseqc-infer':row['id']+'.infer_experiment.txt', 'rseqc-distribution':row['id']+'.read_distribution.txt',
+        filename = {'bcftools':row['id']+'.bcftools.stats.txt','rseqc-genebody':row['id']+'.geneBodyCoverage.txt', 'picard':row['id']+'.insert_size_metrics.txt', 'picard-rna':row['id']+'.rna_metrics.txt', 'rseqc-infer':row['id']+'.infer_experiment.txt', 'rseqc-distribution':row['id']+'.read_distribution.txt',
                     'samtools':row['id']+'.stats.txt', 'mosdepth':row['id']+'.mosdepth.summary.txt',
                     'fastq-screen':row['id']+'_screen.txt', 'nanoplot':'NanoStats.txt', 'nanoq':'nanoq.json'}[tool]
         result.append({**{key:row[key] for key in ('id','path','name','state','error','exit_code','finished_at')},
@@ -104,6 +109,7 @@ def records(paths, tool):
 
 
 async def execute(manager, run, metrics, errors):
+    if run['mode']=='bcftools':return await variant.execute(manager,run,metrics,errors)
     if run['mode'] in alignment.MODES:
         return await alignment.execute(manager, run, metrics, errors)
     directory = manager.directory(run['id'])

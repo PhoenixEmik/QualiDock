@@ -1,5 +1,6 @@
 """Bounded local variant inputs and original BCFtools stats; no variant engine."""
 import gzip
+import asyncio
 import os
 from pathlib import Path
 import re
@@ -7,6 +8,8 @@ import re
 from pydantic import BaseModel, ConfigDict
 from .files import VARIANT
 from .integrity import snapshot
+from .processing import local_file
+from .store import now, save_json
 
 HEADER_LIMIT = 4*1024*1024
 LINE_LIMIT = 256*1024
@@ -20,7 +23,7 @@ class Options(BaseModel):
     multiqc: bool = False
 
 
-def readable(path):
+def readable(path, *, per_sample=False):
     """Call only after FileAccess authorization; read at most a bounded header."""
     if not VARIANT.search(path.name) or '##idx##' in str(path) or any(ord(c)<32 for c in str(path)) or not path.is_file() or not path.stat().st_mode & 0o444 or not os.access(path,os.R_OK):
         raise ValueError('Choose a readable canonical .vcf, .vcf.gz or .bcf input without control characters or HTSlib index syntax')
@@ -69,6 +72,7 @@ def readable(path):
     samples=columns[9:]
     if len(samples)>MAX_SAMPLES or len(set(samples))!=len(samples) or any(not s or len(s)>200 or any(c.isspace() or ord(c)<32 for c in s) for s in samples):
         raise ValueError('VCF requires unique nonempty sample IDs (at most 10000,200 characters each)')
+    if per_sample and not samples:raise ValueError('Per-sample statistics require input sample columns; no samples are invented')
     tags={kind:sorted({m[1] for line in decoded for m in [re.match(r'##'+kind+r'=<ID=([^,>]+),',line)] if m}) for kind in ['INFO','FORMAT']}
     if snapshot(path.stat())!=before:raise ValueError('Variant input changed during header checks')
     if not compressed and not path.name.lower().endswith('.bcf'):
@@ -77,3 +81,70 @@ def readable(path):
             if stream.read()!=b'\n':raise ValueError('Qualified text VCF requires a complete final newline')
     return {'format':'BCF 2.2' if path.name.lower().endswith('.bcf') else decoded[0].removeprefix('##fileformat='),
             'compression':'BGZF' if bgzf else 'gzip' if compressed else 'none','samples':samples,'tags':tags,'source_snapshot':before}
+
+
+SUMMARY_KEYS = ['number of samples:', 'number of records:', 'number of no-ALTs:', 'number of SNPs:',
+                'number of MNPs:', 'number of indels:', 'number of others:',
+                'number of multiallelic sites:', 'number of multiallelic SNP sites:']
+
+
+def report_text(path, maximum=16*1024*1024):
+    if path.is_symlink() or not path.is_file() or path.stat().st_size>maximum:raise ValueError('Variant report exceeds its regular-file parsing limit')
+    with path.open('rb') as stream:raw=stream.read(maximum+1)
+    if len(raw)>maximum:raise ValueError('Variant report exceeds its parsing limit')
+    return raw.decode('utf-8')
+
+
+def original(path, source, header, per_sample):
+    """Validate original report framing/identity before publishing any artifact."""
+    text=report_text(path)
+    if not text.startswith('# This file was produced by bcftools stats (1.24+htslib-1.24) ') or not text.endswith('\n'):
+        raise ValueError('Unsupported or truncated BCFtools stats report')
+    rows=[line.split('\t') for line in text.splitlines() if line and not line.startswith('#')]
+    identities=[r for r in rows if r[0]=='ID']
+    if identities!=[['ID','0',str(source)]]:raise ValueError('Ambiguous or incorrect BCFtools report source identity')
+    summary=[r[2:] for r in rows if r[0]=='SN' and len(r)==4 and r[1]=='0']
+    if [r[0] for r in summary]!=SUMMARY_KEYS or any(not r[1].isascii() or not r[1].isdecimal() for r in summary):
+        raise ValueError('Missing, duplicate or invalid BCFtools summary values')
+    values=dict(summary)
+    if int(values[SUMMARY_KEYS[0]])!=len(header['samples']) or any(int(v)>int(values['number of records:']) for k,v in summary[2:]):
+        raise ValueError('BCFtools summary disagrees with the input header or record population')
+    required=['ID','SN','TSTV','SiS','AF','QUAL','IDD','ST','DP',*(['PSC','PSI','HWE'] if per_sample else [])]
+    declared={r[0][2:] for r in (line.split('\t') for line in text.splitlines()) if len(r)>1 and r[0].startswith('# ') and r[1]=='[2]id'}
+    if not set(required)<=declared:raise ValueError('Truncated BCFtools section definitions')
+    return {'status':'available','summary':{'columns':['Original BCFtools metric','Reported value'],'rows':summary,'total_rows':len(summary)},
+            'input_format':header['format'],'compression':header['compression'],'sample_count':len(header['samples']),
+            'per_sample_requested':per_sample,'sample_statistics_available':per_sample and 'GT' in header['tags']['FORMAT']}
+
+
+async def execute(manager,run,metrics,errors):
+    directory=manager.directory(run['id']);options=run['qc']['options']
+    for row in run['qc']['results']:
+        if run['id'] in manager.cancelled:break
+        try:
+            paths=await asyncio.to_thread(manager.checked_inputs,run)
+            source=next(p for p in paths if str(p)==row['path'])
+            header=await asyncio.to_thread(readable,source,per_sample=options['per_sample'])
+            manager.stores.subdirectory(run['id'],f'qc/{row["id"]}',exist_ok=True)
+            reports={'stats':row['report'],'diagnostics':f'qc/{row["id"]}/{row["id"]}.bcftools.log'}
+            row['state']='running';manager.update(run,stage=f'BCFtools stats · {row["name"]}')
+            argv=[run['tools']['bcftools']['executable'],'stats','--threads',str(run['threads']-1),
+                  *(['--samples','-'] if options['per_sample'] else []),str(source)]
+            env={'REF_PATH':'/dev/null','REF_CACHE':'/dev/null','HTS_PATH':'','BCFTOOLS_PLUGINS':''}
+            code=await manager.command(run,'bcftools',argv,directory,stdout=directory/reports['stats'],stderr=directory/reports['diagnostics'],env=env)
+            row['exit_code']=code
+            if run['id'] in manager.cancelled:return
+            if code:raise ValueError(f'BCFtools stats exited {code}; original diagnostics are in the analysis log')
+            diagnostic=report_text(local_file(directory,reports['diagnostics']),1024*1024)
+            if re.search(r'(?m)^\[(?:E|W)::',diagnostic):raise ValueError('BCFtools reported a native input/format warning or error; completeness is not qualified')
+            parsed=await asyncio.to_thread(original,local_file(directory,row['report']),source,header,options['per_sample'])
+            await asyncio.to_thread(manager.checked_inputs,run)
+            if await asyncio.to_thread(readable,source,per_sample=options['per_sample'])!=header:raise ValueError('Variant input changed during statistics')
+            row.update(state='completed',error=None,variant={**parsed,'reports':reports,'source_snapshot':header['source_snapshot']})
+            run['report_input_map'][row['report']]={'id':row['id'],'path':row['path']}
+        except (ValueError,OSError,KeyError,TypeError) as exc:
+            row.update(state='failed',error=str(exc));errors.append(row['name']+': '+str(exc))
+        row['finished_at']=now()
+        manager.update(run,sample_count=sum(r['state']=='completed' for r in run['qc']['results']))
+    metrics['qc']=run['qc']
+    await asyncio.to_thread(save_json,directory/'metrics.json',metrics)

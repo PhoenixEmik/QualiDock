@@ -19,7 +19,7 @@ from .metrics import parse_report
 from .import_formats import fastp_metadata
 from .reports import discover, metadata
 from .tools import detect_tool, locate_tool
-from . import coverage, alignment, processing, datasets, multiqc, optional_qc, fastq_screen, rseqc, picard_rna
+from . import coverage, alignment, processing, datasets, multiqc, optional_qc, fastq_screen, rseqc, picard_rna, variant
 from .store import ResultStores, now, save_json
 from .sample_metadata import validate_configuration
 from .outcomes import plan, batches, stop, counts
@@ -107,7 +107,7 @@ class RunManager:
         return sorted(self.runs.values(), key=lambda r: r["created_at"], reverse=True)
 
     async def detect_tools(self):
-        names = ("fastqc", "multiqc", "fastp", "seqkit", "nanoq", "nanoplot", "fastq_screen", "bowtie2", "samtools", "mosdepth", "rseqc_infer", "rseqc_distribution", "rseqc_genebody", "java", "picard")
+        names = ("fastqc", "multiqc", "fastp", "seqkit", "nanoq", "nanoplot", "fastq_screen", "bowtie2", "samtools", "bcftools", "mosdepth", "rseqc_infer", "rseqc_distribution", "rseqc_genebody", "java", "picard")
         signature = []
         for name in names:
             configured = getattr(self.settings,name)
@@ -172,7 +172,10 @@ class RunManager:
         input_pairing = []
         normalized_groups = []
         pairing_note = None
-        if mode in alignment.MODES:
+        if mode=='bcftools':
+            if input_datasets or supplied_pairing or sample_groups:raise ValueError('Variant inputs do not accept FASTQ pairing, datasets or sample grouping')
+            for path in paths:await asyncio.to_thread(variant.readable,path,per_sample=qc_options['per_sample'])
+        elif mode in alignment.MODES:
             if input_datasets or supplied_pairing or sample_groups:
                 raise ValueError('Alignment QC does not accept FASTQ datasets, pairing or sample grouping')
             for path in paths:
@@ -191,7 +194,7 @@ class RunManager:
             input_pairing = configuration['input_pairing'] if not configuration.get('pairing_note') or supplied_pairing is not None else []
             normalized_groups = configuration['sample_groups']
             pairing_note = configuration.get('pairing_note')
-        sample_input_paths = [str(path) for path in paths] if mode not in {'multiqc', *alignment.MODES} else []
+        sample_input_paths = [str(path) for path in paths] if mode not in {'multiqc', 'bcftools', *alignment.MODES} else []
         if mode == 'multiqc' and source_run_id:
             source = self.runs[source_run_id]
             input_pairing = deepcopy(source.get('input_pairing', []))
@@ -331,7 +334,8 @@ class RunManager:
         paths = [datasets.resolve(self, path, derived) if not run.get('source_run_id') else access.resolve(path) for path in run['inputs']]
         entries = []
         for path in paths:
-            if run['mode'] in alignment.MODES: alignment.readable(path)
+            if run['mode']=='bcftools': variant.readable(path)
+            elif run['mode'] in alignment.MODES: alignment.readable(path)
             elif run['mode'] != 'multiqc': self.readable_fastq(path)
             entry = access._entry(path.parent, path.name)
             if not entry: raise ValueError('An original input is unavailable')
@@ -353,7 +357,8 @@ class RunManager:
                     raise ValueError("Input directory is unavailable")
                 paths.append(path)
                 continue
-            if run['mode'] in alignment.MODES: alignment.readable(path)
+            if run['mode']=='bcftools': variant.readable(path)
+            elif run['mode'] in alignment.MODES: alignment.readable(path)
             elif run['mode'] != 'multiqc': self.readable_fastq(path)
             stat = path.stat()
             if not path.is_file() or stat.st_size != metadata["size"] or stat.st_mtime_ns != metadata["mtime_ns"] or any(key in metadata and getattr(stat, attribute) != metadata[key] for key, attribute in (("device", "st_dev"), ("inode", "st_ino"))):
@@ -618,6 +623,7 @@ class RunManager:
         coverage_reports = {path for row in run.get('qc', {}).get('results', []) if row['state'] == 'completed' for path in row.get('mosdepth', {}).get('reports', {}).values()}
         gene_reports = {path for row in run.get('qc', {}).get('results', []) if row['state']=='completed' for path in row.get('rseqc',{}).get('reports',{}).values()} if run['mode']=='rseqc-genebody' else None
         picard_reports = {path for row in run.get('qc', {}).get('results', []) if row['state']=='completed' for path in row.get('picard',{}).get('reports',{}).values()}
+        variant_reports = {path for row in run.get('qc', {}).get('results', []) if row['state']=='completed' for path in row.get('variant',{}).get('reports',{}).values()}
         for path in sorted(directory.rglob("*")):
             coverage_report = path.suffix in {'.gz','.csi'} and str(path.relative_to(directory)) in coverage_reports
             gene_report = path.suffix == '.r' and str(path.relative_to(directory)) in (gene_reports or set())
@@ -631,6 +637,8 @@ class RunManager:
                 if relative.startswith('processing/private/'):
                     continue
                 if relative.startswith('qc/'):
+                    if run['mode']=='bcftools' and relative not in variant_reports:
+                        continue
                     if run['mode']=='picard-rna' and relative not in picard_reports:
                         continue
                     if gene_reports is not None and relative not in gene_reports:
