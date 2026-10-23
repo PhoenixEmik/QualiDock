@@ -4,6 +4,35 @@ QualiDock remains `0.1.0.dev0`; no release is tagged or published. This is the
 current acceptance record. Development-phase documents describe historical
 implementation environments and do not override this record.
 
+## Patched HTSlib security qualification — 2026-10-23
+
+[CI 39930283266](https://github.com/PhoenixEmik/QualiDock/actions/runs/39930283266)
+on application code `616494f` passed **all eight jobs** for security PR #42 /
+Issue #41. Current admission requires **SAMtools 1.24 /HTSlib 1.24**,
+**mosdepth 0.3.14 rebuilt with HTSlib 1.24** and explicit native version reporting,
+and **RSeQC 5.0.5 /CLI 5.05 /pysam 0.24.1 /native HTSlib 1.24**.
+Picard remains **3.5.0 /Java 17 /HTSJDK**. Historical 1.22.1 reports remain
+readable, but those executables are no longer accepted for new analyses.
+
+| Check | Accepted evidence |
+| --- | --- |
+| Default backend | 613 passed /231 missing-optional-tool skips; provisioned jobs execute the genuine tools |
+| SAMtools/security | 66 passed without skips per matrix target; original BAM/CRAM flagstat and all 39 SN values/notes unchanged |
+| Scientific regressions | All existing coverage, three RSeQC modes, Picard insert/RNA metrics, FastQC/MultiQC, fastp/SeqKit, nanoq/NanoPlot and FastQ Screen jobs passed |
+| Gene-body | 49 parser/genuine-tool cases passed without skips; original values, index handling, source identity, cancellation and restart retained |
+| Frontend | 154 passed; TypeScript/Vite build passed |
+| Chromium /Firefox | 78 /54 cases, zero errors/failures/skips across retained XML; three prefix contexts, original artifacts and report isolation |
+| Linux resources | 1 CPU /1 GiB cgroup; actual patched flagstat scan cancelled, source unchanged, partial QC unpublished; existing RSS/guardian/recovery checks passed |
+| MultiQC | 1.25.1 /1.35 /latest 1.x (resolved 1.35), with original modules and existing source mapping |
+
+See [HTSLIB-SECURITY.md](HTSLIB-SECURITY.md) for all seven July advisories,
+official source-asset SHA-256 evidence, exact reader/loader contracts, scientific
+comparison, explicit mosdepth version-only instrumentation and complete change
+footprint. Downloaded proof is under ignored `validation/htslib-security`.
+No original scientific output or numerical assertion was rewritten. Tiny fixture
+evidence does not close large/shared-storage acceptance #5 or HPC hosting #4.
+BCFtools remains gated on merging the accepted security PR. No release or tag.
+
 ## RSeQC gene-body coverage — 2026-10-19
 
 [CI 39192950625](https://github.com/PhoenixEmik/QualiDock/actions/runs/39192950625)

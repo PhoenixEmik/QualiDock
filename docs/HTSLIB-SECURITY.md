@@ -35,7 +35,7 @@ exploit reproductions. No exploit payloads are added.
 | mosdepth | Same **mosdepth 0.3.14 / hts-nim 0.3.31**, rebuilt with **HTSlib 1.24**. The official static 0.3.14 asset contains HTSlib 1.22.1 (audited via its embedded version and symbols) and is no longer admitted. See the explicit instrumentation below. SAMtools's version is never used as evidence of mosdepth's reader. |
 | RSeQC | Same **RSeQC 5.0.5**, CLI **5.05**; explicitly pin **pysam 0.24.1 / HTSlib 1.24**. The [pysam release](https://github.com/pysam-developers/pysam/releases/tag/v0.24.1) wraps HTSlib 1.24. Runtime checks the configured script's own Python interpreter with `-I`, distribution metadata and the actual native `hts_version()` exported by its `pysam.libchtslib` extension. Shell launchers and unverifiable/mismatched environments are unavailable. CI compares the native result with `pysam.version.__htslib_version__`, and records the native extension's actual path and linked libraries. |
 | Picard | **Picard 3.5.0 / Java 17 / HTSJDK**, not HTSlib. Its insert-size and RNA-metrics algorithms are unchanged; SAMtools preflight and fixture conversion move to 1.24. CRAM remains unqualified for Picard. |
-| NanoPlot / nanoget | Existing FASTQ-only operation, with no BAM/CRAM exposure through this application. Its isolated dependency environment is separate from the RSeQC environment. A newer external samtools does not patch Python extensions. |
+| NanoPlot / nanoget | Existing FASTQ-only operation. Inspection of the pinned [nanoget 1.19.6 source](https://pypi.org/project/nanoget/1.19.6/) confirms that the selected FASTQ paths use Biopython `SeqIO.parse`; its separate pysam BAM readers and automatic BAM-index creation are unreachable through QualiDock's `--fastq`/`--fastq_rich` contract. Full structural FASTQ validation precedes execution. Its isolated dependency environment is separate from RSeQC; neither external samtools nor the RSeQC probe attests other NanoPlot modes. No unrelated dependency is silently replaced. |
 | Other supported tools | FastQC/Picard use Java implementations; SeqKit and nanoq are not HTSlib readers; Bowtie2/FastQ Screen consume the existing FASTQ contract. They are not silently upgraded or claimed fixed by this change. |
 
 SAMtools/HTSlib 1.22.1 is rejected, even when historical manifests and original
@@ -98,8 +98,9 @@ nim-unicodedb 0.7.0 `ccf0fe9ec986420e368d2c1fcbe420d0157a49f5d8cb1fe9489518bbffd
 nim-unicodeplus 0.5.0 `1649472ef3bcb5f9e8bab2cae402a9394e1aab089ab9a6a7abe05c6d9e9e74d7`.
 No network dependency resolution occurs during compilation.
 
-The compiler is the test runner's distribution-provided Nim; its exact version
-is retained. No speculative compiler upgrade or new runtime dependency is added.
+The accepted Linux compiler is distribution-provided **Nim 1.6.14**, using
+`--gc:refc`; its exact version is retained. No speculative compiler upgrade or
+new application runtime dependency is added.
 
 ## Scientific and failure acceptance
 
@@ -125,8 +126,47 @@ their original official modules and the existing documented 1.25.1 limitation.
 
 ### Gate status
 
-Security branch: implementation/acceptance in progress. Full CI, Linux resource
-evidence and both browser jobs must pass before merger or Variant QC work.
-The new version-policy tests are not scientific evidence by themselves. Local
-missing-tool skips and tiny synthetic fixtures do not qualify large files,
-NFS/Lustre throughput or production hosting. Those remain tracked by #5/#4.
+[CI 39930283266](https://github.com/PhoenixEmik/QualiDock/actions/runs/39930283266)
+on code `616494f` passed **all eight jobs** on 2026-10-23. This is the accepted
+security candidate for [PR #42](https://github.com/PhoenixEmik/QualiDock/pull/42)
+and Issue #41; Variant QC must still wait for that PR to be merged.
+
+- Default backend: **613 passed /231 missing-optional-tool skips**; provisioned
+  scientific jobs execute those tools rather than treating skips as evidence.
+- SAMtools/security suites: **66 passed, no errors/failures/skips**, in each
+  MultiQC matrix target. Both BAM/CRAM original flagstat and all 39 SN values/
+  notes match the genuine 1.22.1 baseline, with original stdout/stderr retained.
+- Gene-body suite: **49 passed, no skips**; all existing numerical/index/security
+  assertions retained. Local genuine RSeQC plus gene-body regressions also passed
+  **49** cases, including shadow-module isolation.
+- RSeQC unit/genuine suite **66 passed**, coverage **46**, Picard insert-size
+  **49**, Picard RNA production **79** plus **15** qualification cases, and
+  RNA/alignment MultiQC **9** passed in the fully provisioned 1.35 job.
+- Frontend: **154 passed**, TypeScript/Vite build passed.
+- Chromium/Firefox: **78 /54 cases**, zero errors/failures/skips across the
+  retained XML suites. Root, `/node/compute/8765`, `/rnode/compute/8765`, native
+  results, original downloads, restart/rerun and report sandbox are exercised.
+  Downloaded mobile alignment/Picard RNA screenshots were visually inspected.
+- MultiQC **1.25.1 /1.35** and latest qualified 1.x (**resolved to 1.35**) passed.
+- Linux **1 CPU /1 GiB cgroup** passed. The captured native command was actual
+  `samtools flagstat -@ 0`, cancelled during the record scan; the group exited,
+  source hashes were unchanged and partial QC reports remained unpublished.
+  Existing process-tree memory termination/recovery, affinity, shutdown and
+  guardian checks passed. RSS samples are observations, not exact peaks.
+
+Downloaded evidence is retained under ignored `validation/htslib-security`,
+including official source/binary/library hashes, `LD_DEBUG` mosdepth library
+initialization/finalization paths, native pysam HTSlib 1.24, independent original
+reports, JUnit XML, screenshots and the full CI job result. The full genuine
+FastQC, fastp/SeqKit, nanoq/NanoPlot, Screen, coverage and Picard insert/RNA jobs
+also passed. No scientific count assertion or original report was weakened.
+
+Source footprint relative to `01bb479`: **5 files added /18 modified /0 removed**.
+Application source is **+71 /−37 (net +34)** across tools, RSeQC environment
+isolation and an alignment docstring; RunManager, execution framework, form and
+navigation are unchanged. The final acceptance follow-up changes documents only.
+
+The version-policy unit tests alone are not scientific evidence. Tiny synthetic
+fixtures and the bounded malformed cases are not a comprehensive fuzzing proof,
+large-file qualification, NFS/Lustre throughput or production-hosting acceptance.
+Those operational limits remain tracked by #5/#4. No release/tag is prepared.
