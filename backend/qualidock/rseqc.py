@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .files import approved_file
 from .integrity import snapshot
 from .processing import local_file
+from .tools import RSEQC_ENV
 
 TOOLS = {'rseqc-infer':'rseqc_infer', 'rseqc-distribution':'rseqc_distribution', 'rseqc-genebody':'rseqc_genebody'}
 MODES = set(TOOLS)
@@ -155,6 +156,8 @@ def distribution(path):
 
 
 async def execute(manager, run, row, contigs, preflight, env, stats=None):
+    # Match the interpreter isolation used to qualify this tool's pysam.
+    env = {**env, **RSEQC_ENV}
     directory = manager.directory(run['id'])
     approved = run['qc']['annotation']
     if await asyncio.to_thread(annotation,manager.settings,approved['id']) != approved:

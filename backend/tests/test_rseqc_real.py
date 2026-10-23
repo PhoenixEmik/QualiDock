@@ -30,6 +30,26 @@ def auth(client,config):
     client.headers.update({'Authorization':'Bearer '+config.token,'X-QualiDock-Request':'1'})
 
 
+@pytest.mark.parametrize('mode',['rseqc-infer','rseqc-distribution'])
+def test_genuine_rseqc_uses_qualified_pysam_despite_inherited_pythonpath(inputs,tmp_path,monkeypatch,mode):
+    from qualidock.tools import RSEQC_ENV
+    config,bam,bed=inputs
+    shadow=tmp_path/'shadow-modules';shadow.mkdir()
+    (shadow/'pysam.py').write_text('raise RuntimeError("Unqualified pysam shadow was imported")\n')
+    monkeypatch.setenv('PYTHONPATH',str(shadow))
+    with TestClient(create_app(config)) as c:
+        auth(c,config)
+        created=c.post('/api/runs',json={'mode':mode,'paths':[str(bam)],'qc_options':{'annotation':'genes'}})
+        assert created.status_code==201,created.text
+        run=wait(c,created.json()['id'],timeout=60)
+        assert run['state']=='completed',run['error']
+        tool='rseqc_infer' if mode=='rseqc-infer' else 'rseqc_distribution'
+        assert run['tools'][tool]['pysam_version']=='0.24.1' and run['tools'][tool]['htslib_version']=='1.24'
+        for execution in run['executions']:
+            if execution['tool']==tool:
+                assert all(execution['environment'][key]==value for key,value in RSEQC_ENV.items())
+
+
 def hashes(directory):
     return {str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in directory.rglob('*') if p.is_file()}
 

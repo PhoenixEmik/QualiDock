@@ -11,6 +11,7 @@ from .files import approved_file
 
 
 PROBE_TIMEOUT = 10
+RSEQC_ENV = {'PYTHONPATH':'', 'PYTHONHOME':'', 'PYTHONNOUSERSITE':'1', 'PYTHONSAFEPATH':'1'}
 # Explicit probes prevent new tools inheriting MultiQC's compatibility rules.
 TOOL_SPECS = {
     'fastqc': ('--version', (0, 12, 1), (0, 14, 0), '0.12.1–0.13.x'),
@@ -114,6 +115,8 @@ async def detect_tool(name: str, executable: str, *, java='java') -> dict:
         env = os.environ.copy()
         for key in ("QUALIDOCK_TOKEN", "password"):
             env.pop(key, None)
+        if name.startswith('rseqc_'):
+            env.update(RSEQC_ENV)
         if name in {'java','picard'}:
             for key in ('JAVA_TOOL_OPTIONS','JDK_JAVA_OPTIONS','_JAVA_OPTIONS'):
                 env.pop(key,None)

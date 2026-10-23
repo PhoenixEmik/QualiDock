@@ -43,6 +43,10 @@ reports remain readable. Exact version reporting is an operator-trusted tool
 contract, not an attestation that an arbitrary executable cannot lie. CI source
 hashes, static/dynamic loader evidence and independent scientific execution
 provide the qualification evidence. No tools are installed by the application.
+RSeQC's probe and execution both clear inherited Python home/path overrides,
+disable user-site imports and enable Python's safe-path mode. Otherwise an
+isolated probe could qualify a different pysam than the scientific command
+actually imports. Genuine RSeQC tests exercise an injected shadow `pysam.py`.
 
 ### mosdepth version-only instrumentation
 

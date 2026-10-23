@@ -53,3 +53,17 @@ def test_dependency_failure_cannot_leave_tool_marked_compatible(tmp_path,monkeyp
     monkeypatch.setattr('qualidock.tools.rseqc_dependencies',fail)
     result=asyncio.run(detect_tool('rseqc_infer',str(executable(tmp_path,'infer_experiment.py 5.05'))))
     assert result['available'] and not result['compatible'] and result['error']=='Unverified HTSlib'
+
+
+def test_rseqc_probe_does_not_qualify_a_different_python_environment(tmp_path,monkeypatch):
+    from qualidock.tools import RSEQC_ENV
+    for name in RSEQC_ENV:monkeypatch.setenv(name,'untrusted-inherited-setting')
+    async def response(argv,env):
+        assert all(env[key]==value for key,value in RSEQC_ENV.items())
+        return 'infer_experiment.py 5.05',0
+    async def dependencies(path,env):
+        assert all(env[key]==value for key,value in RSEQC_ENV.items())
+        return {'pysam_version':'0.24.1','htslib_version':'1.24'}
+    monkeypatch.setattr('qualidock.tools.version_response',response)
+    monkeypatch.setattr('qualidock.tools.rseqc_dependencies',dependencies)
+    assert asyncio.run(detect_tool('rseqc_infer',str(executable(tmp_path,'unused'))))['compatible']
