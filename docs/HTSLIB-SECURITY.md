@@ -87,6 +87,13 @@ release-asset digests:
 | hts-nim v0.3.31 | `93ad65442b16d0191aa0c44803d10a6fb7cde9fa` | `e2e8572156cced4557fcb75ecf5a7ee072bcc7abf81066d4b54d5bf674dab3e0` |
 | docopt.nim v0.7.1 | `efaa112b6df172a9168c4eb581ab8dda1fbcfe2a` | `a172f7e8be5c10735727ca00f69294e8615c4ad055dd9b58dcdb0f7c6bd7d025` |
 
+docopt's existing transitive build dependencies are also pinned (official
+`nitely` tagged source archives): nim-regex 0.11.1 SHA-256
+`c9890246cada2eedee9c4a880073727f4f7025367d9c63bf89e4c50a64eaad67`,
+nim-unicodedb 0.7.0 `ccf0fe9ec986420e368d2c1fcbe420d0157a49f5d8cb1fe9489518bbffda374a`,
+nim-unicodeplus 0.5.0 `1649472ef3bcb5f9e8bab2cae402a9394e1aab089ab9a6a7abe05c6d9e9e74d7`.
+No network dependency resolution occurs during compilation.
+
 The compiler is the test runner's distribution-provided Nim; its exact version
 is retained. No speculative compiler upgrade or new runtime dependency is added.
 

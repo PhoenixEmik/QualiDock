@@ -39,7 +39,10 @@ if [[ " $* " == *" --mosdepth "* ]]; then
   for source in \
     'mosdepth|https://github.com/brentp/mosdepth/archive/refs/tags/v0.3.14.tar.gz|abac67de4547dc5642efd46846044d6b3536d2ca3443b4ca172446edf82eeb42' \
     'hts-nim|https://github.com/brentp/hts-nim/archive/refs/tags/v0.3.31.tar.gz|e2e8572156cced4557fcb75ecf5a7ee072bcc7abf81066d4b54d5bf674dab3e0' \
-    'docopt|https://github.com/docopt/docopt.nim/archive/refs/tags/v0.7.1.tar.gz|a172f7e8be5c10735727ca00f69294e8615c4ad055dd9b58dcdb0f7c6bd7d025'; do
+    'docopt|https://github.com/docopt/docopt.nim/archive/refs/tags/v0.7.1.tar.gz|a172f7e8be5c10735727ca00f69294e8615c4ad055dd9b58dcdb0f7c6bd7d025' \
+    'regex|https://github.com/nitely/nim-regex/archive/refs/tags/v0.11.1.tar.gz|c9890246cada2eedee9c4a880073727f4f7025367d9c63bf89e4c50a64eaad67' \
+    'unicodedb|https://github.com/nitely/nim-unicodedb/archive/refs/tags/v0.7.0.tar.gz|ccf0fe9ec986420e368d2c1fcbe420d0157a49f5d8cb1fe9489518bbffda374a' \
+    'unicodeplus|https://github.com/nitely/nim-unicodeplus/archive/refs/tags/v0.5.0.tar.gz|1649472ef3bcb5f9e8bab2cae402a9394e1aab089ab9a6a7abe05c6d9e9e74d7'; do
     IFS='|' read -r name url digest <<< "$source"
     curl -fsSL "$url" -o "$alignment_tools/$name.tar.gz"
     echo "$digest  $alignment_tools/$name.tar.gz" | sha256sum --check
@@ -48,9 +51,12 @@ if [[ " $* " == *" --mosdepth "* ]]; then
   make -C "$alignment_tools/samtools-1.24/htslib-1.24" -j2 lib-shared
   python "$repo_root/scripts/prepare-mosdepth-security-build.py" "$alignment_tools"
   nim --version > validation/htslib-security/nim-version.txt
-  nim c --mm:refc -d:release \
+  nim c --gc:refc -d:release \
     --path:"$alignment_tools/hts-nim-0.3.31/src" \
     --path:"$alignment_tools/docopt.nim-0.7.1/src" \
+    --path:"$alignment_tools/nim-regex-0.11.1/src" \
+    --path:"$alignment_tools/nim-unicodedb-0.7.0/src" \
+    --path:"$alignment_tools/nim-unicodeplus-0.5.0/src" \
     --out:"$alignment_tools/mosdepth" "$alignment_tools/mosdepth-0.3.14/mosdepth.nim"
   "$alignment_tools/mosdepth" --version | tee validation/mosdepth-tooling.txt
   grep -qx 'mosdepth 0.3.14' validation/mosdepth-tooling.txt
