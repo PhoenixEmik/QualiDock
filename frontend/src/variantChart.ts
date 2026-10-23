@@ -4,7 +4,7 @@ import { overlayColors } from "./fastqcTheme.ts";
 
 // Exact strings remain in tables/downloads. Do not graph rounded unsafe counts.
 function bars(title: string, rows: string[][], columns: [string, number][]): NativePlotView | null {
-  if (!rows.length || rows.some(r => columns.some(([, i]) => !Number.isSafeInteger(Number(r[i]))))) return null;
+  if (!rows.length || rows.some(r => columns.some(([, i]) => !/^[0-9]+$/.test(r[i] ?? "") || !Number.isSafeInteger(Number(r[i]))))) return null;
   const series = columns.map(([name]) => ({name, label: name}));
   return {description: title, summary: "Original BCFtools counts; categories are not combined", series,
     options: {animation: false, grid: {left: 65, right: 25, top: 50, bottom: 100},
@@ -18,7 +18,7 @@ function bars(title: string, rows: string[][], columns: [string, number][]): Nat
 
 export function variantViews(data: VariantMetrics) {
   const summary = new Map(data.summary.rows.map(([k, v]) => [k, v] as const));
-  const composition = bars("Reported SNP / indel composition: overlapping record categories, not a partition of all records", ["SNPs", "MNPs", "indels", "others", "no-ALTs"].map(k => [k, summary.get(`number of ${k}:`) || "0"]), [["Records in category", 1]]);
+  const composition = bars("Reported SNP / indel composition: overlapping record categories, not a partition of all records", ["SNPs", "MNPs", "indels", "others", "no-ALTs"].map(k => [k, summary.get(`number of ${k}:`) ?? ""]), [["Records in category", 1]]);
   const quality = data.quality_available && data.quality.chart_rows
     ? bars("Original QUAL distribution: first-ALT SNP substitutions and indels; missing QUAL is separate", data.quality.chart_rows.map(r => [r[0] === "." ? "Missing QUAL" : r[0], ...r.slice(1)]), [["SNPs (first ALT)", 1], ["Indels", 4]]) : null;
   const depthRows = data.depth.chart_rows?.filter(r => !r[0].startsWith("<"));

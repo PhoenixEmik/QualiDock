@@ -161,7 +161,9 @@ def original(path, source, header, per_sample):
                 continue
             if not line or line.startswith('#'):continue
             code=fields[0]
-            if code=='ID':identities.append(fields);continue
+            if code=='ID':
+                if identities:raise ValueError('Duplicate BCFtools source identity')
+                identities.append(fields);continue
             if code not in SCHEMAS:
                 if code not in declared or len(fields)<2 or fields[1]!='0':raise ValueError('Unknown section has ambiguous identity')
                 if len(other)>=64 and code not in other:raise ValueError('Too many unrecognized original sections')

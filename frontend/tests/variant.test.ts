@@ -38,3 +38,9 @@ test("unsafe count precision and oversized distribution do not create rounded na
   const views = variantViews(data);
   assert.equal(views.composition, null); assert.equal(views.quality, null); assert.equal(views.depth, null);
 });
+
+test("missing historical composition counts remain unavailable instead of becoming zero", () => {
+  const data = genuine("mixed");
+  data.summary.rows = data.summary.rows.filter(r => r[0] !== "number of indels:");
+  assert.equal(variantViews(data).composition, null);
+});
