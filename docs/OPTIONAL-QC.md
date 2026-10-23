@@ -145,6 +145,17 @@ this is not a pixel-equivalence claim. Reproducible evidence is in the run's
 under ignored `validation/nanoplot-final-{linux,browser}`. #31 is accepted with
 its explicitly confirmed HTML-only output scope; no release is prepared.
 
+## BCFtools 1.24 — read-only variant QC
+
+Set `QUALIDOCK_BCFTOOLS` or put `bcftools` on PATH. Only genuine **BCFtools1.24
+with native HTSlib1.24** is qualified. The optional tool is never installed by
+the application. Select VCF/VCF.GZ/BCF inputs in Workspace and configure
+**BCFtools variant QC** under Quality Control. Per-sample statistics and MultiQC
+are explicit options; whole-file statistics need no index. The existing
+source authorization, resource/cancellation controls and authenticated artifact
+downloads apply. See [the exact scientific and format contract](VARIANT-QC.md),
+including unavailable depth/GT, gVCF, original reports and MultiQC limitations.
+
 ## SAMtools 1.24 — read-only alignment QC
 
 Set `QUALIDOCK_SAMTOOLS` or provide `samtools` on PATH. The initial explicit

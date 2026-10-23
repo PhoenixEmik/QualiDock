@@ -59,6 +59,11 @@ Optional [mosdepth 0.3.14](docs/OPTIONAL-QC.md#mosdepth-0314--coverage-qc) adds
 native coverage CDFs and approved BED target/threshold reports for sorted, indexed
 BAM/CRAM. Source alignments/indexes remain unchanged. Reported and omitted
 reference denominators are explicit; per-base output is disabled by default.
+Optional [BCFtools 1.24 Variant QC](docs/VARIANT-QC.md) scans authorized VCF/BCF
+inputs read-only, preserving original stats with native metrics and optional
+MultiQC. No indexing, filtering, rewriting or variant calling. Input files and
+within-file biological samples retain separate identities.
+
 Optional [RSeQC and Picard](docs/RNA-QC.md) add read-only RNA-seq strandedness,
 annotation distribution, indexed-BAM gene-body coverage (native 5′→3′ profile),
 and original insert-size metrics/histograms for BAM.

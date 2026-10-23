@@ -53,7 +53,7 @@ async def observe(manager, run, tool):
         snapshot = group_snapshot(process.pid)
         for item in snapshot:
             command = item['command']
-            real = 'java' in Path(command[0]).name if tool == 'fastqc' else Path(command[0]).name == 'samtools' if tool == 'samtools' else 'qualidock.worker' not in command and any(Path(arg).name == 'multiqc' for arg in command)
+            real = 'java' in Path(command[0]).name if tool == 'fastqc' else Path(command[0]).name == tool if tool in {'samtools','bcftools'} else 'qualidock.worker' not in command and any(Path(arg).name == 'multiqc' for arg in command)
             if real:
                 assert all(len(p['affinity']) <= run['threads'] for p in snapshot), snapshot
                 return {'group': process.pid, 'processes': snapshot}
@@ -83,9 +83,27 @@ async def validate_alignment(manager, inputs, evidence):
     evidence['checks']['patched_samtools_native_cancel']={'tool':tool,'observation':observed,'state':run['state'],'source_unchanged':True,'unpublished_partial_reports':True}
 
 
+async def validate_variant(manager, inputs, evidence):
+    """Observe actual record scanning/cancellation with cgroup CPU/memory limits."""
+    tool=manager.tool_info['bcftools']
+    assert tool['compatible'] and tool['version']==tool['htslib_version']=='1.24'
+    source=inputs/'bounded-variant.vcf'
+    with source.open('wb') as stream:
+        stream.write(b'##fileformat=VCFv4.3\n##contig=<ID=chr1,length=1000>\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n')
+        for _ in range(1000):stream.write(b'chr1\t10\t.\tA\tG\t30\tPASS\t.\n'*2000)
+    before=hashlib.sha256(source.read_bytes()).hexdigest()
+    run=await manager.create('Cancel genuine variant stats','bcftools',[str(source)],1)
+    observed=await observe(manager,run,'bcftools');task=manager.tasks[run['id']]
+    await manager.cancel(run['id']);await task
+    await until(lambda:not group_snapshot(observed['group']),10)
+    assert run['state']=='cancelled' and not any(r['path'].startswith('qc/') for r in run['reports'])
+    assert hashlib.sha256(source.read_bytes()).hexdigest()==before
+    evidence['checks']['bcftools_native_cancel']={'tool':tool,'observation':observed,'state':run['state'],'source_unchanged':True,'unpublished_partial_reports':True}
+
+
 async def main(output):
     assert sys.platform == 'linux' and os.geteuid() != 0, 'Run as an ordinary Linux user'
-    assert all(shutil.which(tool) for tool in ['fastqc','multiqc','samtools']), 'Install actual QC tools before validation'
+    assert all(shutil.which(tool) for tool in ['fastqc','multiqc','samtools','bcftools']), 'Install actual QC tools before validation'
     evidence = {'environment': {'kernel': platform.release(), 'platform': platform.platform(), 'uid': os.getuid(), 'affinity': sorted(os.sched_getaffinity(0)), 'cgroup': Path('/proc/self/cgroup').read_text(), 'limits': cgroup_limits()}, 'checks': {}}
     output.mkdir(parents=True, exist_ok=True)
     try:
@@ -127,6 +145,7 @@ async def main(output):
                 evidence['checks']['malformed_input'] = {'state': invalid['state'], 'error': invalid['error']}
                 assert invalid['state'] == 'failed' and following['state'] == 'completed', evidence['checks']['malformed_input']
                 await validate_alignment(manager,inputs,evidence)
+                await validate_variant(manager,inputs,evidence)
                 limited = LocalExecutor(64)
                 code = await limited.execute('over-budget', [sys.executable, '-c', 'import time; data=bytearray(192*1024*1024); time.sleep(30)'], directory, output/'memory-overrun.log', 1)
                 assert code == 137 and limited.observations['over-budget']['peak_sampled_rss_bytes'] > 64*1024*1024

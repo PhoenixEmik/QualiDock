@@ -22,6 +22,7 @@ TOOL_SPECS = {
     'nanoplot': (None, (1, 48, 0), (1, 48, 1), 'tested NanoPlot 1.48.0'),
     'mosdepth': ('--version', (0, 3, 14), (0, 3, 15), 'mosdepth 0.3.14 with verified HTSlib 1.24 version reporting'),
     'samtools': ('--version', (1, 24, 0), (1, 24, 1), 'qualified SAMtools 1.24 / HTSlib 1.24'),
+    'bcftools': ('--version', (1, 24, 0), (1, 24, 1), 'qualified BCFtools 1.24 / HTSlib 1.24'),
     'rseqc_infer': ('--version', (5, 5, 0), (5, 5, 1), 'RSeQC 5.0.5 (CLI 5.05)'),
     'rseqc_distribution': ('--version', (5, 5, 0), (5, 5, 1), 'RSeQC 5.0.5 (CLI 5.05)'),
     'rseqc_genebody': ('--version', (5, 5, 0), (5, 5, 1), 'RSeQC 5.0.5 (CLI 5.05)'),
@@ -140,8 +141,8 @@ async def detect_tool(name: str, executable: str, *, java='java') -> dict:
             match = re.fullmatch(r'NanoPlot\s+([0-9]+\.[0-9]+\.[0-9]+)', response, re.IGNORECASE)
         if name == 'mosdepth':
             match = re.fullmatch(r'mosdepth ([0-9]+\.[0-9]+\.[0-9]+)\nUsing htslib 1\.24', response)
-        if name == 'samtools':
-            match = re.match(r'samtools (1\.24)\nUsing htslib 1\.24(?:\n|$)', response)
+        if name in {'samtools','bcftools'}:
+            match = re.match(re.escape(name)+r' (1\.24)\nUsing htslib 1\.24(?:\n|$)', response)
         if name.startswith('rseqc_'):
             script = {'rseqc_infer':'infer_experiment', 'rseqc_distribution':'read_distribution', 'rseqc_genebody':'geneBody_coverage'}[name]
             if name == 'rseqc_genebody': result['rscript_executable'] = shutil.which('Rscript')
@@ -162,7 +163,7 @@ async def detect_tool(name: str, executable: str, *, java='java') -> dict:
         result["compatible"] = minimum <= version < maximum
         if not result["compatible"]:
             result["error"] = f"Unsupported {name} version {match[1]}; expected {expected}."
-        if name in {'samtools', 'mosdepth'}:
+        if name in {'samtools', 'bcftools', 'mosdepth'}:
             if response.splitlines().count('Using htslib 1.24') != 1 or len(re.findall(r'(?m)^Using htslib ', response)) != 1:
                 raise ValueError('Ambiguous HTSlib version response')
             result['htslib_version'] = '1.24'

@@ -69,6 +69,21 @@ jobs:
         run: bash scripts/setup-optional-qc-ci.sh ${{ matrix.multiqc == '1.35' && '--falco-benchmark --nanoplot' || '' }}
       - name: Provision alignment QC tool
         run: bash scripts/setup-alignment-ci.sh ${{ matrix.multiqc == '1.35' && '--mosdepth' || '' }}
+      - name: Provision qualified BCFtools
+        run: bash scripts/setup-variant-ci.sh
+      - name: Genuine variant formats, original reports, security and MultiQC mapping
+        env:
+          QUALIDOCK_REQUIRE_VARIANT_TESTS: '1'
+        run: |
+          python scripts/qualify-bcftools.py --bcftools bcftools --output validation/variant-qualification/independent
+          pytest -q backend/tests/test_variant_inputs.py backend/tests/test_variant_stats.py backend/tests/test_variant_real.py backend/tests/test_variant_multiqc.py backend/tests/test_benchmark_variant.py --junitxml=validation/variant-qualification/tests.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: variant-${{ matrix.multiqc }}-qualification
+          path: |
+            validation/variant-qualification
+            validation/variant-tooling
       - name: Compare patched SAMtools with genuine original scientific baselines
         run: python scripts/qualify-samtools-security.py --samtools samtools --output validation/htslib-security/scientific-comparison
       - name: Verify actual RNA-seq CLI and original reports
@@ -259,7 +274,9 @@ jobs:
           path: validation/linux
   report-browser:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    # Includes upstream system-package downloads, native builds and both the
+    # existing full browser suite and variant cases. Runtime resource caps stay.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -291,6 +308,12 @@ jobs:
         run: bash scripts/setup-optional-qc-ci.sh --nanoplot
       - name: Provision alignment QC tool
         run: bash scripts/setup-alignment-ci.sh --mosdepth
+      - name: Provision qualified variant QC tool
+        run: bash scripts/setup-variant-ci.sh
+      - name: Native variant QC, file/sample identities and original reports
+        env:
+          QUALIDOCK_BROWSER: ${{ matrix.browser }}
+        run: pytest -q tests/browser/test_variant_browser.py --junitxml=validation/variant-browser.xml
       - name: Provision RNA QC tools
         run: bash scripts/setup-rna-ci.sh
       - name: Provision Picard and original PDF runtime
@@ -340,7 +363,7 @@ jobs:
         if: matrix.browser == 'chromium'
         env:
           QUALIDOCK_BROWSER: ${{ matrix.browser }}
-        run: pytest -q tests/browser --ignore=tests/browser/test_picard_rna_browser.py --ignore=tests/browser/test_picard_browser.py --ignore=tests/browser/test_rna_browser.py --ignore=tests/browser/test_coverage_browser.py --ignore=tests/browser/test_alignment_browser.py --ignore=tests/browser/test_nanoplot_browser.py --ignore=tests/browser/test_optional_qc_browser.py --ignore=tests/browser/test_processing_browser.py --ignore=tests/browser/test_inspector_browser.py --ignore=tests/browser/test_lineage_browser.py --junitxml=validation/report-browser.xml
+        run: pytest -q tests/browser --ignore=tests/browser/test_variant_browser.py --ignore=tests/browser/test_picard_rna_browser.py --ignore=tests/browser/test_picard_browser.py --ignore=tests/browser/test_rna_browser.py --ignore=tests/browser/test_coverage_browser.py --ignore=tests/browser/test_alignment_browser.py --ignore=tests/browser/test_nanoplot_browser.py --ignore=tests/browser/test_optional_qc_browser.py --ignore=tests/browser/test_processing_browser.py --ignore=tests/browser/test_inspector_browser.py --ignore=tests/browser/test_lineage_browser.py --junitxml=validation/report-browser.xml
       - name: Firefox critical report isolation and interaction
         if: matrix.browser == 'firefox'
         env:
@@ -352,6 +375,9 @@ jobs:
           name: report-browser-${{ matrix.browser }}
           path: |
             validation/htslib-security
+            validation/variant-browser.xml
+            validation/variant-native*.png
+            validation/variant-tooling
             validation/picard-rna-browser.xml
             validation/picard-rna-native*.png
             validation/picard-browser.xml

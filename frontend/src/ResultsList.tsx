@@ -148,6 +148,7 @@ export default function ResultsList({
               onChange={(e) => filter({ mode: e.target.value })}
             >
               <option value="all">All workflows</option>
+              <option value="bcftools">BCFtools variant QC</option>
               <option value="fastqc">FastQC only</option>
               <option value="both">FastQC + MultiQC</option>
               <option value="multiqc">MultiQC only</option>

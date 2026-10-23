@@ -17,6 +17,7 @@ import {
 import { bytes, date, modeLabel, url, isAlignmentQC } from "./api";
 import { Empty, State } from "./Feedback";
 import type { DetailTab, Run, Sample, MultiQCSummary } from "./types";
+import { VariantOverview } from "./VariantResults";
 import OptionalQcResults from "./OptionalQcResults";
 import QcModule from "./QcModule";
 import ProcessingResults from "./ProcessingResults";
@@ -299,14 +300,14 @@ export default function AnalysisDetail({
             {warning}
           </p>
         ))}
-        <AnalysisGroups run={currentRun} samples={samples} />
-        {!isAlignmentQC(currentRun.mode) && (
+        {currentRun.mode === "bcftools" ? <VariantOverview run={currentRun} /> : <AnalysisGroups run={currentRun} samples={samples} />}
+        {currentRun.mode !== "bcftools" && !isAlignmentQC(currentRun.mode) && (
           <>
             <FileOutcomes run={currentRun} />
             <ProcessingLineage runId={currentRun.id} navigate={navigate} />
           </>
         )}
-        {!currentRun.processing && !isAlignmentQC(currentRun.mode) && (
+        {currentRun.mode !== "bcftools" && !currentRun.processing && !isAlignmentQC(currentRun.mode) && (
           <IntegrityReview run={currentRun} refresh={refresh} />
         )}
         {!!currentRun.report_inputs?.length && (

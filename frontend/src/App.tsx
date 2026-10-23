@@ -42,6 +42,7 @@ import type {
   RnaOptions,
   PicardOptions,
   PicardRnaOptions,
+  VariantOptions,
 } from "./types";
 import { Empty } from "./Feedback";
 import FileExplorer from "./FileExplorer";
@@ -104,6 +105,7 @@ export default function App() {
     loglength: false,
     individual_plots: false,
   });
+  const [variantOptions, setVariantOptions] = useState<VariantOptions>({per_sample: false, multiqc: false});
   const [picardRnaOptions, setPicardRnaOptions] = useState<PicardRnaOptions>({
     annotation: "", strand: "", rrna: null, histogram_pdf: false, multiqc: false,
   });
@@ -479,7 +481,9 @@ export default function App() {
       setMode("multiqc");
     else if ([...selected.values()].some((entry) => entry.kind === "alignment"))
       setMode("samtools");
-    else if (mode === "multiqc" || isAlignmentQC(mode) || isProcessing(mode))
+    else if ([...selected.values()].some((entry) => entry.kind === "variant"))
+      setMode("bcftools");
+    else if (mode === "bcftools" || mode === "multiqc" || isAlignmentQC(mode) || isProcessing(mode))
       setMode("both");
     open("new");
   };
@@ -501,7 +505,9 @@ export default function App() {
       const payload = {
         name,
         mode,
-        ...(isRnaQC(mode)
+        ...(mode === "bcftools"
+          ? {qc_options: variantOptions}
+          : isRnaQC(mode)
           ? {
               qc_options: {
                 annotation: rnaOptions.annotation,
@@ -551,6 +557,8 @@ export default function App() {
                 .filter((entry) =>
                   mode === "multiqc"
                     ? ["fastqc", "qcreport"].includes(entry.kind)
+                    : mode === "bcftools"
+                      ? entry.kind === "variant"
                     : isAlignmentQC(mode)
                       ? entry.kind === "alignment" &&
                         (!isBamOnlyQC(mode) || /\.bam$/i.test(entry.name))
@@ -560,11 +568,11 @@ export default function App() {
         threads,
         output_root: outputRoot || null,
         rerun_of: rerunOf,
-        input_datasets: isAlignmentQC(mode)
+        input_datasets: mode === "bcftools" || isAlignmentQC(mode)
           ? []
           : selectedReferences(inputDatasets, new Set(selected.keys())),
         ...(mode !== "multiqc" &&
-        !isAlignmentQC(mode) &&
+        mode !== "bcftools" && !isAlignmentQC(mode) &&
         currentSampleConfiguration
           ? {
               input_pairing: currentSampleConfiguration.input_pairing,
@@ -627,6 +635,7 @@ export default function App() {
     );
     setName(draft.name);
     setMode(draft.mode);
+    if (draft.mode === "bcftools" && draft.qc_options) setVariantOptions(draft.qc_options as VariantOptions);
     if (draft.mode === "picard-rna" && draft.qc_options)
       setPicardRnaOptions(draft.qc_options as PicardRnaOptions);
     if (draft.mode === "picard" && draft.qc_options)
@@ -1033,6 +1042,8 @@ export default function App() {
             <NewAnalysisForm
               coverageOptions={coverageOptions}
               setCoverageOptions={setCoverageOptions}
+              variantOptions={variantOptions}
+              setVariantOptions={setVariantOptions}
               picardRnaOptions={picardRnaOptions}
               setPicardRnaOptions={setPicardRnaOptions}
               picardOptions={picardOptions}

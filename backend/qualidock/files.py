@@ -10,6 +10,7 @@ from .sample_metadata import PAIR_NAME, describe
 
 FASTQ = re.compile(r"\.(?:fastq|fq)(?:\.gz)?$", re.I)
 ALIGNMENT = re.compile(r'\.(?:bam|cram)$', re.I)
+VARIANT = re.compile(r'\.(?:vcf(?:\.gz)?|bcf)$', re.I)
 PAIR = PAIR_NAME
 
 
@@ -75,6 +76,8 @@ class FileAccess:
         pair = PAIR.match(FASTQ.sub("", name)) if kind == "fastq" else None
         if kind == 'file' and ALIGNMENT.search(name):
             kind = 'alignment'
+        if kind == 'file' and VARIANT.search(name):
+            kind = 'variant'
         return {"name": name, "path": str(path), "kind": kind,
                 "size": info.st_size if kind != "directory" else None, "modified": info.st_mtime,
                 "read": f"R{pair[3]}" if pair else None,

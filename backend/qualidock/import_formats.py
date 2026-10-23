@@ -46,11 +46,12 @@ def source_mappings(path):
     result = {}
     if not isinstance(sources,dict):return result
     for module,sections in sources.items():
-        if module.lower() not in {'fastqc','fastp','fastq screen','samtools','rseqc','picard'} or not isinstance(sections,dict):continue
+        if module.lower() not in {'fastqc','fastp','fastq screen','samtools','rseqc','picard','bcftools'} or not isinstance(sections,dict):continue
         for section,rows in sections.items():
             if module.lower() == 'samtools' and section not in {'stats','flagstat'}:continue
             if module.lower() == 'rseqc' and section not in {'infer_experiment','read_distribution','gene_body_coverage'}:continue
             if module.lower() == 'picard' and section not in {'InsertSizeMetrics','RnaSeqMetrics'}:continue
+            if module.lower() == 'bcftools' and section != 'stats':continue
             if not isinstance(rows,dict):continue
             for name,source in rows.items():
                 if isinstance(name,str) and isinstance(source,str):

@@ -1,0 +1,731 @@
+{
+  "tool": {
+    "name": "bcftools",
+    "executable": "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+    "available": true,
+    "compatible": true,
+    "version": "1.24",
+    "error": null,
+    "htslib_version": "1.24"
+  },
+  "commands": [
+    {
+      "case": "snps",
+      "per_sample": false,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/snps.vcf"
+      ],
+      "exit_code": 0,
+      "report": "snps.stats.txt",
+      "sha256": "5049413969d73baf056b756d2c5f9fdbf57903ca3befc691e9a2605e597feed5"
+    },
+    {
+      "case": "snps",
+      "per_sample": true,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "-s",
+        "-",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/snps.vcf"
+      ],
+      "exit_code": 255,
+      "report": "snps-samples.stats.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "case": "indels",
+      "per_sample": false,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/indels.vcf"
+      ],
+      "exit_code": 0,
+      "report": "indels.stats.txt",
+      "sha256": "3d99c81a1a0a316b50fe560dd146e0a21993bbac76c59ba8d8ecd8ff242c8866"
+    },
+    {
+      "case": "indels",
+      "per_sample": true,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "-s",
+        "-",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/indels.vcf"
+      ],
+      "exit_code": 255,
+      "report": "indels-samples.stats.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "case": "mixed",
+      "per_sample": false,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/mixed.vcf"
+      ],
+      "exit_code": 0,
+      "report": "mixed.stats.txt",
+      "sha256": "5d8915b7301b89bdb900ce81c2663b94fac6588306c4c191ca1873b79233798b"
+    },
+    {
+      "case": "mixed",
+      "per_sample": true,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "-s",
+        "-",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/mixed.vcf"
+      ],
+      "exit_code": 255,
+      "report": "mixed-samples.stats.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "case": "multisample",
+      "per_sample": false,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/multisample.vcf"
+      ],
+      "exit_code": 0,
+      "report": "multisample.stats.txt",
+      "sha256": "d1870ce0c76bd242270e00e1a61cf0122beebad552279b2b29963451d230bfcc"
+    },
+    {
+      "case": "multisample",
+      "per_sample": true,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "-s",
+        "-",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/multisample.vcf"
+      ],
+      "exit_code": 0,
+      "report": "multisample-samples.stats.txt",
+      "sha256": "7139252eddbd52063c78e3299ca8f5a9d97f3bebbeb11e0bc4a8459394a80a69"
+    },
+    {
+      "case": "missing-depth",
+      "per_sample": false,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/missing-depth.vcf"
+      ],
+      "exit_code": 0,
+      "report": "missing-depth.stats.txt",
+      "sha256": "51aadedfe5eee60f67f9cc9b1c98a3dd2ffd80dcd37b87299d62d8e7bc3b1f57"
+    },
+    {
+      "case": "missing-depth",
+      "per_sample": true,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "-s",
+        "-",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/missing-depth.vcf"
+      ],
+      "exit_code": 0,
+      "report": "missing-depth-samples.stats.txt",
+      "sha256": "20d8734cb29178dc6ce67e53147551617f96816ac7f0b2c00bede9db4221acdf"
+    },
+    {
+      "case": "no-genotype",
+      "per_sample": false,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/no-genotype.vcf"
+      ],
+      "exit_code": 0,
+      "report": "no-genotype.stats.txt",
+      "sha256": "bff3a1964d5f99e299d597028ddae393f848590dd2bc5e7eaedb2b8a1fca76e8"
+    },
+    {
+      "case": "no-genotype",
+      "per_sample": true,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "-s",
+        "-",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/no-genotype.vcf"
+      ],
+      "exit_code": 0,
+      "report": "no-genotype-samples.stats.txt",
+      "sha256": "abdb2e35fb880f7173c2c858dd68b5423f9b9e794f2566bd1cc795ee42fbb4d4"
+    },
+    {
+      "case": "missing-alleles",
+      "per_sample": false,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/missing-alleles.vcf"
+      ],
+      "exit_code": 0,
+      "report": "missing-alleles.stats.txt",
+      "sha256": "bcc53f17a364be58f0dbc120c601c792f824fa78851325a20ae1a097b7e1f107"
+    },
+    {
+      "case": "missing-alleles",
+      "per_sample": true,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "-s",
+        "-",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/missing-alleles.vcf"
+      ],
+      "exit_code": 255,
+      "report": "missing-alleles-samples.stats.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "case": "symbolic",
+      "per_sample": false,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/symbolic.vcf"
+      ],
+      "exit_code": 0,
+      "report": "symbolic.stats.txt",
+      "sha256": "3aeb9321196f3e4b8554aeaea75caff81922bb312eb1318c4c861546434a15a2"
+    },
+    {
+      "case": "symbolic",
+      "per_sample": true,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "-s",
+        "-",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/symbolic.vcf"
+      ],
+      "exit_code": 255,
+      "report": "symbolic-samples.stats.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "case": "gvcf",
+      "per_sample": false,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/gvcf.vcf"
+      ],
+      "exit_code": 0,
+      "report": "gvcf.stats.txt",
+      "sha256": "0c324fa8f00c5a12d898d76e47a8d18cdcc1f365f2ce53c9792fd2ec42683b75"
+    },
+    {
+      "case": "gvcf",
+      "per_sample": true,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "-s",
+        "-",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/gvcf.vcf"
+      ],
+      "exit_code": 0,
+      "report": "gvcf-samples.stats.txt",
+      "sha256": "8994234015f55f72c16d183eb619d0cf18b50a343c00c2d70fc4941a31c51486"
+    },
+    {
+      "case": "empty",
+      "per_sample": false,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/empty.vcf"
+      ],
+      "exit_code": 0,
+      "report": "empty.stats.txt",
+      "sha256": "88b3cade06b9da4ce5c70f4e5c7790e0bd6bbdfc6a2e243d88547986ccfc0f53"
+    },
+    {
+      "case": "empty",
+      "per_sample": true,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "-s",
+        "-",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/empty.vcf"
+      ],
+      "exit_code": 255,
+      "report": "empty-samples.stats.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "case": "vcf42",
+      "per_sample": false,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/snps-v42.vcf"
+      ],
+      "exit_code": 0,
+      "report": "vcf42.stats.txt",
+      "sha256": "49b9db5b43cb8530bd3ea6e7d274197a60bb7c7c68389105a2cbe99ba57a839a"
+    },
+    {
+      "case": "vcf42",
+      "per_sample": true,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "-s",
+        "-",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/snps-v42.vcf"
+      ],
+      "exit_code": 255,
+      "report": "vcf42-samples.stats.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "case": "gzip",
+      "per_sample": false,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/mixed.vcf.gz"
+      ],
+      "exit_code": 0,
+      "report": "gzip.stats.txt",
+      "sha256": "da652b2a4ce5fb5a5fa5487d79a05e10f1e249d1fd097031017f4304504c6806"
+    },
+    {
+      "case": "gzip",
+      "per_sample": true,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "-s",
+        "-",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/mixed.vcf.gz"
+      ],
+      "exit_code": 255,
+      "report": "gzip-samples.stats.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "case": "bgzf",
+      "per_sample": false,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/mixed.bgzf.vcf.gz"
+      ],
+      "exit_code": 0,
+      "report": "bgzf.stats.txt",
+      "sha256": "7a25f0b13a0e834a1b65331ab1eb22d5fdc11c5a39ef0277b93ac82e135d13b8"
+    },
+    {
+      "case": "bgzf",
+      "per_sample": true,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "-s",
+        "-",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/mixed.bgzf.vcf.gz"
+      ],
+      "exit_code": 255,
+      "report": "bgzf-samples.stats.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "case": "bcf",
+      "per_sample": false,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/bcf.bcf"
+      ],
+      "exit_code": 0,
+      "report": "bcf.stats.txt",
+      "sha256": "0a875c1d7eb51754d2dc4e6d60ff90c185e34c36421ec16e9ae51c157583248b"
+    },
+    {
+      "case": "bcf",
+      "per_sample": true,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "-s",
+        "-",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/bcf.bcf"
+      ],
+      "exit_code": 255,
+      "report": "bcf-samples.stats.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "case": "uncompressed-bcf",
+      "per_sample": false,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/uncompressed-bcf.bcf"
+      ],
+      "exit_code": 0,
+      "report": "uncompressed-bcf.stats.txt",
+      "sha256": "cf9a86c24007da1280cb32d820e4d5ca235dde6884b0bb45fc3983ee12018fba"
+    },
+    {
+      "case": "uncompressed-bcf",
+      "per_sample": true,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "-s",
+        "-",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/uncompressed-bcf.bcf"
+      ],
+      "exit_code": 255,
+      "report": "uncompressed-bcf-samples.stats.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "case": "raw-bcf",
+      "per_sample": false,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/raw-bcf.bcf"
+      ],
+      "exit_code": 0,
+      "report": "raw-bcf.stats.txt",
+      "sha256": "84a54505079d791cdcd8b2bdc8c0748a99fbe465c9b4cdb0bfb2a3e7012c9dec"
+    },
+    {
+      "case": "raw-bcf",
+      "per_sample": true,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "-s",
+        "-",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/raw-bcf.bcf"
+      ],
+      "exit_code": 255,
+      "report": "raw-bcf-samples.stats.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "case": "multisample-bcf",
+      "per_sample": false,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/multisample-bcf.bcf"
+      ],
+      "exit_code": 0,
+      "report": "multisample-bcf.stats.txt",
+      "sha256": "656fe0462be45822ef9c313f9610d2259b238ecf6ac15420252786d30acf203b"
+    },
+    {
+      "case": "multisample-bcf",
+      "per_sample": true,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "-s",
+        "-",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/multisample-bcf.bcf"
+      ],
+      "exit_code": 0,
+      "report": "multisample-bcf-samples.stats.txt",
+      "sha256": "7e9d49cc9d813d8659e26f70835a233937b43f2ca8ad6bf57a68adc1daeffed4"
+    },
+    {
+      "case": "multisample-bgzf",
+      "per_sample": false,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/multisample-bgzf.vcf.gz"
+      ],
+      "exit_code": 0,
+      "report": "multisample-bgzf.stats.txt",
+      "sha256": "55572da6f0b7f33001c3370b7b5d2f382ddcaf03abdc4e6a28b7ab52ab5dcb67"
+    },
+    {
+      "case": "multisample-bgzf",
+      "per_sample": true,
+      "argv": [
+        "/Users/emik/repository/QualiDock/.tools/bcftools-1.24/bcftools-1.24/bcftools",
+        "stats",
+        "-s",
+        "-",
+        "/Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/multisample-bgzf.vcf.gz"
+      ],
+      "exit_code": 0,
+      "report": "multisample-bgzf-samples.stats.txt",
+      "sha256": "5997d6f995e1b762f17acb2c4ba8d7c754c53ae741664d9fe3b3c15e8d7eccf4"
+    }
+  ],
+  "inputs": {
+    "snps": {
+      "format": "VCFv4.3",
+      "compression": "none",
+      "samples": [],
+      "tags": {
+        "INFO": [],
+        "FORMAT": []
+      }
+    },
+    "indels": {
+      "format": "VCFv4.3",
+      "compression": "none",
+      "samples": [],
+      "tags": {
+        "INFO": [],
+        "FORMAT": []
+      }
+    },
+    "mixed": {
+      "format": "VCFv4.3",
+      "compression": "none",
+      "samples": [],
+      "tags": {
+        "INFO": [
+          "END"
+        ],
+        "FORMAT": []
+      }
+    },
+    "multisample": {
+      "format": "VCFv4.3",
+      "compression": "none",
+      "samples": [
+        "alpha",
+        "beta"
+      ],
+      "tags": {
+        "INFO": [
+          "AC",
+          "AN",
+          "DP"
+        ],
+        "FORMAT": [
+          "DP",
+          "GT"
+        ]
+      }
+    },
+    "missing-depth": {
+      "format": "VCFv4.3",
+      "compression": "none",
+      "samples": [
+        "alpha",
+        "beta"
+      ],
+      "tags": {
+        "INFO": [],
+        "FORMAT": [
+          "GT"
+        ]
+      }
+    },
+    "no-genotype": {
+      "format": "VCFv4.3",
+      "compression": "none",
+      "samples": [
+        "alpha"
+      ],
+      "tags": {
+        "INFO": [],
+        "FORMAT": [
+          "GQ"
+        ]
+      }
+    },
+    "missing-alleles": {
+      "format": "VCFv4.3",
+      "compression": "none",
+      "samples": [],
+      "tags": {
+        "INFO": [],
+        "FORMAT": []
+      }
+    },
+    "symbolic": {
+      "format": "VCFv4.3",
+      "compression": "none",
+      "samples": [],
+      "tags": {
+        "INFO": [
+          "END"
+        ],
+        "FORMAT": []
+      }
+    },
+    "gvcf": {
+      "format": "VCFv4.3",
+      "compression": "none",
+      "samples": [
+        "alpha"
+      ],
+      "tags": {
+        "INFO": [
+          "DP",
+          "END"
+        ],
+        "FORMAT": [
+          "DP",
+          "GT"
+        ]
+      }
+    },
+    "empty": {
+      "format": "VCFv4.3",
+      "compression": "none",
+      "samples": [],
+      "tags": {
+        "INFO": [],
+        "FORMAT": []
+      }
+    },
+    "vcf42": {
+      "format": "VCFv4.2",
+      "compression": "none",
+      "samples": [],
+      "tags": {
+        "INFO": [],
+        "FORMAT": []
+      }
+    },
+    "gzip": {
+      "format": "VCFv4.3",
+      "compression": "gzip",
+      "samples": [],
+      "tags": {
+        "INFO": [
+          "END"
+        ],
+        "FORMAT": []
+      }
+    },
+    "bgzf": {
+      "format": "VCFv4.3",
+      "compression": "BGZF",
+      "samples": [],
+      "tags": {
+        "INFO": [
+          "END"
+        ],
+        "FORMAT": []
+      }
+    },
+    "bcf": {
+      "format": "BCF 2.2",
+      "compression": "BGZF",
+      "samples": [],
+      "tags": {
+        "INFO": [
+          "END"
+        ],
+        "FORMAT": []
+      }
+    },
+    "uncompressed-bcf": {
+      "format": "BCF 2.2",
+      "compression": "BGZF",
+      "samples": [],
+      "tags": {
+        "INFO": [
+          "END"
+        ],
+        "FORMAT": []
+      }
+    },
+    "raw-bcf": {
+      "format": "BCF 2.2",
+      "compression": "none",
+      "samples": [],
+      "tags": {
+        "INFO": [
+          "END"
+        ],
+        "FORMAT": []
+      }
+    },
+    "multisample-bcf": {
+      "format": "BCF 2.2",
+      "compression": "BGZF",
+      "samples": [
+        "alpha",
+        "beta"
+      ],
+      "tags": {
+        "INFO": [
+          "AC",
+          "AN",
+          "DP"
+        ],
+        "FORMAT": [
+          "DP",
+          "GT"
+        ]
+      }
+    },
+    "multisample-bgzf": {
+      "format": "VCFv4.3",
+      "compression": "BGZF",
+      "samples": [
+        "alpha",
+        "beta"
+      ],
+      "tags": {
+        "INFO": [
+          "AC",
+          "AN",
+          "DP"
+        ],
+        "FORMAT": [
+          "DP",
+          "GT"
+        ]
+      }
+    }
+  },
+  "input_sha256": {
+    "snps": "6632274f5ab09c4cdbc5484e04880ecd1cf73ea0338b0ef83a9525881542c336",
+    "indels": "17bf8f752300d7aec5b5cfe8d2d771d557fc946cc0090f03f877f26fcd638a28",
+    "mixed": "e37548ccb1068bb904df77924dfd194844055712345b69fc299fba2395667e62",
+    "multisample": "d1600e3a9c1a5ab7ad4df0e8d488263075c4e09f04dada98c3fa4374caaff5f0",
+    "missing-depth": "1b0fbd62367bb8e4eae0bbe3ae02643baa0c2af81d2427e48a614e77dc819216",
+    "no-genotype": "9613d4d04b4c9d4a49b526e0850209d6e4687feba06f50f8718d2a5992250bb1",
+    "missing-alleles": "c64513c6bfc99f059f3f642936a4128969d1dce0858702327a6b2c1ecd28954b",
+    "symbolic": "8256b197b5b710f34e11cae8f3ba2221bd2aaf3383b17a16e4f324f3ec8f6407",
+    "gvcf": "7fd79003e9e67dac71ea72a6ddb9946619e6da33881f65d3faeb4993dd146ed4",
+    "empty": "cfcdb718337d3d4652e63fc4a908770f9f7c9d02e935a12b6fb11e6ee54a13bb",
+    "vcf42": "55e4c8f7b176ff329e85c632b92758f077982cadd31631c3a3e4860a84b3d42e",
+    "gzip": "e9a404536fd6205b8c02fe4bc47685ccd7a4bf2e3aafdf63149d2e2a457e56a7",
+    "bgzf": "593d4570d5a98b989b2407f8322df3836cb8771e4eac1eadfdd04c210a8bce29",
+    "bcf": "889f31a0ab5657ca1da8719f32a25e93d696f67cc9cfe7d69c632ee815f625d1",
+    "uncompressed-bcf": "7339fea3a8d9a84e367ff1227652a707d82bebc5ae7df998043a67fb3cb601bb",
+    "raw-bcf": "98b7b5118335d82be8adeaba6517e4d453b1b84bb4b35d462abf0f6448be9bee",
+    "multisample-bcf": "1db4e9eb23e477f781d1880d8eade39013395e674cfcd39bb8c0bab0572082f9",
+    "multisample-bgzf": "b5ad8074b0b820af7405fded0add3992e015ae57fcb3a670b3fcf7624165427a"
+  },
+  "source_unchanged": true,
+  "equivalent_statistics_verified": true,
+  "indexes_required": false,
+  "scope": "Explicit synthetic records/alleles, not real population accuracy or representative performance",
+  "status": "passed"
+}

@@ -9,7 +9,8 @@ ENV PATH="/opt/FastQC:${PATH}" HOME=/home/qualidock OMP_NUM_THREADS=1 OPENBLAS_N
 WORKDIR /workspace
 COPY . .
 RUN bash scripts/setup-alignment-ci.sh
-ENV PATH="/tmp/qualidock-alignment-tools/samtools-1.24:${PATH}"
+RUN bash scripts/setup-variant-ci.sh
+ENV PATH="/tmp/qualidock-alignment-tools/samtools-1.24:/tmp/qualidock-variant-tools/bcftools-1.24:${PATH}"
 RUN python -m pip install --no-cache-dir -e '.[test]' multiqc==1.35
 USER 1001:1001
 CMD ["python", "scripts/validate-linux-execution.py", "--output", "/evidence"]

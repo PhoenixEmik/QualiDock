@@ -73,7 +73,8 @@ def parser():
     result=argparse.ArgumentParser(description=__doc__)
     result.add_argument('--input',type=Path,nargs='+',required=True)
     result.add_argument('--output',type=Path,required=True,help='New private directory; must not already exist')
-    result.add_argument('--mode',choices=['fastqc','both','nanoq','nanoplot',*sorted(alignment.MODES-{'picard-rna'}),*sorted(processing.MODES)],default='both')
+    result.add_argument('--mode',choices=['fastqc','both','nanoq','nanoplot','bcftools',*sorted(alignment.MODES-{'picard-rna'}),*sorted(processing.MODES)],default='both')
+    result.add_argument('--variant-per-sample',action='store_true',help='BCFtools only: request within-file sample statistics')
     result.add_argument('--alignment-reference', help='Approved local reference ID for a SAMtools/coverage CRAM benchmark')
     result.add_argument('--coverage-panel', help='Approved BED panel ID for coverage benchmarking')
     result.add_argument('--nanoplot-loglength',action='store_true')
@@ -109,7 +110,7 @@ def processing_options(args):
     if args.identifiers and args.mode!='seqkit-extract': raise ValueError('--identifiers requires seqkit-extract')
     if args.preserve_pairs and args.mode not in {'seqkit-filter','seqkit-extract'}: raise ValueError('--preserve-pairs requires length or ID selection')
     if args.compare_qc and args.mode!='fastp': raise ValueError('--compare-qc requires fastp')
-    if args.multiqc and args.mode not in {'fastp','samtools','picard','rseqc-infer','rseqc-distribution'}: raise ValueError('--multiqc requires fastp, SAMtools, RSeQC or Picard')
+    if args.multiqc and args.mode not in {'fastp','samtools','picard','rseqc-infer','rseqc-distribution','bcftools'}: raise ValueError('--multiqc requires fastp, SAMtools, RSeQC, Picard or BCFtools')
     if args.mode not in processing.MODES: return None
     value={'gzip':not args.plain_output}
     if args.mode=='fastp':
@@ -147,7 +148,9 @@ def main(args):
     if args.rna_annotation and args.mode not in {'rseqc-infer','rseqc-distribution'}:raise ValueError('RNA annotation requires RSeQC')
     if (args.rna_sample_size!=200000 or args.rna_mapq!=30) and args.mode!='rseqc-infer':raise ValueError('RNA sampling/MAPQ requires infer_experiment')
     if any((args.picard_by_library,args.picard_include_duplicates,args.picard_histogram_pdf)) and args.mode!='picard':raise ValueError('Picard settings require Picard')
+    if args.variant_per_sample and args.mode!='bcftools':raise ValueError('--variant-per-sample requires BCFtools')
     qc_options=None
+    if args.mode=='bcftools':qc_options={'per_sample':args.variant_per_sample,'multiqc':args.multiqc}
     if args.mode=='nanoplot':qc_options={'loglength':args.nanoplot_loglength,'individual_plots':args.nanoplot_individual_plots}
     if args.mode=='samtools':qc_options={'reference':args.alignment_reference,'multiqc':args.multiqc}
     if args.mode=='mosdepth':qc_options={'reference':args.alignment_reference,'panel':args.coverage_panel}
@@ -158,7 +161,7 @@ def main(args):
     args.output.mkdir(parents=True,mode=0o700)  # Refuse to overwrite any previous evidence/results.
     fingerprint_started=time.monotonic()
     before=[fingerprint(path,args.hash_inputs) for path in files]
-    settings=Settings(roots=list(dict.fromkeys(path.parent for path in files)),output=args.output/'results',frontend=args.output/'frontend',cpus=capacity,memory_mb=budget,fastqc=os.environ.get('QUALIDOCK_FASTQC','fastqc'),multiqc=os.environ.get('QUALIDOCK_MULTIQC','multiqc'),fastp=os.environ.get('QUALIDOCK_FASTP','fastp'),seqkit=os.environ.get('QUALIDOCK_SEQKIT','seqkit'),nanoplot=os.environ.get('QUALIDOCK_NANOPLOT','NanoPlot'),samtools=os.environ.get('QUALIDOCK_SAMTOOLS','samtools'),mosdepth=os.environ.get('QUALIDOCK_MOSDEPTH','mosdepth'),alignment_references=json.loads(os.environ.get('QUALIDOCK_ALIGNMENT_REFERENCES','{}')),coverage_panels=json.loads(os.environ.get('QUALIDOCK_COVERAGE_PANELS','{}')),nanoq=os.environ.get('QUALIDOCK_NANOQ','nanoq'),rseqc_infer=os.environ.get('QUALIDOCK_RSEQC_INFER','infer_experiment.py'),rseqc_distribution=os.environ.get('QUALIDOCK_RSEQC_DISTRIBUTION','read_distribution.py'),rna_annotations=json.loads(os.environ.get('QUALIDOCK_RNA_ANNOTATIONS','{}')),java=os.environ.get('QUALIDOCK_JAVA','java'),picard=os.environ.get('QUALIDOCK_PICARD','picard.jar'))
+    settings=Settings(roots=list(dict.fromkeys(path.parent for path in files)),output=args.output/'results',frontend=args.output/'frontend',cpus=capacity,memory_mb=budget,fastqc=os.environ.get('QUALIDOCK_FASTQC','fastqc'),multiqc=os.environ.get('QUALIDOCK_MULTIQC','multiqc'),fastp=os.environ.get('QUALIDOCK_FASTP','fastp'),seqkit=os.environ.get('QUALIDOCK_SEQKIT','seqkit'),nanoplot=os.environ.get('QUALIDOCK_NANOPLOT','NanoPlot'),samtools=os.environ.get('QUALIDOCK_SAMTOOLS','samtools'),bcftools=os.environ.get('QUALIDOCK_BCFTOOLS','bcftools'),mosdepth=os.environ.get('QUALIDOCK_MOSDEPTH','mosdepth'),alignment_references=json.loads(os.environ.get('QUALIDOCK_ALIGNMENT_REFERENCES','{}')),coverage_panels=json.loads(os.environ.get('QUALIDOCK_COVERAGE_PANELS','{}')),nanoq=os.environ.get('QUALIDOCK_NANOQ','nanoq'),rseqc_infer=os.environ.get('QUALIDOCK_RSEQC_INFER','infer_experiment.py'),rseqc_distribution=os.environ.get('QUALIDOCK_RSEQC_DISTRIBUTION','read_distribution.py'),rna_annotations=json.loads(os.environ.get('QUALIDOCK_RNA_ANNOTATIONS','{}')),java=os.environ.get('QUALIDOCK_JAVA','java'),picard=os.environ.get('QUALIDOCK_PICARD','picard.jar'))
     evidence={'scope':'actual tools; in-process HTTP latency, not browser/SSE/network acceptance','platform':sys.platform,
               'filesystems':[filesystem(path) for path in files], 'output_filesystem':filesystem(args.output), 'inputs':before,'input_bytes':sum(row['size'] for row in before),
               'input_integrity_evidence':'sha256_before_after' if args.hash_inputs else 'metadata_only_not_content_proof',
@@ -237,6 +240,11 @@ def main(args):
                 validation=json.loads(bounded_text(validation_file)) if validation_file.exists() else {}
                 evidence['qc_options']=qc_options
                 evidence['registered_report_bytes']=sum(r['size'] for r in run['reports'])
+            if args.mode=='bcftools':
+                evidence['qc_options']=run['qc']['options']
+                evidence['original_stats_bytes']=sum(r['size'] for r in run['reports'] if r['path'].endswith('.bcftools.stats.txt'))
+                evidence['registered_report_bytes']=sum(r['size'] for r in run['reports'])
+                evidence['variant_scope']='Whole-file BCFtools record scan; native section validation and source snapshots. Source integrity hashes are separate benchmark reads; no genome-wide coverage inference.'
             if args.mode in alignment.MODES:
                 evidence['qc_options']=run['qc']['options']
                 evidence['registered_report_bytes']=sum(r['size'] for r in run['reports'])

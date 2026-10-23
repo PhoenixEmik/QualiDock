@@ -1,6 +1,7 @@
 import { PicardRnaResults } from "./PicardResults";
 import PicardResults from "./PicardResults";
 import RnaQcResults from "./RnaQcResults";
+import VariantResults from "./VariantResults";
 import CoverageResults from "./CoverageResults";
 import AlignmentResults from "./AlignmentResults";
 import { url } from "./api";
@@ -19,6 +20,7 @@ const metrics: [string, string, string][] = [
 ];
 
 export default function OptionalQcResults({ run }: { run: Run }) {
+  if (run.mode === "bcftools") return <VariantResults run={run} />;
   if (run.mode === "picard-rna") return <PicardRnaResults run={run} />;
   if (run.mode === "picard") return <PicardResults run={run} />;
   if (run.mode === "rseqc-infer" || run.mode === "rseqc-distribution" || run.mode === "rseqc-genebody")
