@@ -274,7 +274,9 @@ jobs:
           path: validation/linux
   report-browser:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    # Includes upstream system-package downloads, native builds and both the
+    # existing full browser suite and variant cases. Runtime resource caps stay.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
