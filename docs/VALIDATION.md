@@ -4,6 +4,56 @@ QualiDock remains `0.1.0.dev0`; no release is tagged or published. This is the
 current acceptance record. Development-phase documents describe historical
 implementation environments and do not override this record.
 
+## Read-only BCFtools Variant QC — 2026-10-23
+
+[CI 39952410569](https://github.com/PhoenixEmik/QualiDock/actions/runs/39952410569)
+on application code `afa771f` passed **all eight jobs** for PR #44 /Issue #43.
+Security #41 /PR #42 was accepted and merged before variant implementation.
+Current exact native profiles include **SAMtools1.24 /HTSlib1.24** and
+**BCFtools1.24 /HTSlib1.24**, with original version, source-archive SHA-256 and
+actual bundled/linked-reader evidence. mosdepth0.3.14 and
+RSeQC5.0.5 /pysam0.24.1 use verified HTSlib1.24; Picard3.5.0 /Java17 remains
+Java/HTSJDK, not HTSlib.
+
+| Check | Accepted evidence |
+| --- | --- |
+| Complete backend |694 passed /273 optional-tool skips in the unprovisioned job; required genuine tools run in provisioned jobs |
+| Variant contracts/execution/parser/MultiQC/benchmark |123 passed per1.25.1 /1.35 /latest1.x target (latest resolved1.35), no skips/failures/errors |
+| Frontend |158 passed and production build passed |
+| Chromium /Firefox |81 /57 cases, zero failures/errors/skips; actual original reports, mobile, source selection, history, restart/rerun and three prefix contexts |
+| Existing scientific workflows |All FastQC/MultiQC, fastp/SeqKit, nanoq/NanoPlot, Screen, SAMtools/CRAM, mosdepth, RSeQC, Picard Insert Size and RNA suites passed |
+| Linux resources/security |1 CPU /1 GiB, actual native scans cancelled without source changes or partial publication; RSS/guardian/queue/restart controls passed |
+| SAMtools compatibility |Original BAM/CRAM flagstat identical; all39 SN values/notes unchanged; original provenance retained |
+
+Chromium alone was retried after slow upstream OS-package downloads exhausted
+the initial job's60-minute budget during the final report suite. The same commit
+then completed all81 Chromium tests. No test command/assertion or production
+resource bound was changed for that retry; the other seven successes were kept.
+
+Qualified variant formats: VCF4.2/4.3 plain or gzip/BGZF; BCF2.2 BGZF,
+level-zero BGZF or raw. Whole-file stats needs no index and never rewrites,
+filters, normalizes, annotates, calls, copies or indexes source variants.
+Genuine originals/argv, source/report hashes and independent equivalence checks
+are retained. Original SN/TSTV/substitution values and file-level MultiQC source
+identities are verified separately from within-file sample IDs. Missing GT/DP/
+QUAL, undefined Ti/Tv, overlapping categories and gVCF blocks are explicitly
+handled; no genome coverage, biological AF or missing genotype values are
+invented. Ambiguous duplicate annotation headers are rejected even when the
+native tool exits0; declared-but-unused GT does not turn zero-only PSC into
+available native observations.
+
+See [VARIANT-QC.md](VARIANT-QC.md) for exact definitions, parser/format bounds,
+official MultiQC limitations, originals/provenance, screenshots, benchmark and
+complete file inventory. Relative to security merge `2e16718`:108 added,
+26 modified,0 removed; runtime code (`backend/qualidock`, `frontend/src`)
+**+581 /−29, net+552 lines**. Across security plus variant phases, runtime
+code is net+586 lines relative to `01bb479`. No new manager, engine, database,
+navigation area or chart framework is introduced.
+
+Tiny VCF/BCF fixtures establish execution/scientific contracts, not representative
+throughput. #5 now explicitly tracks authorized large variant files and shared
+storage; #4 site integration and #7 deferred release remain open. No release/tag.
+
 ## Patched HTSlib security qualification — 2026-10-23
 
 [CI 39930283266](https://github.com/PhoenixEmik/QualiDock/actions/runs/39930283266)
@@ -31,7 +81,8 @@ comparison, explicit mosdepth version-only instrumentation and complete change
 footprint. Downloaded proof is under ignored `validation/htslib-security`.
 No original scientific output or numerical assertion was rewritten. Tiny fixture
 evidence does not close large/shared-storage acceptance #5 or HPC hosting #4.
-BCFtools remains gated on merging the accepted security PR. No release or tag.
+That prerequisite was satisfied by merge #42 before the accepted variant phase
+above began. No release or tag.
 
 ## RSeQC gene-body coverage — 2026-10-19
 

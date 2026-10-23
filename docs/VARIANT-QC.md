@@ -1,12 +1,12 @@
 # Read-only BCFtools Variant QC (#43)
 
 Security prerequisite #41 was accepted in CI 39930283266 and merged as #42 /
-`2e16718` before this phase began. Variant QC is a separate development PR; no
+`2e16718` before this phase began. Variant QC is qualified in separate PR #44; no
 release or tag is prepared.
 
 ## Qualified input and tool contract
 
-The candidate uses exactly **BCFtools 1.24 / HTSlib 1.24**, obtained from the
+The qualified runtime uses exactly **BCFtools 1.24 / HTSlib 1.24**, obtained from the
 official release source archive. The upstream GitHub release-asset SHA-256 is
 `8caddc22610ee2851666047c859bb91da0c1e32d0c2ec553db6f153ad130e46f`.
 Test provisioning verifies the digest, explicitly builds bundled static HTSlib,
@@ -23,7 +23,12 @@ normalizes, annotates or calls variants.
 
 Input-root containment and canonical authorization precede bounded format/header
 inspection: 4 MiB decoded header,256 KiB per line,10000 unique sample IDs of at
-most200 characters. Index-syntax markers/control characters in paths are
+most200 characters. Duplicate INFO/FORMAT IDs, repeated declaration attributes
+and unterminated quoted metadata are rejected. Header identities support field
+reordering and quoted commas without inventing tags. Genuine BCFtools1.24 can
+silently accept conflicting duplicate INFO/DP definitions with exit0; that is
+insufficient input evidence and the application rejects it before execution.
+Index-syntax markers/control characters in paths are
 rejected. BGZF requires its complete EOF marker; text VCF requires a final
 newline. Initial checks are header/format evidence, not complete validation or
 an independent reference-assembly assertion. A sequential genuine native scan
@@ -54,6 +59,27 @@ appear in the `<0` underflow bin. Native charts exclude underflow rather than
 turning missing values into zero. Missing/unknown
 AF and singletons share a default bin; AF is not a native biological estimate.
 Original values remain available for inspection with their upstream meanings.
+
+Per-sample `PSC` is preserved as upstream counters, not a new genotype-counting
+engine. In [1.24 `sample_gt_stats` / `do_sample_stats`](https://github.com/samtools/bcftools/blob/1.24/vcfstats.c),
+the hom/het counters follow the called-allele SNP-or-reference branch (including
+ALT=`.`); a mixed SNP/indel call may contribute to both categories. Transition/
+transversion counters count distinct called SNP alternate alleles per genotype,
+not allele copies. `nIndels` counts nonreference calls carrying an indel;
+haploid reference/alternate calls have separate counters and return before the
+diploid categories. `nSingletons` follows the upstream one-nonreference-diploid-
+sample counter, not alternate allele count1. `nMissing` counts unknown GT when
+the record actually has a GT field; records omitting GT do not increment it.
+Consequently these columns neither partition all genotypes nor establish a
+complete missingness/call rate or biological sample identity.
+
+A FORMAT/GT header declaration alone does not prove that records contain GT.
+Genuine1.24 reports all-zero PSC without warnings for declared-but-unused GT.
+Native per-sample counters therefore require unambiguous nonzero reported GT
+counter evidence in addition to the declaration. Ambiguous zero-only reports
+remain original/downloadable; the native genotype view stays unavailable.
+This conservative rule can withhold zero-only PSC even for unusual valid
+genotyped populations; it never fills missing observations or infers a rate.
 
 ## Execution, original parsing and native views
 
@@ -96,7 +122,9 @@ aggregation while original/native results remain available.
 Official plots remain unchanged. Their upstream conventions include converting
 missing QUAL to zero, undefined Ti/Tv to0.00 and missing average depth to zero.
 General Statistics genotype hom/het fields can describe the last sample rather
-than the full input. QualiDock records a visible limitation and never uses these
+than the full input. Per-sample plots derive categories from PSC and record
+counts; records omitting GT do not establish genotype presence or a complete
+call/missingness rate. QualiDock records a visible limitation and never uses these
 values as native metrics. MultiQC output is quarantined until original values
 and unique source mapping pass; failure leaves a partial analysis with completed
 input reports downloadable. Latest qualified1.x is also required in CI.
@@ -111,12 +139,73 @@ Hashes add two separately recorded full source reads. Small fixtures measure
 execution overhead only; they establish no representative performance claim.
 Linux process I/O counters do not measure NFS/Lustre network throughput.
 
-## Acceptance status
+## Acceptance — 2026-10-23
 
-Tool/input and independent upstream qualification complete locally:18 formats/
-cases,36 native invocations;78 input/security/alignment unit regressions passed.
-Application execution/parser security tests passed locally (114 before the
-additional genuine AD fallback case), with157 frontend tests and production
-build. Genuine MultiQC1.25.1/1.35 mapping/failure tests pass. Full CI, both browsers
-and Linux resource evidence are pending; #43 must remain open until those gates
-pass. Large/shared-storage acceptance stays #5.
+[CI 39952410569](https://github.com/PhoenixEmik/QualiDock/actions/runs/39952410569),
+application commit `afa771f`, passed **all eight jobs**. Chromium was retried
+alone on the identical commit after slow upstream system-package downloads
+consumed the first attempt's60-minute job budget during the last report suite.
+The other seven successful gates were retained; no test, numerical assertion or
+production resource limit was disabled or relaxed. The accepted retry completed
+the whole Chromium suite. Browser CI budget includes dependency downloads/native
+builds; it does not change the application's CPU/RSS/process-tree controls.
+
+| Gate | Genuine accepted evidence |
+| --- | --- |
+| BCFtools/native HTSlib | Exactly1.24 /1.24; official source digest, bundled static library, native version/link/build hashes retained |
+| Variant tests | **123 passed, zero failures/errors/skips per MultiQC target**:1.25.1,1.35,latest1.x (resolved1.35) |
+| Independent originals |18 cases/encodings,36 direct native invocations, with expected no-sample `-s -` rejections; source hashes unchanged and equivalent scientific sections identical |
+| Complete backend |694 passed /273 missing-optional-tool skips; provisioned jobs require and execute the genuine tools |
+| Frontend |158 passed; TypeScript/Vite production build passed |
+| Chromium /Firefox |**81 /57**, zero failures/errors/skips; root and both proxy prefixes, native statistics, original downloads, missing-data states, history/restart/rerun and mobile layouts |
+| Existing scientific workflows |FastQC/MultiQC, fastp/SeqKit, nanoq/NanoPlot, FastQ Screen, SAMtools/CRAM, mosdepth, RSeQC and both Picard operations all passed |
+| Patched alignment/security |66 cases per matrix target; BAM/CRAM flagstat byte-identical to original1.22.1 reports, all39 SN values/notes unchanged; version/argv provenance retained |
+| Linux resources |Actual1 CPU /1 GiB cgroup, genuine SAMtools and BCFtools scanning/cancellation, source immutability, unpublished partial reports, shared RSS termination, guardian, queue and restart recovery all passed |
+
+Downloaded evidence is under ignored
+`validation/variant-qualification/accepted-ci-39952410569/`. Original reports,
+exact argv/versions, source/report SHA-256, source mappings, build/link records,
+JUnit and genuine benchmark JSON are retained in the CI artifacts. Final mobile
+Firefox and Chromium screenshots were inspected; native axes/zoom controls stay
+separate and the existing report sandbox is unchanged.
+
+The interface does not estimate AF, unique loci, whole-genome coverage or absent
+genotypes/depth. Native zero-only PSC can remain unavailable as described above;
+original official MultiQC conventions/limitations remain explicit. The local
+one/two-thread comparison also retained identical scientific sections for plain,
+BGZF, BCF and raw BCF inputs; it is not a performance claim. Actual large/private
+VCF/BCF and NFS/Lustre measurements remain open in #5 (with an explicit variant
+follow-up), site OOD/OpenPBS acceptance stays #4, and release #7 stays deferred.
+No QualiDock release or tag is prepared.
+
+## Change inventory
+
+Relative to accepted security merge `2e16718`, the feature adds108 files,
+modifies26 and removes none, including the final acceptance record.
+Of these,93 are compact genuine fixture inputs, original reports, stderr and
+provenance under `backend/tests/fixtures/bcftools-1.24/`; see the complete
+[PR #44 diff](https://github.com/PhoenixEmik/QualiDock/pull/44/files).
+Production code (`backend/qualidock` and `frontend/src`) changes by
+**+581 /−29, net+552 lines** on application commit `afa771f`.
+
+Added application files: `backend/qualidock/variant.py`,
+`frontend/src/VariantResults.tsx`, `VariantSettings.tsx`, `variantChart.ts`.
+Added validation files: `backend/tests/test_variant_inputs.py`,
+`test_variant_stats.py`, `test_variant_real.py`, `test_variant_multiqc.py`,
+`test_benchmark_variant.py`; `frontend/tests/variant.test.ts`;
+`tests/browser/test_variant_browser.py`; `scripts/prepare-variant-test.py`,
+`qualify-bcftools.py`, `setup-variant-ci.sh`; this document and the93 fixtures.
+
+Modified backend application files: `app.py`, `config.py`, `files.py`,
+`history.py`, `import_formats.py`, `manager.py`, `multiqc.py`, `optional_qc.py`,
+`tools.py`. Modified frontend application files: `AnalysisDetail.tsx`,
+`App.tsx`, `FileExplorer.tsx`, `NewAnalysisForm.tsx`, `OptionalQcResults.tsx`,
+`ResultsList.tsx`, `api.ts`, `explorer.ts`, `types.ts`. Remaining modified files:
+`.github/workflows/ci.yml`, `README.md`, `docs/BENCHMARKING.md`,
+`docs/OPTIONAL-QC.md`, `scripts/benchmark-analysis.py`,
+`scripts/linux-validation.Dockerfile`, `scripts/validate-linux-execution.py`.
+The final acceptance entry also updates `docs/VALIDATION.md`.
+
+RunManager gains only input/configuration and artifact routing; it retains the
+single lifecycle/resource slot. NewAnalysisForm delegates the focused variant
+settings. Existing four primary navigation areas and report sandbox remain.
