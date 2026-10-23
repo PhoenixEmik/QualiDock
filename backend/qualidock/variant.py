@@ -42,6 +42,31 @@ def gzip_header(raw):
     if offset>=len(data) or offset>=65536:raise ValueError('Oversized or truncated gzip header')
 
 
+def annotation_ids(lines, kind):
+    """Only bounded header identities; quoted descriptions may contain commas."""
+    result=set()
+    for line in lines:
+        if not line.startswith('##'+kind+'='):continue
+        if not line.startswith('##'+kind+'=<') or not line.endswith('>'):raise ValueError('Malformed variant annotation declaration')
+        body=line.split('=<',1)[1][:-1];fields=[];start=0;quoted=False;escaped=False
+        for i,char in enumerate(body):
+            if escaped:escaped=False
+            elif char=='\\' and quoted:escaped=True
+            elif char=='"':quoted=not quoted
+            elif char==',' and not quoted:fields.append(body[start:i]);start=i+1
+        if quoted or escaped:raise ValueError('Unterminated variant annotation declaration')
+        fields.append(body[start:]);attributes={}
+        for field in fields:
+            key,separator,value=field.partition('=')
+            if not key or not separator or key in attributes:raise ValueError('Ambiguous variant annotation attributes')
+            attributes[key]=value
+        identity=attributes.get('ID','')
+        if not identity or any(c in '\"<>,;=' or c.isspace() or ord(c)<32 for c in identity):raise ValueError('Invalid variant annotation identity')
+        if identity in result:raise ValueError('Duplicate '+kind+' annotation identity')
+        result.add(identity)
+    return sorted(result)
+
+
 def readable(path, *, per_sample=False):
     """Call only after FileAccess authorization; read at most a bounded header."""
     if not VARIANT.search(path.name) or '##idx##' in str(path) or any(ord(c)<32 for c in str(path)) or not path.is_file() or not path.stat().st_mode & 0o444 or not os.access(path,os.R_OK):
@@ -93,7 +118,7 @@ def readable(path, *, per_sample=False):
     if len(samples)>MAX_SAMPLES or len(set(samples))!=len(samples) or any(not s or len(s)>200 or any(c.isspace() or ord(c)<32 for c in s) for s in samples):
         raise ValueError('VCF requires unique nonempty sample IDs (at most 10000,200 characters each)')
     if per_sample and not samples:raise ValueError('Per-sample statistics require input sample columns; no samples are invented')
-    tags={kind:sorted({m[1] for line in decoded for m in [re.match(r'##'+kind+r'=<ID=([^,>]+),',line)] if m}) for kind in ['INFO','FORMAT']}
+    tags={kind:annotation_ids(decoded,kind) for kind in ['INFO','FORMAT']}
     if snapshot(path.stat())!=before:raise ValueError('Variant input changed during header checks')
     if not compressed and not path.name.lower().endswith('.bcf'):
         with path.open('rb') as stream:

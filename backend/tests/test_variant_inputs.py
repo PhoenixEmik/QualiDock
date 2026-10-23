@@ -70,3 +70,19 @@ def test_optional_gzip_headers_are_bounded_before_decompression(tmp_path,flag):
     path=tmp_path/'header.vcf.gz'
     path.write_bytes(b'\x1f\x8b\x08'+bytes([flag])+b'\x00'*6+(b'\xff\xff' if flag==4 else b'')+b'x'*70000)
     with pytest.raises(ValueError):readable(path)
+
+
+def test_annotation_id_order_and_quoted_description_do_not_invent_tags(tmp_path):
+    path=tmp_path/'metadata.vcf'
+    path.write_text(HEADER.replace('#CHROM','##INFO=<Number=1,Description="comma,ID=FAKE and \\"quote\\"",ID=DP,Type=Integer>\n#CHROM'))
+    assert readable(path)['tags']=={'INFO':['DP'],'FORMAT':[]}
+
+
+@pytest.mark.parametrize('declaration',[
+    '##FORMAT=<ID=GT,ID=DP,Number=1,Type=String,Description="ambiguous">',
+    '##INFO=<ID=DP,Number=1,Type=Integer,Description="unterminated>',
+    '##INFO=<ID=DP,Number=1,Type=Integer,Description="first">\n##INFO=<Number=1,ID=DP,Type=String,Description="second">',
+])
+def test_ambiguous_annotation_declarations_are_rejected(tmp_path,declaration):
+    path=tmp_path/'ambiguous.vcf';path.write_text(HEADER.replace('#CHROM',declaration+'\n#CHROM'))
+    with pytest.raises(ValueError):readable(path)

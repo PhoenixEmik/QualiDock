@@ -125,7 +125,7 @@ def test_cancel_and_restart_do_not_publish_unverified_stats(inputs,interrupt):
         assert not any(r['path'].startswith('qc/') for r in restored['reports'])
 
 
-@pytest.mark.parametrize('fault',['gzip-crc','truncated-bcf','invalid-header','duplicate-samples','zero-exit-incomplete','changed-source','missing-source'])
+@pytest.mark.parametrize('fault',['gzip-crc','truncated-bcf','invalid-header','duplicate-samples','duplicate-tag','zero-exit-incomplete','changed-source','missing-source'])
 def test_actual_failures_never_publish_completed_evidence(inputs,fault):
     settings,paths=inputs;source=paths['multisample']
     if fault=='gzip-crc':
@@ -134,6 +134,12 @@ def test_actual_failures_never_publish_completed_evidence(inputs,fault):
         source=paths['raw-bcf'];source.write_bytes(source.read_bytes()[:-3])
     elif fault=='invalid-header':source.write_text(source.read_text().replace('#CHROM','CHROM'))
     elif fault=='duplicate-samples':source.write_text(source.read_text().replace('\talpha\tbeta','\talpha\talpha'))
+    elif fault=='duplicate-tag':
+        source.write_text(source.read_text().replace('#CHROM','##INFO=<ID=DP,Number=1,Type=String,Description="Conflicting duplicate">\n#CHROM'))
+        native=subprocess.run([TOOL,'stats',str(source)],capture_output=True,check=True)
+        assert not native.stderr  # Genuine 1.24 silently keeps the first declaration.
+        evidence=Path('validation/variant-qualification/duplicate-tag');evidence.mkdir(parents=True,exist_ok=True)
+        (evidence/'native-success.stats.txt').write_bytes(native.stdout)
     elif fault in {'zero-exit-incomplete','changed-source','missing-source'}:
         wrapper=settings.output.parent/'fault-bcftools'
         action='data=b"\\n".join(data.split(b"\\n")[:-8])+b"\\n"' if fault=='zero-exit-incomplete' else 'p=Path(sys.argv[-1]);p.write_bytes(p.read_bytes()+b"#changed\\n")' if fault=='changed-source' else 'Path(sys.argv[-1]).unlink()'
@@ -143,7 +149,7 @@ def test_actual_failures_never_publish_completed_evidence(inputs,fault):
         auth(c,settings)
         response=c.post('/api/runs',json={'mode':'bcftools','paths':[str(source)]})
         if response.status_code==400:
-            assert fault in {'gzip-crc','invalid-header','duplicate-samples'}
+            assert fault in {'gzip-crc','invalid-header','duplicate-samples','duplicate-tag'}
             return
         assert response.status_code==201,response.text
         run=wait(c,response.json()['id'],timeout=60)
