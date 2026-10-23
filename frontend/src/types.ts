@@ -622,6 +622,7 @@ export interface VariantMetrics {
   genotype_depth_available: boolean;
   report_sha256: string;
   header_tags: {INFO: string[]; FORMAT: string[]};
+  sample_ids: string[];
   tstv: ReportedTable;
   tstv_ratio: string | null;
   quality: ReportedTable & {chart_rows: string[][] | null};

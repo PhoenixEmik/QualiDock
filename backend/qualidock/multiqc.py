@@ -105,3 +105,37 @@ async def verify_picard_rna(directory, run, names):
                     raise ValueError('MultiQC RNA coverage points differ from original')
             except (InvalidOperation,TypeError) as exc:raise ValueError('Malformed MultiQC RNA coverage') from exc
     if not set(available)<=seen:raise ValueError('Missing available MultiQC RNA coverage profile')
+
+
+async def verify_variant(directory, run, reports):
+    """One stats set per input; verify official raw counts and source identity."""
+    from decimal import Decimal, InvalidOperation
+    value=json.loads(await asyncio.to_thread(bounded_text,directory/'multiqc/multiqc_data/multiqc_data.json'))
+    raw=value.get('report_saved_raw_data',{}).get('multiqc_bcftools_stats',{})
+    if not isinstance(raw,dict):raise ValueError('Missing official BCFtools raw section')
+    names=await report_names(directory,reports,sample_names=raw)
+    expected={r['report']:r for r in run['qc']['results'] if r['state']=='completed'}
+    if set(names)!=set(expected) or None in names.values() or len(set(names.values()))!=len(names) or set(raw)!=set(names.values()):
+        raise ValueError('Incomplete or ambiguous input-dataset mapping')
+    for report,row in expected.items():
+        observed=raw[names[report]];native=row['variant']
+        values={k.rstrip(':').replace(' ','_'):v for k,v in native['summary']['rows']}
+        values.update(zip(['ts','tv','tstv','ts_1st_ALT','tv_1st_ALT','tstv_1st_ALT'],native['tstv']['rows'][0]))
+        values.update({'substitution_type_'+k:v for k,v in native['substitutions']['rows']})
+        if not isinstance(observed,dict):raise ValueError('Malformed BCFtools dataset')
+        for key,original in values.items():
+            try:
+                actual=Decimal(str(observed.get(key)))
+                if not actual.is_finite() or actual!=Decimal(original):raise ValueError('Original BCFtools value changed: '+key)
+            except InvalidOperation as exc:raise ValueError('Missing BCFtools value: '+key) from exc
+    if run['qc']['options']['per_sample']:
+        from pathlib import Path
+        mappings={report:{sample:row['id']+' | '+Path(sample).name for sample in row['variant']['sample_ids']} for report,row in expected.items()}
+        labels=[name for mapping in mappings.values() for name in mapping.values()]
+        if len(set(labels))!=len(labels):raise ValueError('Within-file sample names collide in official plots')
+        plot=value.get('report_plot_data',{}).get('bcftools-stats-sequencing-depth',{})
+        datasets=plot.get('datasets',[])
+        actual=[sample for dataset in datasets for sample in dataset.get('samples',[])]
+        if len(actual)!=len(labels) or set(actual)!=set(labels):raise ValueError('Within-file sample/source mapping unavailable')
+        for report,mapping in mappings.items():expected[report]['variant']['multiqc_samples']=mapping
+    return names

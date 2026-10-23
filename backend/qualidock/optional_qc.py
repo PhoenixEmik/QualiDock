@@ -16,9 +16,7 @@ MODES = {'nanoq', 'fastq-screen', 'nanoplot', 'bcftools', *alignment.MODES}
 
 def options(mode, supplied):
     if mode=='bcftools':
-        value=variant.Options.model_validate(supplied or {}).model_dump()
-        if value['multiqc']:raise ValueError('Variant MultiQC integration has not passed qualification yet')
-        return value
+        return variant.Options.model_validate(supplied or {}).model_dump()
     if mode == 'picard-rna':
         return picard_rna.Options.model_validate(supplied or {}).model_dump()
     if mode == 'picard':

@@ -216,7 +216,7 @@ def original(path, source, header, per_sample):
             'input_format':header['format'],'compression':header['compression'],'sample_count':len(header['samples']),
             'per_sample_requested':per_sample,'sample_statistics_available':per_sample and 'GT' in header['tags']['FORMAT'],
             'quality_available':quality_available,'site_depth_available':site_depth,'genotype_depth_available':genotype_depth,
-            'report_sha256':digest.hexdigest(),'header_tags':header['tags'],
+            'report_sha256':digest.hexdigest(),'header_tags':header['tags'],'sample_ids':header['samples'],
             'tstv':tables['TSTV'],'tstv_ratio':tstv[2] if tv else None,
             'quality':tables['QUAL'],'depth':tables['DP'],'substitutions':tables['ST'],'sample_counts':samples,
             'uninterpreted_sections':sorted(other)}
@@ -252,4 +252,26 @@ async def execute(manager,run,metrics,errors):
         row['finished_at']=now()
         manager.update(run,sample_count=sum(r['state']=='completed' for r in run['qc']['results']))
     metrics['qc']=run['qc']
+    if run['id'] not in manager.cancelled and options['multiqc']:
+        from . import multiqc
+        reports=[directory/r['report'] for r in run['qc']['results'] if r['state']=='completed']
+        if reports:
+            run['qc']['multiqc_status']='invalid'
+            run['warnings'].append('Official MultiQC BCFtools plots retain upstream conventions: missing QUAL may appear at zero, undefined Ti/Tv at 0.00, and missing average sample depth at zero. Its General Statistics genotype counts can describe only the last within-file sample. Use native statistics and original reports for missing-data interpretation; input datasets are separate from biological sample IDs.')
+            manager.update(run,stage='MultiQC · BCFtools stats')
+            try:
+                # Prefix with the owned per-input directory; keep original ID
+                # strings and within-file sample names untouched on disk.
+                problem=await multiqc.execute(manager,run,reports,options=['--module','bcftools'],config={
+                    'prepend_dirs':True,'prepend_dirs_depth':1,'prepend_dirs_sep':' | ',
+                    'fn_clean_sample_names':False,'bcftools':{'collapse_complementary_changes':False}})
+                if problem:raise ValueError(problem)
+                if run['id'] in manager.cancelled:return
+                names=await multiqc.verify_variant(directory,run,reports)
+                metrics['multiqc']=await multiqc.summary(directory)
+                for report,name in names.items():run['report_input_map'][report]['multiqc_name']=name
+                run['qc']['multiqc_status']='available'
+            except (ValueError,OSError,TypeError,UnicodeError,KeyError) as exc:
+                metrics.pop('multiqc',None)
+                errors.append(f'MultiQC variant mapping/values could not be verified: {exc}; original reports remain available')
     await asyncio.to_thread(save_json,directory/'metrics.json',metrics)
