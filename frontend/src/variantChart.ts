@@ -24,7 +24,7 @@ export function variantViews(data: VariantMetrics) {
   const depthRows = data.depth.chart_rows?.filter(r => !r[0].startsWith("<"));
   const depthColumns: [string, number][] = [
     ...(data.site_depth_available ? [["Sites with reported INFO/DP", 3] as [string, number]] : []),
-    ...(data.genotype_depth_available ? [["Genotypes with reported FORMAT/DP", 1] as [string, number]] : []),
+    ...(data.genotype_depth_available ? [["Genotypes with reported sample depth", 1] as [string, number]] : []),
   ];
   const depth = depthRows && depthColumns.length ? bars("Original depth bins: site and genotype observations have separate counting units", depthRows, depthColumns) : null;
   const tstv = bars("Original transition / transversion counts", [["Transitions", data.tstv.rows[0][0]], ["Transversions", data.tstv.rows[0][1]]], [["Substitutions", 1]]);

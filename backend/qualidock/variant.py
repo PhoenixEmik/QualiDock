@@ -25,6 +25,23 @@ class Options(BaseModel):
     multiqc: bool = False
 
 
+def gzip_header(raw):
+    """Bound optional gzip filename/comment/extra fields before gzip.open."""
+    data=raw.read(65536)
+    if len(data)<10 or data[2]!=8 or data[3]&0xe0:raise ValueError('Invalid gzip header')
+    offset=10;flags=data[3]
+    if flags&4:
+        if len(data)<12:raise ValueError('Truncated gzip extra length')
+        offset=12+int.from_bytes(data[10:12],'little')
+    for mask in (8,16):
+        if flags&mask:
+            end=data.find(b'\x00',offset)
+            if end<0:raise ValueError('Oversized or truncated gzip filename/comment')
+            offset=end+1
+    if flags&2:offset+=2
+    if offset>=len(data) or offset>=65536:raise ValueError('Oversized or truncated gzip header')
+
+
 def readable(path, *, per_sample=False):
     """Call only after FileAccess authorization; read at most a bounded header."""
     if not VARIANT.search(path.name) or '##idx##' in str(path) or any(ord(c)<32 for c in str(path)) or not path.is_file() or not path.stat().st_mode & 0o444 or not os.access(path,os.R_OK):
@@ -34,6 +51,7 @@ def readable(path, *, per_sample=False):
         prefix=raw.read(18)
         compressed=prefix[:2]==b'\x1f\x8b'
         bgzf=compressed and len(prefix)==18 and prefix[3]&4 and prefix[12:16]==b'BC\x02\x00'
+        if compressed:raw.seek(0);gzip_header(raw)
         if bgzf:
             if path.stat().st_size<28:raise ValueError('Truncated BGZF input')
             raw.seek(-28,2)
@@ -137,12 +155,15 @@ def original(path, source, header, per_sample):
                     if code in declared or len(declared)>=64:raise ValueError('Duplicate or ambiguous BCFtools section')
                     declared.add(code)
                     columns=[re.sub(r'^\[\d+\]','',v) for v in fields[2:]]
+                    if any(not field.startswith(f'[{i}]') for i,field in enumerate(fields[1:],2)):
+                        raise ValueError('Ambiguous original column numbering')
                     if code in SCHEMAS and columns!=SCHEMAS[code]:raise ValueError('Unsupported BCFtools column definitions')
                 continue
             if not line or line.startswith('#'):continue
             code=fields[0]
             if code=='ID':identities.append(fields);continue
             if code not in SCHEMAS:
+                if code not in declared or len(fields)<2 or fields[1]!='0':raise ValueError('Unknown section has ambiguous identity')
                 if len(other)>=64 and code not in other:raise ValueError('Too many unrecognized original sections')
                 other.add(code);continue
             if code not in declared or len(fields)!=len(SCHEMAS[code])+2 or fields[1]!='0':

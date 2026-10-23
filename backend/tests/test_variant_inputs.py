@@ -63,3 +63,10 @@ def test_variant_input_root_and_symlink_escape(tmp_path):
 @pytest.mark.parametrize('options',[{'per_sample':'yes'},{'multiqc':1},{'filter':'PASS'},{'regions':'chr1'},{'create_index':True}])
 def test_only_explicit_read_only_options(options):
     with pytest.raises(ValueError):Options.model_validate(options)
+
+
+@pytest.mark.parametrize('flag',[4,8,16])
+def test_optional_gzip_headers_are_bounded_before_decompression(tmp_path,flag):
+    path=tmp_path/'header.vcf.gz'
+    path.write_bytes(b'\x1f\x8b\x08'+bytes([flag])+b'\x00'*6+(b'\xff\xff' if flag==4 else b'')+b'x'*70000)
+    with pytest.raises(ValueError):readable(path)
