@@ -49,6 +49,7 @@ class Settings:
     nanoq: str = "nanoq"
     nanoplot: str = "NanoPlot"
     samtools: str = "samtools"
+    bcftools: str = "bcftools"
     mosdepth: str = "mosdepth"
     rseqc_infer: str = "infer_experiment.py"
     rseqc_distribution: str = "read_distribution.py"
@@ -88,6 +89,7 @@ class Settings:
             nanoq=os.environ.get("QUALIDOCK_NANOQ", "nanoq"),
             nanoplot=os.environ.get("QUALIDOCK_NANOPLOT", "NanoPlot"),
             samtools=os.environ.get("QUALIDOCK_SAMTOOLS", "samtools"),
+            bcftools=os.environ.get("QUALIDOCK_BCFTOOLS", "bcftools"),
             mosdepth=os.environ.get("QUALIDOCK_MOSDEPTH", "mosdepth"),
             rseqc_infer=os.environ.get("QUALIDOCK_RSEQC_INFER", "infer_experiment.py"),
             rseqc_distribution=os.environ.get("QUALIDOCK_RSEQC_DISTRIBUTION", "read_distribution.py"),

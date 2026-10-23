@@ -1,0 +1,1 @@
+No sample columns in /Users/emik/repository/QualiDock/backend/tests/fixtures/bcftools-1.24/inputs/missing-alleles.vcf

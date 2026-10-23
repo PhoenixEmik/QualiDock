@@ -1,0 +1,8 @@
+##fileformat=VCFv4.3
+##contig=<ID=chr1,length=1000>
+##contig=<ID=chr2,length=1000>
+##INFO=<ID=END,Number=1,Type=Integer,Description="End coordinate">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+chr1	10	.	N	<DEL>	.	PASS	END=30
+chr1	40	.	N	N]chr2:321]	.	PASS	.
+chr1	60	.	A	*	.	PASS	.
