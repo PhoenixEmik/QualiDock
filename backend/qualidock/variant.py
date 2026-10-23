@@ -1,9 +1,11 @@
 """Bounded local variant inputs and original BCFtools stats; no variant engine."""
 import gzip
+import hashlib
 import asyncio
 import os
 from pathlib import Path
 import re
+from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
 from .files import VARIANT
@@ -95,26 +97,129 @@ def report_text(path, maximum=16*1024*1024):
     return raw.decode('utf-8')
 
 
+SCHEMAS = {
+    'SN':['key','value'],
+    'TSTV':['ts','tv','ts/tv','ts (1st ALT)','tv (1st ALT)','ts/tv (1st ALT)'],
+    'QUAL':['Quality','number of SNPs','number of transitions (1st ALT)','number of transversions (1st ALT)','number of indels'],
+    'ST':['type','count'],
+    'DP':['bin','number of genotypes','fraction of genotypes (%)','number of sites','fraction of sites (%)'],
+    'PSC':['sample','nRefHom','nNonRefHom','nHets','nTransitions','nTransversions','nIndels','average depth','nSingletons','nHapRef','nHapAlt','nMissing'],
+}
+
+
+def number(value, integer=False):
+    if len(value)>64 or not re.fullmatch(r'[0-9]+' if integer else r'[0-9]+(?:\.[0-9]+)?',value):
+        raise ValueError('Invalid/nonfinite BCFtools numeric value')
+    return Decimal(value)
+
+
 def original(path, source, header, per_sample):
-    """Validate original report framing/identity before publishing any artifact."""
-    text=report_text(path)
-    if not text.startswith('# This file was produced by bcftools stats (1.24+htslib-1.24) ') or not text.endswith('\n'):
-        raise ValueError('Unsupported or truncated BCFtools stats report')
-    rows=[line.split('\t') for line in text.splitlines() if line and not line.startswith('#')]
-    identities=[r for r in rows if r[0]=='ID']
+    """Stream validated original sections; never load the variant dataset."""
+    if path.is_symlink() or not path.is_file() or path.stat().st_size>16*1024*1024:
+        raise ValueError('BCFtools report exceeds 16 MiB regular-file limit')
+    tables={code:{'columns':columns,'rows':[],'total_rows':0} for code,columns in SCHEMAS.items()}
+    charts={code:[] for code in ['QUAL','DP']}
+    seen={code:set() for code in SCHEMAS};declared=set();identities=[];other=set();total=0
+    sample_ids=set(header['samples']);digest=hashlib.sha256();quality_available=False;site_depth=False;genotype_depth=False
+    dp_counts=[Decimal(0),Decimal(0)];dp_fractions=[Decimal(0),Decimal(0)]
+    with path.open('rb') as stream:
+        while raw:=stream.readline(65537):
+            total+=len(raw);digest.update(raw)
+            if len(raw)>65536 or total>16*1024*1024 or not raw.endswith(b'\n'):
+                raise ValueError('Oversized or truncated BCFtools report line')
+            line=raw.decode('utf-8').rstrip('\r\n')
+            if total==len(raw) and not line.startswith('# This file was produced by bcftools stats (1.24+htslib-1.24) '):
+                raise ValueError('Unsupported original BCFtools report version')
+            fields=line.split('\t')
+            if line.startswith('# '):
+                if len(fields)>1 and fields[1]=='[2]id':
+                    code=fields[0][2:]
+                    if code in declared or len(declared)>=64:raise ValueError('Duplicate or ambiguous BCFtools section')
+                    declared.add(code)
+                    columns=[re.sub(r'^\[\d+\]','',v) for v in fields[2:]]
+                    if code in SCHEMAS and columns!=SCHEMAS[code]:raise ValueError('Unsupported BCFtools column definitions')
+                continue
+            if not line or line.startswith('#'):continue
+            code=fields[0]
+            if code=='ID':identities.append(fields);continue
+            if code not in SCHEMAS:
+                if len(other)>=64 and code not in other:raise ValueError('Too many unrecognized original sections')
+                other.add(code);continue
+            if code not in declared or len(fields)!=len(SCHEMAS[code])+2 or fields[1]!='0':
+                raise ValueError('Malformed or ambiguous BCFtools section identity')
+            row=fields[2:];key=row[0] if code!='TSTV' else '0'
+            if key in seen[code] or len(seen[code])>=50000:raise ValueError('Duplicate or oversized BCFtools section rows')
+            seen[code].add(key)
+            if code=='SN':number(row[1],True)
+            elif code=='TSTV':
+                for i,v in enumerate(row):number(v,i not in {2,5})
+            elif code=='ST':
+                if not re.fullmatch(r'[ACGT]>[ACGT]',row[0]) or row[0][0]==row[0][2]:raise ValueError('Invalid substitution identity')
+                number(row[1],True)
+            elif code=='QUAL':
+                if row[0]!='.':
+                    number(row[0]);quality_available|=any(number(v,True)>0 for v in row[1:])
+                for v in row[1:]:number(v,True)
+                if int(row[1])!=int(row[2])+int(row[3]):raise ValueError('Inconsistent original QUAL counts')
+            elif code=='DP':
+                if not re.fullmatch(r'[<>]?[0-9]+',row[0]):raise ValueError('Unsupported original depth bin')
+                for i,v in enumerate(row[1:],1):number(v,i in {1,3})
+                for i in range(2):
+                    count=number(row[1+2*i],True);fraction=number(row[2+2*i])
+                    if fraction>100:raise ValueError('Invalid original depth fraction')
+                    dp_counts[i]+=count;dp_fractions[i]+=fraction
+                if not row[0].startswith('<'):
+                    genotype_depth|=number(row[1],True)>0;site_depth|=number(row[3],True)>0
+                if not per_sample and number(row[1],True):raise ValueError('Unrequested genotype depth statistics')
+            elif code=='PSC':
+                if not per_sample or row[0] not in sample_ids:raise ValueError('Unknown/unrequested within-file sample')
+                for i,v in enumerate(row[1:],1):number(v,i!=7)
+            table=tables[code];table['total_rows']+=1
+            if len(table['rows'])<200:table['rows'].append(row)
+            if code in charts and charts[code] is not None:
+                if len(charts[code])>=2000:charts[code]=None
+                else:charts[code].append(row)
+    required={'ID','SN','TSTV','SiS','AF','QUAL','IDD','ST','DP',*(['PSC','PSI','HWE'] if per_sample else [])}
+    if not total or not required<=declared:raise ValueError('Truncated BCFtools section definitions')
     if identities!=[['ID','0',str(source)]]:raise ValueError('Ambiguous or incorrect BCFtools report source identity')
-    summary=[r[2:] for r in rows if r[0]=='SN' and len(r)==4 and r[1]=='0']
-    if [r[0] for r in summary]!=SUMMARY_KEYS or any(not r[1].isascii() or not r[1].isdecimal() for r in summary):
-        raise ValueError('Missing, duplicate or invalid BCFtools summary values')
-    values=dict(summary)
-    if int(values[SUMMARY_KEYS[0]])!=len(header['samples']) or any(int(v)>int(values['number of records:']) for k,v in summary[2:]):
-        raise ValueError('BCFtools summary disagrees with the input header or record population')
-    required=['ID','SN','TSTV','SiS','AF','QUAL','IDD','ST','DP',*(['PSC','PSI','HWE'] if per_sample else [])]
-    declared={r[0][2:] for r in (line.split('\t') for line in text.splitlines()) if len(r)>1 and r[0].startswith('# ') and r[1]=='[2]id'}
-    if not set(required)<=declared:raise ValueError('Truncated BCFtools section definitions')
+    summary=tables['SN']['rows'];values=dict(summary)
+    if [r[0] for r in summary]!=SUMMARY_KEYS or int(values['number of samples:'])!=len(header['samples']):
+        raise ValueError('Missing/duplicate summary or disagreement with source sample header')
+    count=int(values['number of records:'])
+    if any(int(v)>count for k,v in summary[2:]):raise ValueError('Summary count exceeds input record population')
+    substitutions={a+'>'+b for a in 'ACGT' for b in 'ACGT' if a!=b}
+    if seen['ST']!=substitutions or tables['TSTV']['total_rows']!=1:raise ValueError('Incomplete substitution/TiTv evidence')
+    tstv=tables['TSTV']['rows'][0]
+    transitions={'A>G','G>A','C>T','T>C'}
+    ts=sum(int(r[1]) for r in tables['ST']['rows'] if r[0] in transitions)
+    tv=sum(int(r[1]) for r in tables['ST']['rows'] if r[0] not in transitions)
+    if [ts,tv]!=[int(tstv[0]),int(tstv[1])]:raise ValueError('Substitution and TiTv counts disagree')
+    for offset in [0,3]:
+        numerator,denominator,reported=map(Decimal,tstv[offset:offset+3])
+        if numerator>Decimal(tstv[0]) or denominator>Decimal(tstv[1]):raise ValueError('Invalid first-ALT substitution counts')
+        if denominator and abs(reported-numerator/denominator)>Decimal('0.0050000001'):
+            raise ValueError('Invalid reported TiTv rounding')
+        if not denominator and reported:raise ValueError('Undefined original TiTv must retain upstream zero')
+    if per_sample and seen['PSC']!=sample_ids:raise ValueError('Incomplete per-sample report')
+    if not per_sample and (seen['PSC'] or {'PSC','PSI','HWE'}&declared):raise ValueError('Unexpected per-sample report')
+    for counts,fractions in zip(dp_counts,dp_fractions):
+        if counts and abs(fractions-100)>Decimal('0.000001')*max(1,tables['DP']['total_rows']):
+            raise ValueError('Truncated/inconsistent original depth distribution')
+    if dp_counts[1]>count or dp_counts[0]>count*len(header['samples']):raise ValueError('Depth observations exceed record/sample population')
+    for code in charts:tables[code]['chart_rows']=charts[code]
+    samples=tables['PSC']
+    # Upstream average depth 0.0 conflates missing observations and measured zero.
+    # Keep the raw original downloadable; omit that ambiguous native column.
+    samples={'columns':[v for i,v in enumerate(samples['columns']) if i!=7],
+             'rows':[[v for i,v in enumerate(row) if i!=7] for row in samples['rows']], 'total_rows':samples['total_rows']}
     return {'status':'available','summary':{'columns':['Original BCFtools metric','Reported value'],'rows':summary,'total_rows':len(summary)},
             'input_format':header['format'],'compression':header['compression'],'sample_count':len(header['samples']),
-            'per_sample_requested':per_sample,'sample_statistics_available':per_sample and 'GT' in header['tags']['FORMAT']}
+            'per_sample_requested':per_sample,'sample_statistics_available':per_sample and 'GT' in header['tags']['FORMAT'],
+            'quality_available':quality_available,'site_depth_available':site_depth,'genotype_depth_available':genotype_depth,
+            'report_sha256':digest.hexdigest(),'header_tags':header['tags'],
+            'tstv':tables['TSTV'],'tstv_ratio':tstv[2] if tv else None,
+            'quality':tables['QUAL'],'depth':tables['DP'],'substitutions':tables['ST'],'sample_counts':samples,
+            'uninterpreted_sections':sorted(other)}
 
 
 async def execute(manager,run,metrics,errors):
