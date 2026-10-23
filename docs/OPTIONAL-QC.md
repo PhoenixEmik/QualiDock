@@ -145,10 +145,10 @@ this is not a pixel-equivalence claim. Reproducible evidence is in the run's
 under ignored `validation/nanoplot-final-{linux,browser}`. #31 is accepted with
 its explicitly confirmed HTML-only output scope; no release is prepared.
 
-## SAMtools 1.22.1 — read-only alignment QC
+## SAMtools 1.24 — read-only alignment QC
 
 Set `QUALIDOCK_SAMTOOLS` or provide `samtools` on PATH. The initial explicit
-contract requires **SAMtools 1.22.1 with HTSlib 1.22.1**; older, prerelease and
+contract requires **SAMtools 1.24 with HTSlib 1.24**; older, prerelease and
 unqualified builds are unavailable without affecting FASTQ tools. No application
 runtime dependency is added. Test provisioning builds the original pinned source.
 
@@ -276,7 +276,7 @@ acceptance remains unmeasured.
 ## mosdepth 0.3.14 — coverage QC
 
 Set `QUALIDOCK_MOSDEPTH` or provide `mosdepth` on PATH. The initial verified CLI
-contract is **0.3.14**, with the existing **SAMtools/HTSlib 1.22.1** preflight.
+contract is **0.3.14 with HTSlib 1.24 version reporting**, with the existing **SAMtools/HTSlib 1.24** preflight.
 Select BAM/CRAM and choose **mosdepth coverage QC** in the existing QC form.
 It uses the same alignment authorization, resource slot, executor, stdout limits,
 cancellation, per-file/partial results, JSON persistence and artifact protection.

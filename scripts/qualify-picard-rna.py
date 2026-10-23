@@ -243,7 +243,7 @@ async def qualify(args):
     assert re.search(r'(?m)^openjdk 17\.',(root/'java-version.stdout.txt').read_text())
     assert await run('samtools-version',[args.samtools,'--version'])==0
     samtools_version=(root/'samtools-version.stdout.txt').read_text()
-    assert 'samtools 1.22.1\n' in samtools_version and 'Using htslib 1.22.1\n' in samtools_version
+    assert 'samtools 1.24\n' in samtools_version and 'Using htslib 1.24\n' in samtools_version
     assert await run('picard-version',java+['--version'])==1
     assert ((root/'picard-version.stdout.txt').read_text()+(root/'picard-version.stderr.txt').read_text()).splitlines().count('Version:3.5.0')==1
     assert await run('picard-help',java+['--help']) in {0,1}

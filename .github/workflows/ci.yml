@@ -69,6 +69,8 @@ jobs:
         run: bash scripts/setup-optional-qc-ci.sh ${{ matrix.multiqc == '1.35' && '--falco-benchmark --nanoplot' || '' }}
       - name: Provision alignment QC tool
         run: bash scripts/setup-alignment-ci.sh ${{ matrix.multiqc == '1.35' && '--mosdepth' || '' }}
+      - name: Compare patched SAMtools with genuine original scientific baselines
+        run: python scripts/qualify-samtools-security.py --samtools samtools --output validation/htslib-security/scientific-comparison
       - name: Verify actual RNA-seq CLI and original reports
         if: matrix.multiqc == '1.35'
         run: bash scripts/setup-rna-ci.sh
@@ -80,7 +82,7 @@ jobs:
       - name: Actual SAMtools, CRAM reference safety and MultiQC compatibility
         env:
           QUALIDOCK_REQUIRE_ALIGNMENT_TESTS: '1'
-        run: pytest -q backend/tests/test_alignment.py backend/tests/test_alignment_real.py
+        run: pytest -q backend/tests/test_alignment.py backend/tests/test_alignment_real.py backend/tests/test_htslib_security.py backend/tests/test_htslib_security_real.py --junitxml=validation/htslib-security/tests.xml
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -88,6 +90,7 @@ jobs:
           path: |
             validation/alignment
             validation/alignment-tooling.txt
+            validation/htslib-security
       - name: Actual RNA-seq reports, annotation security and restart
         if: matrix.multiqc == '1.35'
         env:
@@ -348,6 +351,7 @@ jobs:
         with:
           name: report-browser-${{ matrix.browser }}
           path: |
+            validation/htslib-security
             validation/picard-rna-browser.xml
             validation/picard-rna-native*.png
             validation/picard-browser.xml

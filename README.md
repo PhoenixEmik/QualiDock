@@ -51,7 +51,7 @@ Optional [FastQ Screen](docs/OPTIONAL-QC.md#fastq-screen-016x-tested-0160) uses
 administrator-approved, prebuilt Bowtie2 reference panels for read-level source
 screening. Original reports and verified MultiQC aggregation remain available;
 mapping observations are not definitive contamination diagnoses.
-Optional [SAMtools 1.22.1 alignment QC](docs/OPTIONAL-QC.md#samtools-1221--read-only-alignment-qc)
+Optional [SAMtools 1.24 alignment QC](docs/OPTIONAL-QC.md#samtools-124--read-only-alignment-qc)
 accepts BAM/CRAM in the same file explorer. It records original quickcheck,
 flagstat and stats reports without FASTQ pairing or source/index modification.
 CRAM requires an administrator-approved local FASTA and existing .fai.

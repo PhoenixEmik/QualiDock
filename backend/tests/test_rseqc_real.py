@@ -141,7 +141,7 @@ def test_paths_with_shell_and_html_characters_are_literal_and_collision_safe(inp
 def test_cancel_and_restart_do_not_register_unfinished_reports(inputs,interrupt):
     config,bam,bed=inputs;before=hashes(bam.parent)
     launcher=config.output.parent/'slow-infer'
-    launcher.write_text(f'#!{sys.executable}\nimport os,sys,time\nif "--version" not in sys.argv:time.sleep(30)\nos.execv({INFER!r},[{INFER!r},*sys.argv[1:]])\n');launcher.chmod(0o700)
+    launcher.write_text(f'#!{Path(INFER).read_text().splitlines()[0][2:]}\nimport os,sys,time\nif "--version" not in sys.argv:time.sleep(30)\nos.execv({INFER!r},[{INFER!r},*sys.argv[1:]])\n');launcher.chmod(0o700)
     config=replace(config,rseqc_infer=str(launcher))
     with TestClient(create_app(config)) as c:
         auth(c,config);response=c.post('/api/runs',json={'mode':'rseqc-infer','paths':[str(bam)],'qc_options':{'annotation':'genes'}})
@@ -166,7 +166,7 @@ def test_partial_success_and_zero_exit_malformed_report(inputs):
         assert run['state']=='partial' and run['sample_count']==1
         assert sum(r['state']=='completed' for r in run['qc']['results'])==1
     launcher=config.output.parent/'malformed-infer'
-    launcher.write_text(f'#!{sys.executable}\nimport os,sys\nif "--version" in sys.argv:os.execv({INFER!r},[{INFER!r},*sys.argv[1:]])\nprint("incomplete upstream report")\n');launcher.chmod(0o700)
+    launcher.write_text(f'#!{Path(INFER).read_text().splitlines()[0][2:]}\nimport os,sys\nif "--version" in sys.argv:os.execv({INFER!r},[{INFER!r},*sys.argv[1:]])\nprint("incomplete upstream report")\n');launcher.chmod(0o700)
     config=replace(config,rseqc_infer=str(launcher))
     with TestClient(create_app(config)) as c:
         auth(c,config);run=wait(c,c.post('/api/runs',json={'mode':'rseqc-infer','paths':[str(bam)],'qc_options':{'annotation':'genes'}}).json()['id'])

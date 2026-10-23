@@ -8,6 +8,8 @@ RUN curl -fsSL https://github.com/s-andrews/FastQC/releases/download/v0.13.0/fas
 ENV PATH="/opt/FastQC:${PATH}" HOME=/home/qualidock OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 WORKDIR /workspace
 COPY . .
+RUN bash scripts/setup-alignment-ci.sh
+ENV PATH="/tmp/qualidock-alignment-tools/samtools-1.24:${PATH}"
 RUN python -m pip install --no-cache-dir -e '.[test]' multiqc==1.35
 USER 1001:1001
 CMD ["python", "scripts/validate-linux-execution.py", "--output", "/evidence"]

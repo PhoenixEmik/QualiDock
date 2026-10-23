@@ -93,9 +93,12 @@ def test_invalid_optional_annotation_catalog_does_not_break_configuration(annota
 
 
 @pytest.mark.parametrize('version,compatible',[('5.05',True),('5.0.4',False),('5.05rc1',False),('5.06',False)])
-def test_version_probe_preserves_exact_upstream_cli_contract(tmp_path,version,compatible):
+def test_version_probe_preserves_exact_upstream_cli_contract(tmp_path,monkeypatch,version,compatible):
     import asyncio,sys
     from qualidock.tools import detect_tool
+    async def dependencies(path,env):
+        return {'pysam_version':'0.24.1','htslib_version':'1.24'}
+    monkeypatch.setattr('qualidock.tools.rseqc_dependencies',dependencies)
     path=tmp_path/'infer_experiment.py';path.write_text(f'#!{sys.executable}\nprint({("infer_experiment.py "+version)!r})\n');path.chmod(0o700)
     result=asyncio.run(detect_tool('rseqc_infer',str(path)))
     assert result['compatible'] is compatible

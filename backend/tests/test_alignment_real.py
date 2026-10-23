@@ -67,7 +67,7 @@ def test_actual_reports_metrics_multicq_provenance_and_restart(inputs, kind):
         retained = Path('validation/alignment')/kind
         shutil.copytree(config.output/run['id'], retained, dirs_exist_ok=True)
         assert run['state'] == 'completed', (run['error'], (config.output/run['id']/'analysis.log').read_text()[-10000:])
-        assert run['tools']['samtools']['version'] == run['tools']['samtools']['htslib_version'] == '1.22.1'
+        assert run['tools']['samtools']['version'] == run['tools']['samtools']['htslib_version'] == '1.24'
         assert not run['input_pairing'] and not run['sample_groups'] and not run.get('derived_datasets')
         row = run['qc']['results'][0]; data = row['alignment']
         assert data['quickcheck'] == 'passed (header/EOF only)'

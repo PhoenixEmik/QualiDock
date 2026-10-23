@@ -1,4 +1,4 @@
-"""Read-only SAMtools 1.22.1 adapter; no FASTQ parsing or pairing."""
+"""Read-only SAMtools/HTSlib 1.24 adapter; no FASTQ parsing or pairing."""
 import asyncio
 from decimal import Decimal, InvalidOperation
 import gzip
